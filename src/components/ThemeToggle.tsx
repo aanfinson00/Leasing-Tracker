@@ -19,10 +19,10 @@ export function ThemeToggle() {
       type="button"
       onClick={cycle}
       title={`${label} (click to change)`}
-      className="inline-flex items-center justify-center w-9 h-9 rounded-md text-fg-muted hover:text-fg hover:bg-bg-hover transition-colors"
+      className="inline-flex items-center justify-center w-11 h-11 rounded-xl text-fg-muted hover:text-fg hover:bg-bg-elevated/70 transition-all"
       aria-label={label}
     >
-      <Icon size={18} strokeWidth={2} />
+      <Icon size={19} strokeWidth={1.75} />
     </button>
   );
 }

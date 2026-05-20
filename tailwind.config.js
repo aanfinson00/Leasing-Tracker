@@ -28,6 +28,7 @@ export default {
           hover: 'var(--accent-hover)',
           fg: 'var(--accent-fg)',
           soft: 'var(--accent-soft)',
+          tint: 'var(--accent-tint)',
         },
         success: 'var(--success)',
         warning: 'var(--warning)',
@@ -38,9 +39,14 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        serif: ['Fraunces', 'Source Serif Pro', 'Georgia', 'Times New Roman', 'serif'],
       },
       boxShadow: {
-        card: 'var(--shadow)',
+        soft: 'var(--shadow-sm)',
+        lift: 'var(--shadow-md)',
+      },
+      borderRadius: {
+        '2xl': '14px',
       },
     },
   },

@@ -12,6 +12,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { Deal, DealStage } from '../types';
 import { DealStageEnum } from '../types';
+import { StageBadge } from './StageBadge';
 
 interface DealDrawerProps {
   deal: Deal | null;
@@ -62,8 +63,8 @@ const parseStr = (v: string): string | null => {
 };
 
 const inputClass =
-  'w-full px-3 py-2 bg-bg border border-border rounded-md text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors';
-const labelClass = 'block text-xs font-medium text-fg-muted mb-1 uppercase tracking-wide';
+  'w-full px-3.5 py-2.5 bg-bg rounded-xl text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent transition-all shadow-soft';
+const labelClass = 'block text-[11px] font-medium text-fg-subtle mb-1.5 uppercase tracking-[0.1em]';
 
 interface SectionProps {
   icon: LucideIcon;
@@ -73,10 +74,12 @@ interface SectionProps {
 
 function Section({ icon: Icon, title, children }: SectionProps) {
   return (
-    <section className="border-t border-border pt-5 mt-5 first:border-t-0 first:pt-0 first:mt-0">
-      <div className="flex items-center gap-2 mb-3">
-        <Icon size={16} strokeWidth={2} className="text-fg-muted" />
-        <h3 className="text-sm font-semibold text-fg tracking-tight">{title}</h3>
+    <section className="pt-7 mt-7 border-t border-border first:border-t-0 first:pt-0 first:mt-0">
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent-tint text-accent">
+          <Icon size={14} strokeWidth={2} />
+        </div>
+        <h3 className="font-serif text-lg font-medium text-fg tracking-tight">{title}</h3>
       </div>
       {children}
     </section>
@@ -88,6 +91,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<FormValues>();
 
@@ -160,32 +164,45 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
     }
   };
 
+  const currentName = watch('propertyName') ?? deal.propertyName;
+  const currentStage = (watch('stage') ?? deal.stage) as DealStage;
+
   return (
     <div className="fixed inset-0 z-50 flex">
       <div
-        className="flex-1 bg-black/50 backdrop-blur-sm"
+        className="flex-1 bg-fg/30 backdrop-blur-[2px]"
         onClick={onClose}
         aria-label="Close drawer"
       />
-      <div className="w-full max-w-2xl bg-bg-elevated border-l border-border shadow-2xl overflow-y-auto">
+      <div className="w-full max-w-2xl bg-bg shadow-lift overflow-y-auto">
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
-          <div className="sticky top-0 bg-bg-elevated/95 backdrop-blur border-b border-border px-6 py-4 flex items-center justify-between z-10">
-            <h2 className="text-lg font-semibold text-fg tracking-tight truncate">
-              {deal.propertyName ? deal.propertyName : 'New Deal'}
-            </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-md text-fg-muted hover:text-fg hover:bg-bg-hover transition-colors"
-              aria-label="Close"
-            >
-              <X size={18} strokeWidth={2} />
-            </button>
+          <div className="sticky top-0 bg-bg/90 backdrop-blur-md border-b border-border px-7 py-5 z-10">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-fg-subtle mb-1.5">
+                  {deal.propertyName ? 'Edit Deal' : 'New Deal'}
+                </p>
+                <h2 className="font-serif text-2xl text-fg tracking-tight font-semibold truncate">
+                  {currentName || 'Untitled Property'}
+                </h2>
+                <div className="mt-2">
+                  <StageBadge stage={currentStage} />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-lg text-fg-muted hover:text-fg hover:bg-bg-hover transition-colors shrink-0"
+                aria-label="Close"
+              >
+                <X size={18} strokeWidth={1.75} />
+              </button>
+            </div>
           </div>
 
-          <div className="flex-1 px-6 py-5">
+          <div className="flex-1 px-7 py-6">
             <Section icon={Building2} title="Property">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div className="col-span-2">
                   <label className={labelClass}>Property Name *</label>
                   <input
@@ -193,7 +210,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
                     className={inputClass}
                   />
                   {errors.propertyName && (
-                    <p className="text-danger text-xs mt-1">{errors.propertyName.message}</p>
+                    <p className="text-danger text-xs mt-1.5">{errors.propertyName.message}</p>
                   )}
                 </div>
                 <div className="col-span-2">
@@ -220,7 +237,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
             </Section>
 
             <Section icon={Users} title="Tenant & Pipeline">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div className="col-span-2">
                   <label className={labelClass}>Tenant Name *</label>
                   <input
@@ -228,7 +245,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
                     className={inputClass}
                   />
                   {errors.tenantName && (
-                    <p className="text-danger text-xs mt-1">{errors.tenantName.message}</p>
+                    <p className="text-danger text-xs mt-1.5">{errors.tenantName.message}</p>
                   )}
                 </div>
                 <div>
@@ -262,7 +279,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
             </Section>
 
             <Section icon={DollarSign} title="Economics">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
                   <label className={labelClass}>Base Rent $/SF</label>
                   <input
@@ -282,11 +299,11 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Lease Start Date</label>
+                  <label className={labelClass}>Lease Start</label>
                   <input {...register('leaseStartDate')} type="date" className={inputClass} />
                 </div>
                 <div>
-                  <label className={labelClass}>Lease End Date</label>
+                  <label className={labelClass}>Lease End</label>
                   <input {...register('leaseEndDate')} type="date" className={inputClass} />
                 </div>
                 <div>
@@ -310,7 +327,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
             </Section>
 
             <Section icon={Gift} title="Concessions & Options">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
                   <label className={labelClass}>TI Allowance $/SF</label>
                   <input
@@ -340,14 +357,10 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
             </Section>
 
             <Section icon={NotebookPen} title="Notes">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div className="col-span-2">
                   <label className={labelClass}>Notes</label>
-                  <textarea
-                    {...register('notes')}
-                    rows={4}
-                    className={inputClass}
-                  />
+                  <textarea {...register('notes')} rows={4} className={inputClass} />
                 </div>
                 <div>
                   <label className={labelClass}>Last Modified By</label>
@@ -357,28 +370,28 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
             </Section>
           </div>
 
-          <div className="sticky bottom-0 bg-bg-elevated/95 backdrop-blur border-t border-border px-6 py-3 flex items-center justify-between gap-2">
+          <div className="sticky bottom-0 bg-bg/90 backdrop-blur-md border-t border-border px-7 py-4 flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={handleDelete}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-danger hover:bg-danger/10 rounded-md transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-danger hover:bg-danger/10 rounded-lg transition-colors"
             >
-              <Trash2 size={14} strokeWidth={2} />
+              <Trash2 size={14} strokeWidth={1.75} />
               Delete
             </button>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-2 text-sm font-medium text-fg-muted hover:text-fg hover:bg-bg-hover rounded-md transition-colors"
+                className="px-4 py-2 text-sm font-medium text-fg-muted hover:text-fg hover:bg-bg-hover rounded-xl transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-semibold bg-accent text-accent-fg rounded-md hover:bg-accent-hover transition-colors"
+                className="px-5 py-2 text-sm font-semibold bg-accent text-accent-fg rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
               >
-                Save Deal
+                Save
               </button>
             </div>
           </div>

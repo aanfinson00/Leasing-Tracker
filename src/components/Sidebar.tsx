@@ -1,4 +1,4 @@
-import { Briefcase, Clock, BarChart3, Settings, User } from 'lucide-react';
+import { Briefcase, Clock, BarChart3, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -18,12 +18,12 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Sidebar() {
   return (
-    <aside className="hidden sm:flex flex-col items-center w-[60px] shrink-0 border-r border-border bg-bg-elevated h-screen sticky top-0 py-3 z-20">
-      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-accent text-accent-fg font-bold text-sm tracking-tight mb-4">
-        LT
+    <aside className="hidden sm:flex flex-col items-center w-[68px] shrink-0 bg-bg-subtle/60 h-screen sticky top-0 py-5 z-20">
+      <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-accent text-accent-fg shadow-soft mb-6">
+        <span className="font-serif font-semibold text-[17px] leading-none tracking-tight">LT</span>
       </div>
 
-      <nav className="flex flex-col items-center gap-1 flex-1">
+      <nav className="flex flex-col items-center gap-1.5 flex-1">
         {NAV_ITEMS.map(({ icon: Icon, label, active, disabled }) => (
           <button
             key={label}
@@ -31,32 +31,22 @@ export function Sidebar() {
             title={label}
             disabled={disabled}
             className={[
-              'inline-flex items-center justify-center w-10 h-10 rounded-md transition-colors',
+              'inline-flex items-center justify-center w-11 h-11 rounded-xl transition-all',
               active
-                ? 'bg-accent-soft text-accent'
+                ? 'bg-bg-elevated text-accent shadow-soft'
                 : disabled
-                  ? 'text-fg-subtle cursor-not-allowed opacity-50'
-                  : 'text-fg-muted hover:text-fg hover:bg-bg-hover',
+                  ? 'text-fg-subtle/60 cursor-not-allowed'
+                  : 'text-fg-muted hover:text-fg hover:bg-bg-elevated/70',
             ].join(' ')}
             aria-label={label}
             aria-current={active ? 'page' : undefined}
           >
-            <Icon size={20} strokeWidth={2} />
+            <Icon size={19} strokeWidth={1.75} />
           </button>
         ))}
       </nav>
 
-      <div className="flex flex-col items-center gap-1 mt-auto">
-        <ThemeToggle />
-        <button
-          type="button"
-          title="Account (coming soon)"
-          disabled
-          className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-bg-subtle text-fg-muted text-xs font-semibold cursor-not-allowed"
-        >
-          <User size={16} strokeWidth={2} />
-        </button>
-      </div>
+      <ThemeToggle />
     </aside>
   );
 }
