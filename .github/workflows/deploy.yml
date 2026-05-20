@@ -26,6 +26,16 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Compute password hash
+        env:
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        run: |
+          if [ -n "$APP_PASSWORD" ]; then
+            HASH=$(printf '%s' "$APP_PASSWORD" | sha256sum | cut -d' ' -f1)
+            echo "VITE_PASSWORD_HASH=$HASH" >> $GITHUB_ENV
+          fi
+
       - run: npm run build
 
       - uses: actions/configure-pages@v5

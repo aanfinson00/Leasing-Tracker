@@ -8,7 +8,7 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, ChevronUp, ChevronDown, Pencil, Trash2, Sparkles } from 'lucide-react';
+import { ArrowUpDown, ChevronUp, ChevronDown, Pencil, Trash2, Sparkles, UserPlus } from 'lucide-react';
 import type { RentRollRow, Deal } from '../types';
 
 interface RentRollTableProps {
@@ -16,6 +16,7 @@ interface RentRollTableProps {
   prospectsBySpaceId: Map<string, Deal>;
   onSelect: (row: RentRollRow) => void;
   onDelete: (id: string) => void;
+  onStartProspect: (row: RentRollRow) => void;
 }
 
 const formatNum = (n: number | null | undefined): string =>
@@ -37,7 +38,7 @@ const Stars = ({ n }: { n: number | null }) => {
   );
 };
 
-export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete }: RentRollTableProps) {
+export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, onStartProspect }: RentRollTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const columnHelper = createColumnHelper<RentRollRow>();
 
@@ -171,37 +172,55 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete }: 
       columnHelper.display({
         id: 'actions',
         header: '',
-        cell: (info) => (
-          <div className="flex justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect(info.row.original);
-              }}
-              title="Edit"
-              aria-label="Edit row"
-              className="p-2 rounded-lg text-fg-muted hover:text-accent hover:bg-bg-hover transition-colors"
-            >
-              <Pencil size={14} strokeWidth={1.75} />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm('Delete this rent roll row?')) {
-                  onDelete(info.row.original.id);
-                }
-              }}
-              title="Delete"
-              aria-label="Delete row"
-              className="p-2 rounded-lg text-fg-muted hover:text-danger hover:bg-bg-hover transition-colors"
-            >
-              <Trash2 size={14} strokeWidth={1.75} />
-            </button>
-          </div>
-        ),
+        cell: (info) => {
+          const r = info.row.original;
+          const canStartProspect =
+            !r.occupied && (!r.spaceId || !prospectsBySpaceId.has(r.spaceId));
+          return (
+            <div className="flex justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {canStartProspect && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStartProspect(r);
+                  }}
+                  title="Start prospect for this space"
+                  aria-label="Start prospect"
+                  className="p-2 rounded-lg text-accent hover:bg-accent-soft transition-colors"
+                >
+                  <UserPlus size={14} strokeWidth={2} />
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(r);
+                }}
+                title="Edit"
+                aria-label="Edit row"
+                className="p-2 rounded-lg text-fg-muted hover:text-accent hover:bg-bg-hover transition-colors"
+              >
+                <Pencil size={14} strokeWidth={1.75} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm('Delete this rent roll row?')) {
+                    onDelete(r.id);
+                  }
+                }}
+                title="Delete"
+                aria-label="Delete row"
+                className="p-2 rounded-lg text-fg-muted hover:text-danger hover:bg-bg-hover transition-colors"
+              >
+                <Trash2 size={14} strokeWidth={1.75} />
+              </button>
+            </div>
+          );
+        },
       }),
     ],
-    [columnHelper, prospectsBySpaceId, onSelect, onDelete]
+    [columnHelper, prospectsBySpaceId, onSelect, onDelete, onStartProspect]
   );
 
   const table = useReactTable({

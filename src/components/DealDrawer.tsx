@@ -8,6 +8,7 @@ import {
   TrendingUp,
   NotebookPen,
   Trash2,
+  ArrowRight,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Deal, DealStatus, Priority } from '../types';
@@ -19,6 +20,7 @@ interface DealDrawerProps {
   onClose: () => void;
   onSave: (deal: Deal) => void;
   onDelete: (id: string) => void;
+  onPromote?: (deal: Deal) => void;
 }
 
 type FormValues = {
@@ -47,6 +49,11 @@ type FormValues = {
 
 const toFormString = (v: string | number | null | undefined): string => {
   if (v === null || v === undefined) return '';
+  if (typeof v === 'number') {
+    // Strip floating-point noise (e.g., 8.486999... → 8.49 for currency-like values)
+    if (Number.isInteger(v)) return String(v);
+    return parseFloat(v.toFixed(6)).toString();
+  }
   return String(v);
 };
 
@@ -86,7 +93,7 @@ function Section({ icon: Icon, title, children }: SectionProps) {
   );
 }
 
-export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps) {
+export function DealDrawer({ deal, onClose, onSave, onDelete, onPromote }: DealDrawerProps) {
   const {
     register,
     handleSubmit,
@@ -362,7 +369,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
             </Section>
           </div>
 
-          <div className="sticky bottom-0 bg-bg/90 backdrop-blur-md border-t border-border px-7 py-4 flex items-center justify-between gap-2">
+          <div className="sticky bottom-0 bg-bg/90 backdrop-blur-md border-t border-border px-7 py-4 flex items-center justify-between gap-2 flex-wrap">
             <button
               type="button"
               onClick={handleDelete}
@@ -371,7 +378,50 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
               <Trash2 size={14} strokeWidth={1.75} />
               Delete
             </button>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              {currentStatus === 'Executed' && onPromote && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Save current edits before promoting so the latest values flow through
+                    handleSubmit((values) => {
+                      const updatedDeal: Deal = {
+                        ...deal,
+                        ...{
+                          dealName: values.dealName.trim(),
+                          spaceId: parseStr(values.spaceId),
+                          building: parseStr(values.building),
+                          dealId: parseStr(values.dealId),
+                          minSF: parseNum(values.minSF),
+                          maxSF: parseNum(values.maxSF) ?? parseNum(values.minSF),
+                          prospectTenant: parseStr(values.prospectTenant),
+                          brokerRep: parseStr(values.brokerRep),
+                          transaction: parseStr(values.transaction),
+                          status: values.status,
+                          lastRevalUWRent: parseNum(values.lastRevalUWRent),
+                          targetRent: parseNum(values.targetRent),
+                          proposedTermMonths: parseNum(values.proposedTermMonths),
+                          freeRentMonths: parseNum(values.freeRentMonths),
+                          tiPerSF: parseNum(values.tiPerSF),
+                          tiNote: parseStr(values.tiNote),
+                          probabilityPct: parseNum(values.probabilityPct),
+                          expectedStart: parseStr(values.expectedStart),
+                          lastUpdated: parseStr(values.lastUpdated) ?? new Date().toISOString().slice(0, 10),
+                          priority: values.priority,
+                          notes: parseStr(values.notes),
+                        },
+                      };
+                      onSave(updatedDeal);
+                      onPromote(updatedDeal);
+                      onClose();
+                    })();
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-accent border border-accent rounded-xl hover:bg-accent-soft transition-colors"
+                >
+                  <ArrowRight size={14} strokeWidth={2} />
+                  Promote to Rent Roll
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}

@@ -1,0 +1,139 @@
+import { useEffect, useState, type ReactNode } from 'react';
+import { Lock } from 'lucide-react';
+
+const STORAGE_KEY = 'app:unlocked';
+const ATTEMPT_KEY = 'app:auth:attempts';
+const LOCKOUT_KEY = 'app:auth:lockoutUntil';
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 30_000;
+
+const EXPECTED_HASH = (import.meta.env.VITE_PASSWORD_HASH ?? '').trim();
+
+async function sha256(input: string): Promise<string> {
+  const enc = new TextEncoder().encode(input);
+  const hashBuf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(hashBuf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+interface LoginGateProps {
+  children: ReactNode;
+}
+
+export function LoginGate({ children }: LoginGateProps) {
+  const [unlocked, setUnlocked] = useState<boolean>(() => {
+    if (!EXPECTED_HASH) return true; // no password configured → pass through (dev mode)
+    return localStorage.getItem(STORAGE_KEY) === 'true';
+  });
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [lockoutRemaining, setLockoutRemaining] = useState(0);
+
+  // Tick down lockout timer
+  useEffect(() => {
+    if (unlocked) return;
+    const lockoutUntil = parseInt(localStorage.getItem(LOCKOUT_KEY) ?? '0', 10);
+    if (!lockoutUntil) return;
+    const tick = () => {
+      const remaining = Math.max(0, lockoutUntil - Date.now());
+      setLockoutRemaining(remaining);
+      if (remaining === 0) {
+        localStorage.removeItem(LOCKOUT_KEY);
+        localStorage.removeItem(ATTEMPT_KEY);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [unlocked]);
+
+  if (unlocked) return <>{children}</>;
+
+  const isLockedOut = lockoutRemaining > 0;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLockedOut || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const hash = await sha256(password);
+      if (hash === EXPECTED_HASH) {
+        localStorage.setItem(STORAGE_KEY, 'true');
+        localStorage.removeItem(ATTEMPT_KEY);
+        localStorage.removeItem(LOCKOUT_KEY);
+        setUnlocked(true);
+      } else {
+        const attempts = parseInt(localStorage.getItem(ATTEMPT_KEY) ?? '0', 10) + 1;
+        localStorage.setItem(ATTEMPT_KEY, String(attempts));
+        if (attempts >= MAX_ATTEMPTS) {
+          const until = Date.now() + LOCKOUT_MS;
+          localStorage.setItem(LOCKOUT_KEY, String(until));
+          setLockoutRemaining(LOCKOUT_MS);
+          setError(`Too many attempts. Try again in ${Math.ceil(LOCKOUT_MS / 1000)}s.`);
+        } else {
+          setError(`Incorrect password (${MAX_ATTEMPTS - attempts} attempts left).`);
+        }
+        setPassword('');
+      }
+    } catch (err) {
+      setError('Could not verify password — your browser may not support crypto.subtle.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg p-6">
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center text-center mb-8">
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-accent text-accent-fg shadow-soft mb-5">
+            <Lock size={22} strokeWidth={2} />
+          </div>
+          <h1 className="text-2xl font-semibold text-fg tracking-[-0.02em]">
+            Leasing Tracker
+          </h1>
+          <p className="text-sm text-fg-muted mt-1.5">Restricted access</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              autoFocus
+              disabled={isLockedOut || submitting}
+              className="w-full px-3.5 py-3 bg-bg-elevated rounded-xl text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent transition-all shadow-soft text-center tracking-wider"
+            />
+            {error && (
+              <p className="mt-2 text-xs text-danger text-center">{error}</p>
+            )}
+            {isLockedOut && !error && (
+              <p className="mt-2 text-xs text-fg-subtle text-center">
+                Locked out — {Math.ceil(lockoutRemaining / 1000)}s remaining
+              </p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLockedOut || submitting || password.length === 0}
+            className="w-full px-4 py-3 text-sm font-semibold bg-accent text-accent-fg rounded-xl hover:bg-accent-hover transition-colors shadow-soft disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {submitting ? 'Checking…' : 'Continue'}
+          </button>
+        </form>
+
+        <p className="mt-6 text-[11px] text-fg-subtle text-center leading-relaxed">
+          Unlock state is stored locally on this device.
+          <br />
+          Log out from the sidebar to clear.
+        </p>
+      </div>
+    </div>
+  );
+}

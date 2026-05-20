@@ -1,6 +1,8 @@
-import { Briefcase, Building, BarChart3, Settings } from 'lucide-react';
+import { Briefcase, Building, BarChart3, Settings, Lock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
+
+const PASSWORD_HASH_CONFIGURED = !!(import.meta.env.VITE_PASSWORD_HASH ?? '').trim();
 
 export type View = 'prospects' | 'rentroll';
 
@@ -57,7 +59,25 @@ export function Sidebar({ view, onChangeView }: SidebarProps) {
         })}
       </nav>
 
-      <ThemeToggle />
+      <div className="flex flex-col gap-1">
+        <ThemeToggle />
+        {PASSWORD_HASH_CONFIGURED && (
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm('Log out? You will need to re-enter the password.')) {
+                localStorage.removeItem('app:unlocked');
+                window.location.reload();
+              }
+            }}
+            title="Log out"
+            aria-label="Log out"
+            className="inline-flex items-center justify-center w-11 h-11 rounded-xl text-fg-muted hover:text-fg hover:bg-bg-elevated/70 transition-all"
+          >
+            <Lock size={19} strokeWidth={1.75} />
+          </button>
+        )}
+      </div>
     </aside>
   );
 }

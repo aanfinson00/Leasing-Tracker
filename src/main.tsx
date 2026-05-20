@@ -3,11 +3,14 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { ThemeProvider } from './theme'
+import { LoginGate } from './components/LoginGate'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
-      <App />
+      <LoginGate>
+        <App />
+      </LoginGate>
     </ThemeProvider>
   </StrictMode>,
 )

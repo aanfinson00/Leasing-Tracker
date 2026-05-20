@@ -12,6 +12,7 @@ import { RentRollTable } from './components/RentRollTable';
 import { RentRollFilterBar } from './components/RentRollFilterBar';
 import { RentRollSummary } from './components/RentRollSummary';
 import { RentRollDrawer } from './components/RentRollDrawer';
+import { PromoteDrawer } from './components/PromoteDrawer';
 import { Sidebar, type View } from './components/Sidebar';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
   const [filename, setFilename] = useState<string>('');
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [editingRow, setEditingRow] = useState<RentRollRow | null>(null);
+  const [promotingDeal, setPromotingDeal] = useState<Deal | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -128,6 +130,65 @@ function App() {
     setFilteredRentRoll((prev) => prev.filter((r) => r.id !== id));
   };
 
+  // ── Cross-tab: Promote a prospect → Rent Roll
+  const handleOpenPromote = (deal: Deal) => {
+    setEditingDeal(null);
+    setPromotingDeal(deal);
+  };
+
+  const handleConfirmPromote = (rrRow: RentRollRow, isNew: boolean) => {
+    if (!promotingDeal) return;
+    const newRows = isNew
+      ? [...rentRoll, rrRow]
+      : rentRoll.map((r) => (r.id === rrRow.id ? rrRow : r));
+    setRentRoll(newRows);
+    setFilteredRentRoll(newRows);
+    // Delete the prospect — it lives in the rent roll from here on
+    const newDeals = deals.filter((d) => d.id !== promotingDeal.id);
+    setDeals(newDeals);
+    setFilteredDeals(newDeals);
+    setPromotingDeal(null);
+    setView('rentroll');
+  };
+
+  // ── Cross-tab: Start a prospect from a vacant Rent Roll row
+  const todayIso = () => {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${day}`;
+  };
+  const handleStartProspect = (row: RentRollRow) => {
+    const sf = row.leasableSF;
+    const newDeal: Deal = {
+      ...defaultDeal(),
+      dealName: row.dealName ?? '',
+      dealId: row.dealId,
+      building: row.building,
+      spaceId: row.spaceId,
+      minSF: sf,
+      maxSF: sf,
+      lastRevalUWRent: row.lastRevalUWRent,
+      targetRent: row.startingAnnualRentPSF ?? row.lastRevalUWRent,
+      status: 'Prospect',
+      priority: 'Low',
+      lastUpdated: todayIso(),
+    };
+    const updated = [...deals, newDeal];
+    setDeals(updated);
+    setFilteredDeals(updated);
+    setView('prospects');
+    setEditingDeal(newDeal);
+  };
+
+  // Find the matched Rent Roll row for a prospect being promoted
+  const matchedRentRollRow = useMemo<RentRollRow | null>(() => {
+    if (!promotingDeal?.spaceId) return null;
+    return (
+      rentRoll.find((r) => r.spaceId === promotingDeal.spaceId) ?? null
+    );
+  }, [promotingDeal, rentRoll]);
+
   const hasData = deals.length > 0 || rentRoll.length > 0;
   const currentCount =
     view === 'prospects' ? filteredDeals.length : filteredRentRoll.length;
@@ -223,6 +284,7 @@ function App() {
                       deals={filteredDeals}
                       onSelectDeal={handleSelectDeal}
                       onDeleteDeal={handleDeleteDeal}
+                      onPromote={handleOpenPromote}
                     />
                   )}
                 </section>
@@ -243,6 +305,7 @@ function App() {
                     prospectsBySpaceId={prospectsBySpaceId}
                     onSelect={handleSelectRow}
                     onDelete={handleDeleteRow}
+                    onStartProspect={handleStartProspect}
                   />
                 )}
               </section>
@@ -256,12 +319,19 @@ function App() {
         onClose={() => setEditingDeal(null)}
         onSave={handleSaveDeal}
         onDelete={handleDeleteDeal}
+        onPromote={handleOpenPromote}
       />
       <RentRollDrawer
         row={editingRow}
         onClose={() => setEditingRow(null)}
         onSave={handleSaveRow}
         onDelete={handleDeleteRow}
+      />
+      <PromoteDrawer
+        deal={promotingDeal}
+        existingRow={matchedRentRollRow}
+        onClose={() => setPromotingDeal(null)}
+        onConfirm={handleConfirmPromote}
       />
     </div>
   );

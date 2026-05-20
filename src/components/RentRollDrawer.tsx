@@ -52,6 +52,10 @@ type FormValues = {
 
 const toFormString = (v: string | number | null | undefined): string => {
   if (v === null || v === undefined) return '';
+  if (typeof v === 'number') {
+    if (Number.isInteger(v)) return String(v);
+    return parseFloat(v.toFixed(6)).toString();
+  }
   return String(v);
 };
 

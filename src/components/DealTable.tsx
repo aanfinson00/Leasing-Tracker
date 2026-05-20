@@ -8,7 +8,7 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, ChevronUp, ChevronDown, Pencil, Trash2 } from 'lucide-react';
+import { ArrowUpDown, ChevronUp, ChevronDown, Pencil, Trash2, ArrowRight } from 'lucide-react';
 import type { Deal } from '../types';
 import { StatusBadge, PriorityLabel } from './StatusBadge';
 
@@ -16,6 +16,7 @@ interface DealTableProps {
   deals: Deal[];
   onSelectDeal: (deal: Deal) => void;
   onDeleteDeal: (id: string) => void;
+  onPromote: (deal: Deal) => void;
 }
 
 const formatSFCell = (min: number | null, max: number | null): string => {
@@ -31,7 +32,7 @@ const formatTI = (deal: Deal): string => {
   return '–';
 };
 
-export function DealTable({ deals, onSelectDeal, onDeleteDeal }: DealTableProps) {
+export function DealTable({ deals, onSelectDeal, onDeleteDeal, onPromote }: DealTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const columnHelper = createColumnHelper<Deal>();
@@ -131,37 +132,53 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal }: DealTableProps)
       columnHelper.display({
         id: 'actions',
         header: '',
-        cell: (info) => (
-          <div className="flex justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectDeal(info.row.original);
-              }}
-              title="Edit"
-              aria-label="Edit deal"
-              className="p-2 rounded-lg text-fg-muted hover:text-accent hover:bg-bg-hover transition-colors"
-            >
-              <Pencil size={14} strokeWidth={1.75} />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm(`Delete deal "${info.row.original.dealName || 'this deal'}"?`)) {
-                  onDeleteDeal(info.row.original.id);
-                }
-              }}
-              title="Delete"
-              aria-label="Delete deal"
-              className="p-2 rounded-lg text-fg-muted hover:text-danger hover:bg-bg-hover transition-colors"
-            >
-              <Trash2 size={14} strokeWidth={1.75} />
-            </button>
-          </div>
-        ),
+        cell: (info) => {
+          const isExecuted = info.row.original.status === 'Executed';
+          return (
+            <div className="flex justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {isExecuted && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPromote(info.row.original);
+                  }}
+                  title="Promote to Rent Roll"
+                  aria-label="Promote to Rent Roll"
+                  className="p-2 rounded-lg text-accent hover:bg-accent-soft transition-colors"
+                >
+                  <ArrowRight size={14} strokeWidth={2} />
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectDeal(info.row.original);
+                }}
+                title="Edit"
+                aria-label="Edit deal"
+                className="p-2 rounded-lg text-fg-muted hover:text-accent hover:bg-bg-hover transition-colors"
+              >
+                <Pencil size={14} strokeWidth={1.75} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`Delete deal "${info.row.original.dealName || 'this deal'}"?`)) {
+                    onDeleteDeal(info.row.original.id);
+                  }
+                }}
+                title="Delete"
+                aria-label="Delete deal"
+                className="p-2 rounded-lg text-fg-muted hover:text-danger hover:bg-bg-hover transition-colors"
+              >
+                <Trash2 size={14} strokeWidth={1.75} />
+              </button>
+            </div>
+          );
+        },
       }),
     ],
-    [columnHelper, onSelectDeal, onDeleteDeal]
+    [columnHelper, onSelectDeal, onDeleteDeal, onPromote]
   );
 
   const table = useReactTable({
