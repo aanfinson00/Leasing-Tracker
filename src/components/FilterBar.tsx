@@ -1,5 +1,8 @@
+import { useState, useEffect } from 'react';
+import { Search } from 'lucide-react';
 import type { Deal, DealStage } from '../types';
 import { DealStageEnum } from '../types';
+import { StageChip } from './StageBadge';
 
 interface FilterBarProps {
   deals: Deal[];
@@ -7,66 +10,59 @@ interface FilterBarProps {
 }
 
 export function FilterBar({ deals, onFilterChange }: FilterBarProps) {
-  const handleSearchChange = (query: string) => {
-    const lowerQuery = query.toLowerCase();
-    const filtered = deals.filter(
-      (deal) =>
-        deal.propertyName.toLowerCase().includes(lowerQuery) ||
-        deal.tenantName.toLowerCase().includes(lowerQuery) ||
-        deal.address.toLowerCase().includes(lowerQuery) ||
-        deal.city.toLowerCase().includes(lowerQuery)
-    );
-    onFilterChange(filtered);
-  };
+  const [query, setQuery] = useState('');
+  const [selectedStages, setSelectedStages] = useState<Set<DealStage>>(new Set());
 
-  const handleStageFilter = (stages: DealStage[]) => {
-    if (stages.length === 0) {
-      onFilterChange(deals);
-      return;
-    }
-    const filtered = deals.filter((deal) => stages.includes(deal.stage));
+  useEffect(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = deals.filter((deal) => {
+      const matchesQuery =
+        q === '' ||
+        deal.propertyName.toLowerCase().includes(q) ||
+        deal.tenantName.toLowerCase().includes(q) ||
+        deal.address.toLowerCase().includes(q) ||
+        deal.city.toLowerCase().includes(q);
+      const matchesStage = selectedStages.size === 0 || selectedStages.has(deal.stage);
+      return matchesQuery && matchesStage;
+    });
     onFilterChange(filtered);
-  };
+  }, [query, selectedStages, deals, onFilterChange]);
 
-  const stages = DealStageEnum.options;
+  const toggleStage = (stage: DealStage) => {
+    setSelectedStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(stage)) next.delete(stage);
+      else next.add(stage);
+      return next;
+    });
+  };
 
   return (
-    <div className="bg-white rounded shadow p-4 space-y-3">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Search
-        </label>
+    <div className="bg-bg-elevated rounded-lg border border-border p-4 space-y-3 shadow-card">
+      <div className="relative">
+        <Search
+          size={16}
+          strokeWidth={2}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle pointer-events-none"
+        />
         <input
           type="text"
-          placeholder="Property, tenant, address..."
-          onChange={(e) => handleSearchChange(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={query}
+          placeholder="Search property, tenant, address…"
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full pl-9 pr-3 py-2 bg-bg border border-border rounded-md text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Stage
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {stages.map((stage) => (
-            <label key={stage} className="flex items-center">
-              <input
-                type="checkbox"
-                value={stage}
-                onChange={() => {
-                  const selected = Array.from(
-                    document.querySelectorAll('input[name="stage"]:checked')
-                  ).map((el) => (el as HTMLInputElement).value) as DealStage[];
-                  handleStageFilter(selected);
-                }}
-                name="stage"
-                className="rounded"
-              />
-              <span className="ml-2 text-sm text-gray-700">{stage}</span>
-            </label>
-          ))}
-        </div>
+      <div className="flex flex-wrap gap-1.5">
+        {DealStageEnum.options.map((stage) => (
+          <StageChip
+            key={stage}
+            stage={stage}
+            selected={selectedStages.has(stage)}
+            onClick={() => toggleStage(stage)}
+          />
+        ))}
       </div>
     </div>
   );

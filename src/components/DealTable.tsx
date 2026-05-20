@@ -9,7 +9,9 @@ import {
   type SortingState,
   type ColumnFiltersState,
 } from '@tanstack/react-table';
+import { ArrowUpDown, ChevronUp, ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import type { Deal } from '../types';
+import { StageBadge } from './StageBadge';
 
 interface DealTableProps {
   deals: Deal[];
@@ -27,52 +29,74 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal }: DealTableProps)
     () => [
       columnHelper.accessor('propertyName', {
         header: 'Property',
-        cell: (info) => info.getValue(),
+        cell: (info) => (
+          <span className="font-medium text-fg">{info.getValue()}</span>
+        ),
       }),
       columnHelper.accessor('tenantName', {
         header: 'Tenant',
-        cell: (info) => info.getValue(),
+        cell: (info) => <span className="text-fg-muted">{info.getValue()}</span>,
       }),
       columnHelper.accessor('stage', {
         header: 'Stage',
-        cell: (info) => (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            {info.getValue()}
-          </span>
-        ),
+        cell: (info) => <StageBadge stage={info.getValue()} />,
       }),
       columnHelper.accessor('squareFeet', {
         header: 'SF',
-        cell: (info) => info.getValue()?.toLocaleString(),
+        cell: (info) => (
+          <span className="tabular-nums text-fg-muted">
+            {info.getValue()?.toLocaleString() ?? '–'}
+          </span>
+        ),
       }),
       columnHelper.accessor('baseRentPSF', {
         header: '$/SF',
-        cell: (info) => (info.getValue() ? `$${info.getValue()?.toFixed(2)}` : '–'),
+        cell: (info) => (
+          <span className="tabular-nums text-fg-muted">
+            {info.getValue() ? `$${info.getValue()?.toFixed(2)}` : '–'}
+          </span>
+        ),
       }),
       columnHelper.accessor('leaseStartDate', {
-        header: 'Start Date',
-        cell: (info) => info.getValue() || '–',
+        header: 'Start',
+        cell: (info) => (
+          <span className="tabular-nums text-fg-muted">{info.getValue() || '–'}</span>
+        ),
       }),
       columnHelper.accessor('leaseEndDate', {
-        header: 'End Date',
-        cell: (info) => info.getValue() || '–',
+        header: 'End',
+        cell: (info) => (
+          <span className="tabular-nums text-fg-muted">{info.getValue() || '–'}</span>
+        ),
       }),
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
+        header: '',
         cell: (info) => (
-          <div className="flex gap-2">
+          <div className="flex justify-end gap-1">
             <button
-              onClick={() => onSelectDeal(info.row.original)}
-              className="text-blue-600 hover:text-blue-900 text-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectDeal(info.row.original);
+              }}
+              title="Edit"
+              aria-label="Edit deal"
+              className="p-1.5 rounded text-fg-muted hover:text-accent hover:bg-bg-hover transition-colors"
             >
-              Edit
+              <Pencil size={14} strokeWidth={2} />
             </button>
             <button
-              onClick={() => onDeleteDeal(info.row.original.id)}
-              className="text-red-600 hover:text-red-900 text-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm(`Delete deal for "${info.row.original.propertyName || 'this property'}"?`)) {
+                  onDeleteDeal(info.row.original.id);
+                }
+              }}
+              title="Delete"
+              aria-label="Delete deal"
+              className="p-1.5 rounded text-fg-muted hover:text-danger hover:bg-bg-hover transition-colors"
             >
-              Delete
+              <Trash2 size={14} strokeWidth={2} />
             </button>
           </div>
         ),
@@ -96,35 +120,56 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal }: DealTableProps)
   });
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
+    <div className="overflow-x-auto rounded-lg border border-border bg-bg-elevated shadow-card">
       <table className="w-full border-collapse">
-        <thead className="bg-gray-100">
+        <thead className="bg-bg-subtle border-b border-border">
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <th
-                  key={header.id}
-                  className="px-4 py-3 text-left text-sm font-semibold text-gray-900 cursor-pointer hover:bg-gray-200"
-                  onClick={header.column.getToggleSortingHandler()}
-                >
-                  <div className="flex items-center gap-2">
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                    <span className="text-xs">
-                      {header.column.getIsSorted() ? (
-                        header.column.getIsSorted() === 'desc' ? ' 🔽' : ' 🔼'
-                      ) : null}
-                    </span>
-                  </div>
-                </th>
-              ))}
+              {headerGroup.headers.map((header) => {
+                const canSort = header.column.getCanSort();
+                const sorted = header.column.getIsSorted();
+                const isActions = header.column.id === 'actions';
+                return (
+                  <th
+                    key={header.id}
+                    className={[
+                      'px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-fg-muted',
+                      canSort && !isActions
+                        ? 'cursor-pointer hover:text-fg transition-colors select-none'
+                        : '',
+                      isActions ? 'text-right' : '',
+                    ].join(' ')}
+                    onClick={canSort && !isActions ? header.column.getToggleSortingHandler() : undefined}
+                  >
+                    <div className={`inline-flex items-center gap-1 ${isActions ? 'justify-end w-full' : ''}`}>
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      {canSort && !isActions && (
+                        <span className="text-fg-subtle">
+                          {sorted === 'asc' ? (
+                            <ChevronUp size={12} strokeWidth={2.5} />
+                          ) : sorted === 'desc' ? (
+                            <ChevronDown size={12} strokeWidth={2.5} />
+                          ) : (
+                            <ArrowUpDown size={12} strokeWidth={2} className="opacity-40" />
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           ))}
         </thead>
-        <tbody className="divide-y divide-gray-200">
+        <tbody className="divide-y divide-border">
           {table.getRowModel().rows.map((row) => (
-            <tr key={row.id} className="hover:bg-gray-50">
+            <tr
+              key={row.id}
+              onClick={() => onSelectDeal(row.original)}
+              className="hover:bg-bg-hover cursor-pointer transition-colors"
+            >
               {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="px-4 py-3 text-sm text-gray-900">
+                <td key={cell.id} className="px-4 py-2.5 text-sm">
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </td>
               ))}
