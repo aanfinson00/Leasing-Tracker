@@ -1,16 +1,47 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { Deal } from './types';
 import { defaultDeal } from './types';
 import { loadFromFile, saveToFile } from './lib/excel';
+import { saveSnapshot, loadSnapshot, clearSnapshot } from './lib/autosave';
 import { DealTable } from './components/DealTable';
 import { FilterBar } from './components/FilterBar';
 import { SummaryStrip } from './components/SummaryStrip';
+import { DealDrawer } from './components/DealDrawer';
 
 function App() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([]);
   const [filename, setFilename] = useState<string>('');
+  const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    loadSnapshot().then((snapshot) => {
+      if (snapshot && snapshot.deals.length > 0) {
+        const restore = confirm(
+          `Found unsaved work from ${new Date(snapshot.savedAt).toLocaleString()} (${snapshot.deals.length} deals). Restore?`
+        );
+        if (restore) {
+          setDeals(snapshot.deals);
+          setFilteredDeals(snapshot.deals);
+          setFilename(snapshot.filename);
+        } else {
+          clearSnapshot();
+        }
+      }
+      setHydrated(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (deals.length === 0) {
+      clearSnapshot();
+      return;
+    }
+    saveSnapshot(deals, filename);
+  }, [deals, filename, hydrated]);
 
   const handleOpenFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -36,12 +67,23 @@ function App() {
     const updated = [...deals, newDeal];
     setDeals(updated);
     setFilteredDeals(updated);
+    setEditingDeal(newDeal);
+  };
+
+  const handleSelectDeal = (deal: Deal) => {
+    setEditingDeal(deal);
+  };
+
+  const handleSaveDeal = (updated: Deal) => {
+    const newDeals = deals.map((d) => (d.id === updated.id ? updated : d));
+    setDeals(newDeals);
+    setFilteredDeals((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
   };
 
   const handleDeleteDeal = (id: string) => {
     const newDeals = deals.filter((d) => d.id !== id);
     setDeals(newDeals);
-    setFilteredDeals(newDeals);
+    setFilteredDeals((prev) => prev.filter((d) => d.id !== id));
   };
 
   return (
@@ -100,7 +142,7 @@ function App() {
             ) : (
               <DealTable
                 deals={filteredDeals}
-                onSelectDeal={() => {}}
+                onSelectDeal={handleSelectDeal}
                 onDeleteDeal={handleDeleteDeal}
               />
             )}
@@ -109,6 +151,13 @@ function App() {
           </>
         )}
       </div>
+
+      <DealDrawer
+        deal={editingDeal}
+        onClose={() => setEditingDeal(null)}
+        onSave={handleSaveDeal}
+        onDelete={handleDeleteDeal}
+      />
     </div>
   );
 }
