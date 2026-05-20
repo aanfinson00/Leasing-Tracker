@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { FilePlus, Sparkles, FolderOpen, Download, Plus, FileSpreadsheet } from 'lucide-react';
+import { FilePlus, Sparkles, FolderOpen, Download, Plus, FileSpreadsheet, Link2, Check, X } from 'lucide-react';
 import type { Deal, RentRollRow } from './types';
 import { defaultDeal, defaultRentRollRow } from './types';
 import { loadFromFile, saveToFile } from './lib/excel';
 import { saveSnapshot, loadSnapshot, clearSnapshot } from './lib/autosave';
+import { encodeShare, decodeShare, readShareFromUrl, clearShareFromUrl } from './lib/share';
 import { DealTable } from './components/DealTable';
 import { FilterBar } from './components/FilterBar';
 import { SummaryStrip } from './components/SummaryStrip';
@@ -26,6 +27,8 @@ function App() {
   const [editingRow, setEditingRow] = useState<RentRollRow | null>(null);
   const [promotingDeal, setPromotingDeal] = useState<Deal | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [shareToast, setShareToast] = useState<string | null>(null);
+  const [sharedSnapshot, setSharedSnapshot] = useState<{ filename: string; sharedAt: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Cross-tab lookup: which prospects have an active deal for a given Space ID?
@@ -40,6 +43,25 @@ function App() {
   }, [deals]);
 
   useEffect(() => {
+    const encoded = readShareFromUrl();
+    if (encoded) {
+      decodeShare(encoded).then((payload) => {
+        if (payload) {
+          setDeals(payload.deals);
+          setFilteredDeals(payload.deals);
+          setRentRoll(payload.rentRoll);
+          setFilteredRentRoll(payload.rentRoll);
+          setFilename(payload.filename);
+          setSharedSnapshot({ filename: payload.filename, sharedAt: payload.sharedAt });
+        } else {
+          alert('That share link is invalid or corrupted.');
+        }
+        clearShareFromUrl();
+        setHydrated(true);
+      });
+      return;
+    }
+
     loadSnapshot().then((snapshot) => {
       if (snapshot && (snapshot.deals.length > 0 || snapshot.rentRoll.length > 0)) {
         const restore = confirm(
@@ -88,6 +110,26 @@ function App() {
   const handleSaveFile = () => {
     const name = filename || 'leases.xlsx';
     saveToFile(deals, rentRoll, name);
+  };
+
+  const handleShareLink = async () => {
+    try {
+      const encoded = await encodeShare(deals, rentRoll, filename || 'leases.xlsx');
+      const url = `${window.location.origin}${window.location.pathname}#data=${encoded}`;
+      // Soft size warning — URLs over ~30KB break some chat apps / email
+      const sizeKB = Math.round(url.length / 1024);
+      if (sizeKB > 30) {
+        const proceed = confirm(
+          `Share link is ${sizeKB} KB. Some chat apps / email clients truncate long URLs (~30 KB safe). Copy anyway?`
+        );
+        if (!proceed) return;
+      }
+      await navigator.clipboard.writeText(url);
+      setShareToast(`Share link copied (${sizeKB} KB)`);
+      setTimeout(() => setShareToast(null), 3500);
+    } catch (err) {
+      alert(`Could not create share link: ${err instanceof Error ? err.message : err}`);
+    }
   };
 
   // ── Prospects handlers
@@ -257,6 +299,16 @@ function App() {
                 </button>
 
                 <button
+                  onClick={handleShareLink}
+                  disabled={!hasData}
+                  title="Copy a shareable URL with the current data baked in"
+                  className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-fg bg-bg-elevated rounded-xl hover:bg-bg-hover transition-colors shadow-soft disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-bg-elevated"
+                >
+                  <Link2 size={15} strokeWidth={1.75} />
+                  Share
+                </button>
+
+                <button
                   onClick={view === 'prospects' ? handleNewDeal : handleNewRow}
                   className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
                 >
@@ -267,6 +319,32 @@ function App() {
             </div>
           </div>
         </header>
+
+        {sharedSnapshot && (
+          <div className="max-w-7xl w-full mx-auto px-6 sm:px-10 -mt-2 mb-4">
+            <div className="flex items-center gap-3 px-4 py-3 bg-accent-tint border border-accent/20 rounded-xl">
+              <Sparkles size={16} strokeWidth={2} className="text-accent shrink-0" />
+              <div className="flex-1 text-sm">
+                <span className="font-medium text-fg">Viewing a shared snapshot</span>
+                <span className="text-fg-muted"> from {sharedSnapshot.filename} · shared {new Date(sharedSnapshot.sharedAt).toLocaleString()}</span>
+              </div>
+              <button
+                onClick={() => setSharedSnapshot(null)}
+                className="text-fg-muted hover:text-fg p-1 rounded-md transition-colors"
+                aria-label="Dismiss"
+              >
+                <X size={14} strokeWidth={2} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {shareToast && (
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-fg text-bg rounded-xl shadow-lift text-sm font-medium">
+            <Check size={15} strokeWidth={2.5} />
+            {shareToast}
+          </div>
+        )}
 
         <main className="flex-1 px-6 sm:px-10 pb-12 max-w-7xl w-full mx-auto space-y-8">
           {view === 'prospects' ? (
