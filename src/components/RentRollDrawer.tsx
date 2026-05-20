@@ -42,6 +42,7 @@ type FormValues = {
   expiryYearBucket: string;
   tiPerSF: string;
   tiNote: string;
+  uwTiPerSF: string;
   commissionStructurePct: string;
   commissionDollar: string;
   lastRevalUWRent: string;
@@ -122,6 +123,7 @@ export function RentRollDrawer({ row, onClose, onSave, onDelete }: RentRollDrawe
         expiryYearBucket: toFormString(row.expiryYearBucket),
         tiPerSF: toFormString(row.tiPerSF),
         tiNote: toFormString(row.tiNote),
+        uwTiPerSF: toFormString(row.uwTiPerSF),
         commissionStructurePct: toFormString(row.commissionStructurePct),
         commissionDollar: toFormString(row.commissionDollar),
         lastRevalUWRent: toFormString(row.lastRevalUWRent),
@@ -158,6 +160,7 @@ export function RentRollDrawer({ row, onClose, onSave, onDelete }: RentRollDrawe
       expiryYearBucket: parseStr(v.expiryYearBucket),
       tiPerSF: parseNum(v.tiPerSF),
       tiNote: parseStr(v.tiNote),
+      uwTiPerSF: parseNum(v.uwTiPerSF),
       specOffice: row.specOffice,
       commissionStructurePct: parseNum(v.commissionStructurePct),
       commissionDollar: parseNum(v.commissionDollar),
@@ -337,6 +340,16 @@ export function RentRollDrawer({ row, onClose, onSave, onDelete }: RentRollDrawe
                 <div>
                   <label className={labelClass}>TI ($/SF)</label>
                   <input {...register('tiPerSF')} type="number" step="0.01" className={`${inputClass} tabular-nums`} />
+                </div>
+                <div>
+                  <label className={labelClass}>UW TI ($/SF)</label>
+                  <input
+                    {...register('uwTiPerSF')}
+                    type="number"
+                    step="0.01"
+                    placeholder="Underwritten"
+                    className={`${inputClass} tabular-nums`}
+                  />
                 </div>
                 <div className="col-span-2">
                   <label className={labelClass}>TI Note</label>

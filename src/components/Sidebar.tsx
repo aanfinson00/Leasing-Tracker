@@ -4,7 +4,7 @@ import { ThemeToggle } from './ThemeToggle';
 
 const PASSWORD_HASH_CONFIGURED = !!(import.meta.env.VITE_PASSWORD_HASH ?? '').trim();
 
-export type View = 'prospects' | 'rentroll';
+export type View = 'prospects' | 'rentroll' | 'reports';
 
 interface NavItem {
   id: View | 'placeholder';
@@ -16,7 +16,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: 'prospects', icon: Briefcase, label: 'Prospects' },
   { id: 'rentroll', icon: Building, label: 'Rent Roll' },
-  { id: 'placeholder', icon: BarChart3, label: 'Reports (coming soon)', disabled: true },
+  { id: 'reports', icon: BarChart3, label: 'Reports' },
   { id: 'placeholder', icon: Settings, label: 'Settings (coming soon)', disabled: true },
 ];
 

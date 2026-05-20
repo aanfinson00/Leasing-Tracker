@@ -65,6 +65,7 @@ export function previewPromote(
 
     tiPerSF: deal.tiPerSF ?? existing?.tiPerSF ?? null,
     tiNote: deal.tiNote ?? existing?.tiNote ?? null,
+    uwTiPerSF: existing?.uwTiPerSF ?? null,
     specOffice: existing?.specOffice ?? null,
     commissionStructurePct: existing?.commissionStructurePct ?? null,
     commissionDollar: existing?.commissionDollar ?? null,

@@ -14,6 +14,7 @@ import { RentRollFilterBar } from './components/RentRollFilterBar';
 import { RentRollSummary } from './components/RentRollSummary';
 import { RentRollDrawer } from './components/RentRollDrawer';
 import { PromoteDrawer } from './components/PromoteDrawer';
+import { ReportsView } from './components/ReportsView';
 import { Sidebar, type View } from './components/Sidebar';
 
 function App() {
@@ -233,9 +234,11 @@ function App() {
 
   const hasData = deals.length > 0 || rentRoll.length > 0;
   const currentCount =
-    view === 'prospects' ? filteredDeals.length : filteredRentRoll.length;
-  const totalCount = view === 'prospects' ? deals.length : rentRoll.length;
-  const viewTitle = view === 'prospects' ? 'Prospects' : 'Rent Roll';
+    view === 'prospects' ? filteredDeals.length : view === 'rentroll' ? filteredRentRoll.length : 0;
+  const totalCount =
+    view === 'prospects' ? deals.length : view === 'rentroll' ? rentRoll.length : 0;
+  const viewTitle =
+    view === 'prospects' ? 'Prospects' : view === 'rentroll' ? 'Rent Roll' : 'Reports';
 
   return (
     <div className="flex min-h-screen bg-bg text-fg">
@@ -254,17 +257,23 @@ function App() {
                     <>
                       <FileSpreadsheet size={14} strokeWidth={1.75} className="shrink-0 text-fg-subtle" />
                       <span className="font-medium text-fg">{filename}</span>
-                      <span className="text-fg-subtle">·</span>
-                      <span className="tabular-nums">
-                        {currentCount} of {totalCount}
-                      </span>
+                      {view !== 'reports' && (
+                        <>
+                          <span className="text-fg-subtle">·</span>
+                          <span className="tabular-nums">
+                            {currentCount} of {totalCount}
+                          </span>
+                        </>
+                      )}
                     </>
                   ) : hasData ? (
                     <>
-                      <span className="tabular-nums font-medium text-fg">
-                        {currentCount} of {totalCount}
-                      </span>
-                      <span className="text-fg-subtle">·</span>
+                      {view !== 'reports' && (
+                        <span className="tabular-nums font-medium text-fg">
+                          {currentCount} of {totalCount}
+                        </span>
+                      )}
+                      {view !== 'reports' && <span className="text-fg-subtle">·</span>}
                       <span className="text-warning">Unsaved — click Save to export</span>
                     </>
                   ) : (
@@ -308,13 +317,15 @@ function App() {
                   Share
                 </button>
 
-                <button
-                  onClick={view === 'prospects' ? handleNewDeal : handleNewRow}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
-                >
-                  <Plus size={15} strokeWidth={2.25} />
-                  {view === 'prospects' ? 'New Deal' : 'New Row'}
-                </button>
+                {view !== 'reports' && (
+                  <button
+                    onClick={view === 'prospects' ? handleNewDeal : handleNewRow}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
+                  >
+                    <Plus size={15} strokeWidth={2.25} />
+                    {view === 'prospects' ? 'New Deal' : 'New Row'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -347,7 +358,9 @@ function App() {
         )}
 
         <main className="flex-1 px-6 sm:px-10 pb-12 max-w-7xl w-full mx-auto space-y-8">
-          {view === 'prospects' ? (
+          {view === 'reports' ? (
+            <ReportsView deals={deals} rentRoll={rentRoll} />
+          ) : view === 'prospects' ? (
             deals.length === 0 ? (
               <EmptyHero onAction={handleNewDeal} ctaLabel="Create your first deal" />
             ) : (

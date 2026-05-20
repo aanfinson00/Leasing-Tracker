@@ -116,6 +116,7 @@ export const RentRollRowSchema = z.object({
   // TI & commissions
   tiPerSF: z.number().nullable().optional(),
   tiNote: z.string().nullable().optional(),
+  uwTiPerSF: z.number().nullable().optional(),
   specOffice: z.string().nullable().optional(),
   commissionStructurePct: z.number().nullable().optional(),
   commissionDollar: z.number().nullable().optional(),
@@ -150,6 +151,7 @@ export const RentRollRowSchema = z.object({
   expiryYearBucket: r.expiryYearBucket ?? null,
   tiPerSF: r.tiPerSF ?? null,
   tiNote: r.tiNote ?? null,
+  uwTiPerSF: r.uwTiPerSF ?? null,
   specOffice: r.specOffice ?? null,
   commissionStructurePct: r.commissionStructurePct ?? null,
   commissionDollar: r.commissionDollar ?? null,
@@ -185,6 +187,7 @@ export const defaultRentRollRow = (): RentRollRow => ({
   expiryYearBucket: null,
   tiPerSF: null,
   tiNote: null,
+  uwTiPerSF: null,
   specOffice: null,
   commissionStructurePct: null,
   commissionDollar: null,
