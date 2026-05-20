@@ -1,81 +1,99 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  ScatterChart,
-  Scatter,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
-  ZAxis,
   CartesianGrid,
   Tooltip,
   ReferenceLine,
   ResponsiveContainer,
+  Cell,
 } from 'recharts';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import type { RentRollRow } from '../../types';
+import { useChartColors } from '../../lib/chartTokens';
+import { formatCurrencyShort } from '../../lib/format';
+import { ChartCard } from './ChartCard';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
-import type { RentRollRow } from '../../types';
-import { useChartColors, colorFor } from '../../lib/chartTokens';
-import { ChartCard } from './ChartCard';
 
 interface UWvsActualRentChartProps {
   rows: RentRollRow[];
 }
 
 interface Point {
-  uw: number;
-  actual: number;
-  sf: number;
-  market: string;
+  label: string;
   tenant: string;
   deal: string;
-  spread: number;
-  pctOfUw: number;
+  market: string;
+  uw: number;
+  actual: number;
+  dollarDelta: number; // $/SF
+  pctDelta: number;    // %
+  sf: number;
+  annualDollarDelta: number; // $ across the space (dollarDelta × SF)
 }
+
+type Metric = 'pct' | 'dollar';
 
 export function UWvsActualRentChart({ rows }: UWvsActualRentChartProps) {
   const c = useChartColors();
+  const [metric, setMetric] = useState<Metric>('pct');
 
-  const { points, byMarket, stats, axisMax } = useMemo(() => {
+  const { points, stats } = useMemo(() => {
     const all: Point[] = [];
     rows.forEach((r) => {
       if (!r.occupied) return;
       if (r.lastRevalUWRent == null || r.startingAnnualRentPSF == null) return;
       const uw = r.lastRevalUWRent;
       const actual = r.startingAnnualRentPSF;
-      const pctOfUw = uw > 0 ? (actual / uw) * 100 : 0;
+      if (uw <= 0) return; // can't compute % from zero baseline
+      const dollarDelta = actual - uw;
+      const pctDelta = (actual / uw - 1) * 100;
+      const sf = r.leasableSF ?? 0;
+      const tenant = (r.tenantName ?? '–').trim();
+      const deal = (r.dealName ?? '–').trim();
       all.push({
+        label: `${tenant} · ${deal}`,
+        tenant,
+        deal,
+        market: r.market ?? 'Unknown',
         uw,
         actual,
-        sf: r.leasableSF ?? 0,
-        market: r.market ?? 'Unknown',
-        tenant: r.tenantName ?? '–',
-        deal: r.dealName ?? '–',
-        spread: actual - uw,
-        pctOfUw,
+        dollarDelta,
+        pctDelta,
+        sf,
+        annualDollarDelta: dollarDelta * sf,
       });
     });
 
-    const byMarketMap = new Map<string, Point[]>();
-    all.forEach((p) => {
-      const arr = byMarketMap.get(p.market) ?? [];
-      arr.push(p);
-      byMarketMap.set(p.market, arr);
-    });
-    const above = all.filter((p) => p.actual >= p.uw);
-    const totalSf = all.reduce((s, p) => s + p.sf, 0);
-    const aboveSf = above.reduce((s, p) => s + p.sf, 0);
-    const aboveSfPct = totalSf > 0 ? (aboveSf / totalSf) * 100 : 0;
-    const max = all.reduce((m, p) => Math.max(m, p.uw, p.actual), 0);
+    const sorted = [...all].sort((a, b) =>
+      metric === 'pct' ? b.pctDelta - a.pctDelta : b.dollarDelta - a.dollarDelta
+    );
+
+    const above = all.filter((p) => p.dollarDelta > 0.005);
+    const below = all.filter((p) => p.dollarDelta < -0.005);
+    const atPar = all.length - above.length - below.length;
+    const totalAnnualDelta = all.reduce((s, p) => s + p.annualDollarDelta, 0);
+    const totalSF = all.reduce((s, p) => s + p.sf, 0);
+    const weightedPct =
+      totalSF > 0
+        ? all.reduce((s, p) => s + p.pctDelta * p.sf, 0) / totalSF
+        : 0;
+
     return {
-      points: all,
-      byMarket: Array.from(byMarketMap.entries()).sort((a, b) => a[0].localeCompare(b[0])),
+      points: sorted,
       stats: {
-        total: all.length,
         above: above.length,
-        aboveSfPct,
+        below: below.length,
+        atPar,
+        totalAnnualDelta,
+        weightedPct,
       },
-      axisMax: Math.ceil(max * 1.05),
     };
-  }, [rows]);
+  }, [rows, metric]);
 
   const CustomTooltip = (props: Any) => {
     const { active, payload } = props;
@@ -90,7 +108,7 @@ export function UWvsActualRentChart({ rows }: UWvsActualRentChartProps) {
           padding: 12,
           fontSize: 12,
           color: c.fg,
-          minWidth: 200,
+          minWidth: 220,
         }}
       >
         <p className="font-semibold mb-1">{p.tenant}</p>
@@ -102,24 +120,70 @@ export function UWvsActualRentChart({ rows }: UWvsActualRentChartProps) {
           <span className="text-right">${p.uw.toFixed(2)}/SF</span>
           <span style={{ color: c.fgMuted }}>Actual</span>
           <span className="text-right">${p.actual.toFixed(2)}/SF</span>
-          <span style={{ color: c.fgMuted }}>Spread</span>
+          <span style={{ color: c.fgMuted }}>$ delta</span>
           <span
-            className="text-right"
-            style={{ color: p.spread >= 0 ? c.success : c.danger }}
+            className="text-right font-medium"
+            style={{ color: p.dollarDelta >= 0 ? c.success : c.danger }}
           >
-            {p.spread >= 0 ? '+' : ''}${p.spread.toFixed(2)}/SF
+            {p.dollarDelta >= 0 ? '+' : ''}${p.dollarDelta.toFixed(2)}/SF
           </span>
-          <span style={{ color: c.fgMuted }}>% of UW</span>
-          <span className="text-right">{p.pctOfUw.toFixed(0)}%</span>
+          <span style={{ color: c.fgMuted }}>% delta</span>
+          <span
+            className="text-right font-medium"
+            style={{ color: p.pctDelta >= 0 ? c.success : c.danger }}
+          >
+            {p.pctDelta >= 0 ? '+' : ''}{p.pctDelta.toFixed(1)}%
+          </span>
+          <span style={{ color: c.fgMuted }}>Annual $ impact</span>
+          <span
+            className="text-right tabular-nums"
+            style={{ color: p.annualDollarDelta >= 0 ? c.success : c.danger }}
+          >
+            {p.annualDollarDelta >= 0 ? '+' : ''}${Math.round(p.annualDollarDelta).toLocaleString()}
+          </span>
         </div>
       </div>
     );
   };
 
+  // Compute symmetric x-axis around 0 for visual fairness
+  const dataValue = (p: Point) => (metric === 'pct' ? p.pctDelta : p.dollarDelta);
+  const absMax = points.reduce((m, p) => Math.max(m, Math.abs(dataValue(p))), 0);
+  const axisMax = absMax === 0 ? (metric === 'pct' ? 5 : 1) : Math.ceil(absMax * 1.15 * 10) / 10;
+
+  // Truncate long labels so they fit
+  const truncate = (s: string, n = 28) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+  const chartData = points.map((p) => ({
+    ...p,
+    displayLabel: truncate(`${p.tenant} · ${p.deal}`),
+    value: dataValue(p),
+  }));
+
+  const height = Math.max(220, points.length * 22 + 40);
+
   return (
     <ChartCard
       title="UW vs Actual Rent"
-      subtitle="Each point is an occupied space"
+      subtitle={metric === 'pct' ? '% delta from underwritten rent per space' : '$ delta per SF from underwritten rent'}
+      actions={
+        <div className="flex bg-bg-subtle rounded-lg p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setMetric('pct')}
+            className={`px-2.5 py-1 rounded-md font-medium ${metric === 'pct' ? 'bg-bg-elevated text-fg shadow-soft' : 'text-fg-muted'}`}
+          >
+            %
+          </button>
+          <button
+            type="button"
+            onClick={() => setMetric('dollar')}
+            className={`px-2.5 py-1 rounded-md font-medium ${metric === 'dollar' ? 'bg-bg-elevated text-fg shadow-soft' : 'text-fg-muted'}`}
+          >
+            $/SF
+          </button>
+        </div>
+      }
     >
       {points.length === 0 ? (
         <div className="h-72 flex items-center justify-center text-sm text-fg-subtle text-center px-6">
@@ -127,70 +191,108 @@ export function UWvsActualRentChart({ rows }: UWvsActualRentChartProps) {
         </div>
       ) : (
         <>
-          <div className="h-72">
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="flex flex-col gap-1 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-emerald-800 dark:text-emerald-300">
+                <TrendingUp size={12} strokeWidth={2.5} />
+                Above UW
+              </div>
+              <div className="text-2xl font-semibold tabular-nums text-emerald-800 dark:text-emerald-300">
+                {stats.above}
+              </div>
+              <div className="text-[11px] text-emerald-800/70 dark:text-emerald-300/70">
+                spaces leasing higher
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 p-3 rounded-xl bg-stone-100 dark:bg-stone-800/40">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-stone-700 dark:text-stone-300">
+                <Minus size={12} strokeWidth={2.5} />
+                At Par
+              </div>
+              <div className="text-2xl font-semibold tabular-nums text-stone-700 dark:text-stone-300">
+                {stats.atPar}
+              </div>
+              <div className="text-[11px] text-stone-600 dark:text-stone-400">
+                within ±$0.01/SF
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 p-3 rounded-xl bg-rose-50 dark:bg-rose-500/10">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-rose-800 dark:text-rose-300">
+                <TrendingDown size={12} strokeWidth={2.5} />
+                Below UW
+              </div>
+              <div className="text-2xl font-semibold tabular-nums text-rose-800 dark:text-rose-300">
+                {stats.below}
+              </div>
+              <div className="text-[11px] text-rose-800/70 dark:text-rose-300/70">
+                spaces leasing lower
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-baseline justify-between mb-3 px-1">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.1em] text-fg-subtle">
+                SF-weighted avg delta
+              </p>
+              <p
+                className="text-lg font-semibold tabular-nums"
+                style={{ color: stats.weightedPct >= 0 ? c.success : c.danger }}
+              >
+                {stats.weightedPct >= 0 ? '+' : ''}{stats.weightedPct.toFixed(2)}%
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] uppercase tracking-[0.1em] text-fg-subtle">
+                Annual $ impact
+              </p>
+              <p
+                className="text-lg font-semibold tabular-nums"
+                style={{ color: stats.totalAnnualDelta >= 0 ? c.success : c.danger }}
+              >
+                {stats.totalAnnualDelta >= 0 ? '+' : ''}{formatCurrencyShort(stats.totalAnnualDelta)}
+              </p>
+            </div>
+          </div>
+
+          <div style={{ height }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={c.border} />
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ top: 4, right: 24, left: 0, bottom: 4 }}
+                barCategoryGap={2}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke={c.border} horizontal={false} />
                 <XAxis
                   type="number"
-                  dataKey="uw"
-                  name="UW Rent"
-                  domain={[0, axisMax]}
+                  domain={[-axisMax, axisMax]}
                   stroke={c.fgSubtle}
                   tick={{ fill: c.fgMuted, fontSize: 11 }}
                   tickLine={false}
-                  tickFormatter={(v) => `$${v}`}
-                  label={{
-                    value: 'UW Rent ($/SF)',
-                    position: 'insideBottom',
-                    offset: -2,
-                    fill: c.fgMuted,
-                    fontSize: 11,
-                  }}
+                  tickFormatter={(v) => (metric === 'pct' ? `${v > 0 ? '+' : ''}${v}%` : `${v > 0 ? '+' : ''}$${v}`)}
                 />
                 <YAxis
-                  type="number"
-                  dataKey="actual"
-                  name="Actual"
-                  domain={[0, axisMax]}
+                  type="category"
+                  dataKey="displayLabel"
                   stroke={c.fgSubtle}
-                  tick={{ fill: c.fgMuted, fontSize: 11 }}
+                  tick={{ fill: c.fgMuted, fontSize: 10 }}
                   tickLine={false}
-                  tickFormatter={(v) => `$${v}`}
-                  label={{
-                    value: 'Actual ($/SF)',
-                    angle: -90,
-                    position: 'insideLeft',
-                    fill: c.fgMuted,
-                    fontSize: 11,
-                  }}
+                  width={180}
+                  interval={0}
                 />
-                <ZAxis type="number" dataKey="sf" range={[40, 400]} />
-                <ReferenceLine
-                  segment={[
-                    { x: 0, y: 0 },
-                    { x: axisMax, y: axisMax },
-                  ]}
-                  stroke={c.fgSubtle}
-                  strokeDasharray="4 4"
-                />
-                <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-                {byMarket.map(([market, pts]) => (
-                  <Scatter
-                    key={market}
-                    name={market}
-                    data={pts}
-                    fill={colorFor(market, c.palette)}
-                    fillOpacity={0.7}
-                  />
-                ))}
-              </ScatterChart>
+                <ReferenceLine x={0} stroke={c.fgSubtle} strokeWidth={1} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: c.bgSubtle }} />
+                <Bar dataKey="value" radius={[0, 2, 2, 0]}>
+                  {chartData.map((p, i) => (
+                    <Cell
+                      key={i}
+                      fill={p.value > 0.005 ? c.success : p.value < -0.005 ? c.danger : c.fgSubtle}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
-          </div>
-          <div className="mt-3 pt-3 border-t border-border text-xs text-fg-muted">
-            <span className="font-medium text-fg">{stats.above}</span> of{' '}
-            <span className="font-medium text-fg">{stats.total}</span> spaces leasing at or above UW
-            ({stats.aboveSfPct.toFixed(0)}% of occupied SF).
           </div>
         </>
       )}
