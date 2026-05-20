@@ -145,47 +145,115 @@ const buildGetter = (rawRow: RawRow) => {
 
 // ──────────────────────────────────────────────────────────────────
 // Sheet detection — auto-find Prospects sheet vs Rent Roll sheet
+// Handles workbooks with title/instruction rows above the headers
+// (e.g. "CENTRAL LOGISTICS PLATFORM — Rent Roll" + ✎ note rows).
 // ──────────────────────────────────────────────────────────────────
 
-const looksLikeRentRoll = (headers: string[]): boolean => {
-  const norm = new Set(headers.map(HEADER_NORMALIZE));
-  return (
-    norm.has(HEADER_NORMALIZE('Leasable SF')) ||
-    norm.has(HEADER_NORMALIZE('Occupied?')) ||
-    norm.has(HEADER_NORMALIZE('Tenant Rating')) ||
-    norm.has(HEADER_NORMALIZE('Actual or Prospective UW')) ||
-    norm.has(HEADER_NORMALIZE('In-Place Rent'))
-  );
-};
+const RENT_ROLL_HEADER_HINTS = ['leasablesf', 'occupied', 'tenantrating', 'actualorprospectiveuw'];
+const PROSPECTS_HEADER_HINTS = ['prospecttenant', 'probabilityoflease', 'targetrent'];
 
-const looksLikeProspects = (headers: string[]): boolean => {
-  const norm = new Set(headers.map(HEADER_NORMALIZE));
-  return (
-    norm.has(HEADER_NORMALIZE('Prospect / Tenant')) ||
-    norm.has(HEADER_NORMALIZE('Probability of Lease %')) ||
-    (norm.has(HEADER_NORMALIZE('Target Rent ($/SF)')) && norm.has(HEADER_NORMALIZE('Status')))
-  );
-};
-
-const getSheetHeaders = (sheet: XLSX.WorkSheet): string[] => {
+const readRow = (sheet: XLSX.WorkSheet, rowIdx: number): string[] => {
   const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1');
-  const headers: string[] = [];
+  const out: string[] = [];
   for (let c = range.s.c; c <= range.e.c; c++) {
-    const cellRef = XLSX.utils.encode_cell({ r: range.s.r, c });
-    const cell = sheet[cellRef];
-    headers.push(cell?.v ? String(cell.v) : '');
+    const ref = XLSX.utils.encode_cell({ r: rowIdx, c });
+    const cell = sheet[ref];
+    out.push(cell?.v !== undefined && cell?.v !== null ? String(cell.v) : '');
   }
-  return headers;
+  return out;
+};
+
+// Look at the first ~10 rows to find one that contains expected column names.
+// Returns the row index of the header row, or 0 if none found.
+const findHeaderRow = (sheet: XLSX.WorkSheet): { rowIdx: number; type: 'rentroll' | 'prospects' | 'unknown' } => {
+  const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1');
+  const maxScan = Math.min(range.s.r + 12, range.e.r);
+  for (let r = range.s.r; r <= maxScan; r++) {
+    const headers = readRow(sheet, r);
+    const norm = new Set(headers.map(HEADER_NORMALIZE));
+    const rrHits = RENT_ROLL_HEADER_HINTS.filter((h) => norm.has(h)).length;
+    const pHits = PROSPECTS_HEADER_HINTS.filter((h) => norm.has(h)).length;
+    if (rrHits >= 2) return { rowIdx: r, type: 'rentroll' };
+    if (pHits >= 2) return { rowIdx: r, type: 'prospects' };
+    if (norm.has('dealname') && (norm.has('status') || norm.has('priority'))) {
+      return { rowIdx: r, type: 'prospects' };
+    }
+    if (norm.has('tenantname') && norm.has('leasestart')) {
+      return { rowIdx: r, type: 'rentroll' };
+    }
+  }
+  return { rowIdx: range.s.r, type: 'unknown' };
+};
+
+// Convert sheet to objects, starting from a specific header row index.
+const sheetToJsonFromRow = (sheet: XLSX.WorkSheet, headerRowIdx: number): RawRow[] => {
+  const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1');
+  const headers = readRow(sheet, headerRowIdx);
+  // De-duplicate empty headers so json_to_sheet doesn't collide
+  const cleanHeaders = headers.map((h, i) => (h && h.trim() !== '' ? h : `__col_${i}`));
+
+  const rows: RawRow[] = [];
+  for (let r = headerRowIdx + 1; r <= range.e.r; r++) {
+    const rowVals = readRow(sheet, r);
+    const obj: RawRow = {};
+    let hasAny = false;
+    for (let c = 0; c < cleanHeaders.length; c++) {
+      const raw = sheet[XLSX.utils.encode_cell({ r, c })];
+      const v = raw?.v;
+      if (v !== undefined && v !== null && String(v).trim() !== '') hasAny = true;
+      obj[cleanHeaders[c]] = v ?? null;
+      // also stash the formatted string for date cells we couldn't get raw value for
+      if (!raw && rowVals[c]) {
+        obj[cleanHeaders[c]] = rowVals[c];
+        if (rowVals[c].trim() !== '') hasAny = true;
+      }
+    }
+    if (hasAny) rows.push(obj);
+  }
+  return rows;
 };
 
 // ──────────────────────────────────────────────────────────────────
 // Parsers per sheet type
 // ──────────────────────────────────────────────────────────────────
 
+const SUMMARY_KEYWORDS = new Set([
+  'pipelinesummary',
+  'wtdavgprobability',
+  'totalactive',
+  'totalpipeline',
+  'grandtotal',
+  'subtotal',
+  'rfpout',
+  'rfpforapproval',
+  'loiout',
+  'leaseout',
+  'executed',
+  'dead',
+  'lost',
+  'onhold',
+  'prospect',
+  'status',
+]);
+
 const parseProspectsRow = (rawRow: RawRow): Deal | null => {
   const get = buildGetter(rawRow);
   const dealName = cleanString(get('Deal Name', 'Property', 'Property Name'));
   if (!dealName) return null;
+
+  // Real prospect rows have at least one of: tenant, broker, transaction, or SF.
+  // Summary rows below the data block only have a label in Deal Name.
+  const tenant = cleanString(get('Prospect / Tenant', 'Prospect/Tenant', 'Tenant', 'Prospect'));
+  const broker = cleanString(get('Broker / Rep', 'Broker/Rep', 'Broker', 'Rep'));
+  const transaction = cleanString(get('Transaction', 'Transaction Type', 'Deal Type'));
+  const availSF = cleanString(get('Available SF', 'SF', 'Square Feet'));
+  if (!tenant && !broker && !transaction && !availSF) {
+    // Probable summary/calculation row — skip.
+    return null;
+  }
+  // Defensive: skip rows whose Deal Name matches known summary labels.
+  if (SUMMARY_KEYWORDS.has(HEADER_NORMALIZE(dealName))) return null;
+
   const { min: minSF, max: maxSF } = parseSFRange(get('Available SF', 'SF', 'Square Feet'));
   const ti = parseTI(get('$ TI / SF', 'TI', 'TI/SF', 'TI Allowance'));
   const parsed = {
@@ -224,8 +292,19 @@ const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
   const get = buildGetter(rawRow);
   const dealName = cleanString(get('Deal Name'));
   const tenant = cleanString(get('Tenant Name', 'Tenant'));
-  // Skip totally blank rows (no deal name AND no tenant AND no space)
-  if (!dealName && !tenant && !cleanString(get('Space ID'))) return null;
+  const spaceId = cleanString(get('Space ID'));
+  const dealId = cleanString(get('Deal ID'));
+  const leasableSFRaw = get('Leasable SF', 'SF', 'Square Feet');
+
+  // Skip clearly blank rows.
+  if (!dealName && !tenant && !spaceId) return null;
+
+  // Skip placeholder rows where Deal ID is "-" / "0" and there's no real data
+  // (e.g. the "- 0 0" rows your template leaves at the bottom).
+  const isPlaceholderDealId = dealId === '-' || dealId === '0';
+  const isPlaceholderSpaceId = !spaceId || spaceId === '0';
+  if (isPlaceholderDealId && isPlaceholderSpaceId && !tenant && !dealName) return null;
+  if (!dealName && !tenant && !leasableSFRaw) return null;
 
   const ti = parseTI(get('$ TI/ TI Allowance', '$ TI / TI Allowance', '$ TI', 'TI Allowance'));
 
@@ -295,33 +374,19 @@ export async function loadFromFile(file: File): Promise<LoadResult> {
         for (const name of workbook.SheetNames) {
           const ws = workbook.Sheets[name];
           if (!ws) continue;
-          const headers = getSheetHeaders(ws);
-          const rows = XLSX.utils.sheet_to_json<RawRow>(ws, {
-            defval: null,
-            raw: false,
-            dateNF: 'yyyy-mm-dd',
-          });
+          const { rowIdx, type } = findHeaderRow(ws);
+          if (type === 'unknown') continue;
+          const rows = sheetToJsonFromRow(ws, rowIdx);
 
-          if (looksLikeRentRoll(headers)) {
+          if (type === 'rentroll') {
             rentRoll = rentRoll.concat(
               rows.map(parseRentRollRow).filter((r): r is RentRollRow => r !== null)
             );
-          } else if (looksLikeProspects(headers)) {
+          } else if (type === 'prospects') {
             deals = deals.concat(
               rows.map(parseProspectsRow).filter((d): d is Deal => d !== null)
             );
           }
-        }
-
-        // Fall back: if no sheet matched, try the first sheet as Prospects
-        if (deals.length === 0 && rentRoll.length === 0 && workbook.SheetNames[0]) {
-          const ws = workbook.Sheets[workbook.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json<RawRow>(ws, {
-            defval: null,
-            raw: false,
-            dateNF: 'yyyy-mm-dd',
-          });
-          deals = rows.map(parseProspectsRow).filter((d): d is Deal => d !== null);
         }
 
         resolve({ deals, rentRoll });
