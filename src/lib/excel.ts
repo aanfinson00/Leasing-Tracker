@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
-import { Deal, DealSchema } from '../types';
+import type { Deal } from '../types';
+import { DealSchema } from '../types';
 
 const DEALS_SHEET = 'Deals';
 

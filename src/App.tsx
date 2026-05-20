@@ -1,10 +1,14 @@
 import { useState, useRef } from 'react';
-import { Deal, defaultDeal } from './types';
+import type { Deal } from './types';
+import { defaultDeal } from './types';
 import { loadFromFile, saveToFile } from './lib/excel';
-import './App.css';
+import { DealTable } from './components/DealTable';
+import { FilterBar } from './components/FilterBar';
+import { SummaryStrip } from './components/SummaryStrip';
 
 function App() {
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [filteredDeals, setFilteredDeals] = useState<Deal[]>([]);
   const [filename, setFilename] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -15,6 +19,7 @@ function App() {
     try {
       const loadedDeals = await loadFromFile(file);
       setDeals(loadedDeals);
+      setFilteredDeals(loadedDeals);
       setFilename(file.name);
     } catch (err) {
       alert(`Error loading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -27,15 +32,16 @@ function App() {
   };
 
   const handleNewDeal = () => {
-    setDeals([...deals, defaultDeal()]);
-  };
-
-  const handleUpdateDeal = (id: string, updated: Deal) => {
-    setDeals(deals.map((d) => (d.id === id ? updated : d)));
+    const newDeal = defaultDeal();
+    const updated = [...deals, newDeal];
+    setDeals(updated);
+    setFilteredDeals(updated);
   };
 
   const handleDeleteDeal = (id: string) => {
-    setDeals(deals.filter((d) => d.id !== id));
+    const newDeals = deals.filter((d) => d.id !== id);
+    setDeals(newDeals);
+    setFilteredDeals(newDeals);
   };
 
   return (
@@ -84,76 +90,24 @@ function App() {
             <p className="text-gray-600 text-lg">No deals loaded. Open a file or create a new deal.</p>
           </div>
         ) : (
-          <div className="bg-white rounded shadow overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Property</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Tenant</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Stage</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">SF</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">$/SF</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Start Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {deals.map((deal) => (
-                  <tr key={deal.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">{deal.propertyName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{deal.tenantName}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-semibold">
-                        {deal.stage}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{deal.squareFeet?.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">${deal.baseRentPSF?.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{deal.leaseStartDate}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <button
-                        onClick={() => handleDeleteDeal(deal.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+          <>
+            <FilterBar deals={deals} onFilterChange={setFilteredDeals} />
 
-        <div className="bg-white rounded shadow p-4">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Summary</h2>
-          <div className="grid grid-cols-4 gap-4">
-            <div>
-              <p className="text-gray-600 text-sm">Total Deals</p>
-              <p className="text-2xl font-bold text-gray-900">{deals.length}</p>
-            </div>
-            <div>
-              <p className="text-gray-600 text-sm">Total Square Feet</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {deals.reduce((sum, d) => sum + (d.squareFeet || 0), 0).toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-gray-600 text-sm">Total Annual Rent</p>
-              <p className="text-2xl font-bold text-gray-900">
-                ${deals
-                  .reduce((sum, d) => sum + ((d.squareFeet || 0) * (d.baseRentPSF || 0)), 0)
-                  .toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              </p>
-            </div>
-            <div>
-              <p className="text-gray-600 text-sm">Active Leases</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {deals.filter((d) => d.stage === 'Active').length}
-              </p>
-            </div>
-          </div>
-        </div>
+            {filteredDeals.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded shadow">
+                <p className="text-gray-600 text-lg">No deals match your filters.</p>
+              </div>
+            ) : (
+              <DealTable
+                deals={filteredDeals}
+                onSelectDeal={() => {}}
+                onDeleteDeal={handleDeleteDeal}
+              />
+            )}
+
+            <SummaryStrip deals={filteredDeals} />
+          </>
+        )}
       </div>
     </div>
   );
