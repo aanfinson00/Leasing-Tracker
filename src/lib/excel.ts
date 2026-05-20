@@ -1,10 +1,285 @@
 import * as XLSX from 'xlsx';
-import type { Deal } from '../types';
-import { DealSchema } from '../types';
+import type { Deal, DealStatus, Priority, RentRollRow, UWBasis } from '../types';
+import { DealSchema, DealStatusEnum, RentRollRowSchema, UWBasisEnum } from '../types';
 
-const DEALS_SHEET = 'Deals';
+const MISSING_TOKENS = new Set(['', '?', '#n/a', '#na', 'n/a', 'na', '-', '—', 'tbd', 'unknown']);
 
-export async function loadFromFile(file: File): Promise<Deal[]> {
+const isMissing = (v: unknown): boolean => {
+  if (v === null || v === undefined) return true;
+  const s = String(v).trim().toLowerCase();
+  return MISSING_TOKENS.has(s);
+};
+
+const cleanString = (v: unknown): string | null => {
+  if (isMissing(v)) return null;
+  return String(v).trim();
+};
+
+const parseNumber = (v: unknown): number | null => {
+  if (isMissing(v)) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const cleaned = String(v)
+    .replace(/[$,]/g, '')
+    .replace(/\s*(months?|month|sf|%|\/sf)\s*$/i, '')
+    .replace(/^\s*~\s*/, '')
+    .trim();
+  if (cleaned === '') return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+};
+
+const parseSFRange = (v: unknown): { min: number | null; max: number | null } => {
+  if (isMissing(v)) return { min: null, max: null };
+  if (typeof v === 'number') return { min: v, max: v };
+  const raw = String(v).replace(/[,]/g, '').replace(/\s*sf\s*$/i, '').trim();
+  const rangeMatch = raw.match(/^(\d+(?:\.\d+)?)\s*(?:-|to|–|—)\s*(\d+(?:\.\d+)?)$/i);
+  if (rangeMatch) {
+    return { min: Number(rangeMatch[1]), max: Number(rangeMatch[2]) };
+  }
+  const single = parseNumber(raw);
+  return { min: single, max: single };
+};
+
+const parseTI = (v: unknown): { num: number | null; note: string | null } => {
+  if (isMissing(v)) return { num: null, note: null };
+  const num = parseNumber(v);
+  if (num !== null) return { num, note: null };
+  const s = String(v).trim();
+  return { num: null, note: s === '' ? null : s };
+};
+
+const parsePercent = (v: unknown): number | null => {
+  if (isMissing(v)) return null;
+  if (typeof v === 'number') {
+    return v <= 1 ? Math.round(v * 100) : v;
+  }
+  const cleaned = String(v).replace(/[%\s]/g, '');
+  const n = Number(cleaned);
+  if (!Number.isFinite(n)) return null;
+  return n <= 1 ? Math.round(n * 100) : n;
+};
+
+const parseDate = (v: unknown): string | null => {
+  if (isMissing(v)) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === 'number') {
+    const ms = (v - 25569) * 86400 * 1000;
+    const d = new Date(ms);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  const s = String(v).trim();
+  if (!s) return null;
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  return s;
+};
+
+const parseBool = (v: unknown): boolean => {
+  if (typeof v === 'boolean') return v;
+  const s = String(v ?? '').trim().toLowerCase();
+  return s === 'yes' || s === 'y' || s === 'true' || s === '1';
+};
+
+const parseStars = (v: unknown): number | null => {
+  if (isMissing(v)) return null;
+  const s = String(v).trim();
+  const filled = (s.match(/★/g) ?? []).length;
+  if (filled > 0) return Math.min(filled, 5);
+  const asNum = parseNumber(v);
+  if (asNum !== null && asNum >= 0 && asNum <= 5) return Math.round(asNum);
+  return null;
+};
+
+const parseStatus = (v: unknown): DealStatus => {
+  const s = cleanString(v);
+  if (!s) return 'Prospect';
+  const opts = DealStatusEnum.options;
+  const exact = opts.find((o) => o.toLowerCase() === s.toLowerCase());
+  if (exact) return exact;
+  const lower = s.toLowerCase();
+  if (lower.includes('rfp') && lower.includes('approval')) return 'RFP for Approval';
+  if (lower.includes('rfp')) return 'RFP Out';
+  if (lower.includes('hold')) return 'On Hold';
+  if (lower.includes('execut')) return 'Executed';
+  if (lower.includes('lost') || lower.includes('dead')) return 'Lost';
+  return 'Prospect';
+};
+
+const parsePriority = (v: unknown): Priority => {
+  const s = cleanString(v)?.toLowerCase() ?? '';
+  if (s.startsWith('h')) return 'High';
+  if (s.startsWith('m')) return 'Medium';
+  return 'Low';
+};
+
+const parseUWBasis = (v: unknown): UWBasis | null => {
+  const s = cleanString(v)?.toLowerCase() ?? '';
+  if (!s) return null;
+  if (s.includes('actual')) return 'Actual';
+  if (s.includes('prospect') || s.includes('uw')) return 'Prospective UW';
+  const opts = UWBasisEnum.options;
+  const exact = opts.find((o) => o.toLowerCase() === s);
+  return exact ?? null;
+};
+
+const HEADER_NORMALIZE = (h: string) =>
+  h.toLowerCase().replace(/[\s_\-/().$%]+/g, '').replace(/&/g, 'and').trim();
+
+interface RawRow {
+  [key: string]: unknown;
+}
+
+const buildGetter = (rawRow: RawRow) => {
+  const norm: Record<string, unknown> = {};
+  Object.entries(rawRow).forEach(([k, v]) => {
+    norm[HEADER_NORMALIZE(k)] = v;
+  });
+  return (...keys: string[]): unknown => {
+    for (const k of keys) {
+      const nk = HEADER_NORMALIZE(k);
+      if (nk in norm && norm[nk] !== null && norm[nk] !== undefined) return norm[nk];
+    }
+    return null;
+  };
+};
+
+// ──────────────────────────────────────────────────────────────────
+// Sheet detection — auto-find Prospects sheet vs Rent Roll sheet
+// ──────────────────────────────────────────────────────────────────
+
+const looksLikeRentRoll = (headers: string[]): boolean => {
+  const norm = new Set(headers.map(HEADER_NORMALIZE));
+  return (
+    norm.has(HEADER_NORMALIZE('Leasable SF')) ||
+    norm.has(HEADER_NORMALIZE('Occupied?')) ||
+    norm.has(HEADER_NORMALIZE('Tenant Rating')) ||
+    norm.has(HEADER_NORMALIZE('Actual or Prospective UW')) ||
+    norm.has(HEADER_NORMALIZE('In-Place Rent'))
+  );
+};
+
+const looksLikeProspects = (headers: string[]): boolean => {
+  const norm = new Set(headers.map(HEADER_NORMALIZE));
+  return (
+    norm.has(HEADER_NORMALIZE('Prospect / Tenant')) ||
+    norm.has(HEADER_NORMALIZE('Probability of Lease %')) ||
+    (norm.has(HEADER_NORMALIZE('Target Rent ($/SF)')) && norm.has(HEADER_NORMALIZE('Status')))
+  );
+};
+
+const getSheetHeaders = (sheet: XLSX.WorkSheet): string[] => {
+  const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1');
+  const headers: string[] = [];
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cellRef = XLSX.utils.encode_cell({ r: range.s.r, c });
+    const cell = sheet[cellRef];
+    headers.push(cell?.v ? String(cell.v) : '');
+  }
+  return headers;
+};
+
+// ──────────────────────────────────────────────────────────────────
+// Parsers per sheet type
+// ──────────────────────────────────────────────────────────────────
+
+const parseProspectsRow = (rawRow: RawRow): Deal | null => {
+  const get = buildGetter(rawRow);
+  const dealName = cleanString(get('Deal Name', 'Property', 'Property Name'));
+  if (!dealName) return null;
+  const { min: minSF, max: maxSF } = parseSFRange(get('Available SF', 'SF', 'Square Feet'));
+  const ti = parseTI(get('$ TI / SF', 'TI', 'TI/SF', 'TI Allowance'));
+  const parsed = {
+    id: crypto.randomUUID(),
+    dealName,
+    spaceId: cleanString(get('Space ID')),
+    building: cleanString(get('Building')),
+    dealId: cleanString(get('Deal ID')),
+    minSF,
+    maxSF,
+    prospectTenant: cleanString(get('Prospect / Tenant', 'Prospect/Tenant', 'Tenant', 'Prospect')),
+    brokerRep: cleanString(get('Broker / Rep', 'Broker/Rep', 'Broker', 'Rep')),
+    transaction: cleanString(get('Transaction', 'Transaction Type', 'Deal Type')),
+    status: parseStatus(get('Status', 'Stage')),
+    lastRevalUWRent: parseNumber(get('Last Reval UW Rent ($/SF)', 'UW Rent', 'Last Reval UW Rent')),
+    targetRent: parseNumber(get('Target Rent ($/SF)', 'Target Rent', 'Base Rent PSF')),
+    proposedTermMonths: parseNumber(get('Proposed Term (Months)', 'Proposed Term', 'Term', 'Term Months')),
+    freeRentMonths: parseNumber(get('Free Rent (Months)', 'Free Rent', 'Free Rent Months')),
+    tiPerSF: ti.num,
+    tiNote: ti.note,
+    probabilityPct: parsePercent(get('Probability of Lease %', 'Probability', 'Probability %')),
+    expectedStart: parseDate(get('Expected Start', 'Lease Start Date', 'Start Date')),
+    lastUpdated: parseDate(get('Last Updated', 'Last Modified')),
+    priority: parsePriority(get('Priority')),
+    notes: cleanString(get('Notes', 'Comment', 'Comments')),
+  };
+  const result = DealSchema.safeParse(parsed);
+  if (!result.success) {
+    console.warn('Skipping unparsable prospects row:', parsed, result.error.format());
+    return null;
+  }
+  return result.data;
+};
+
+const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
+  const get = buildGetter(rawRow);
+  const dealName = cleanString(get('Deal Name'));
+  const tenant = cleanString(get('Tenant Name', 'Tenant'));
+  // Skip totally blank rows (no deal name AND no tenant AND no space)
+  if (!dealName && !tenant && !cleanString(get('Space ID'))) return null;
+
+  const ti = parseTI(get('$ TI/ TI Allowance', '$ TI / TI Allowance', '$ TI', 'TI Allowance'));
+
+  const parsed = {
+    id: crypto.randomUUID(),
+    dealId: cleanString(get('Deal ID')),
+    dealName,
+    buildingId: cleanString(get('Building ID')),
+    spaceId: cleanString(get('Space ID')),
+    building: cleanString(get('Building')),
+    market: cleanString(get('Market')),
+    propertyType: cleanString(get('Property Type')),
+    buildingType: cleanString(get('Building Type')),
+    tenantName: tenant,
+    tenantRating: parseStars(get('Tenant Rating (1-5)', 'Tenant Rating', 'Rating')),
+    occupied: parseBool(get('Occupied?', 'Occupied')),
+    uwBasis: parseUWBasis(get('Actual or Prospective UW', 'UW Basis', 'Basis')),
+    leasableSF: parseNumber(get('Leasable SF', 'SF', 'Square Feet')),
+    leaseStart: parseDate(get('Lease Start')),
+    leaseTermMonths: parseNumber(get('Lease Term (Months)', 'Lease Term', 'Term', 'Term Months')),
+    leaseEnd: parseDate(get('Lease End')),
+    freeRentMonths: parseNumber(get('Free Rent (Months)', 'Free Rent')),
+    annualRentBumpsPct: parsePercent(get('Annual Rent Bumps (%)', 'Annual Rent Bumps', 'Rent Bumps')),
+    expiryYearBucket: cleanString(get('Expiry Year Bucket', 'Expiry')),
+    tiPerSF: ti.num,
+    tiNote: ti.note,
+    specOffice: cleanString(get('Spec Office/lighting prior to additional $ TI spend', 'Spec Office')),
+    commissionStructurePct: parsePercent(get('Leasing Commission Structure', 'Commission Structure')),
+    commissionDollar: parseNumber(get('Leasing Commission $', 'Commission $')),
+    lastRevalUWRent: parseNumber(get('Last Reval UW Rent ($/SF)', 'Last Reval UW Rent')),
+    startingAnnualRentPSF: parseNumber(get('Starting Annual Rent ($/SF)', 'Starting Annual Rent')),
+    inPlaceRent: parseNumber(get('In-Place Rent')),
+    annualRent: parseNumber(get('Annual Rent ($)', 'Annual Rent')),
+    notes: cleanString(get('Notes')),
+  };
+
+  const result = RentRollRowSchema.safeParse(parsed);
+  if (!result.success) {
+    console.warn('Skipping unparsable rent roll row:', parsed, result.error.format());
+    return null;
+  }
+  return result.data;
+};
+
+// ──────────────────────────────────────────────────────────────────
+// Public API
+// ──────────────────────────────────────────────────────────────────
+
+export interface LoadResult {
+  deals: Deal[];
+  rentRoll: RentRollRow[];
+}
+
+export async function loadFromFile(file: File): Promise<LoadResult> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -12,51 +287,44 @@ export async function loadFromFile(file: File): Promise<Deal[]> {
         const data = e.target?.result;
         if (!data) throw new Error('Failed to read file');
 
-        const workbook = XLSX.read(data, { type: 'array' });
-        const worksheet = workbook.Sheets[DEALS_SHEET];
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
 
-        if (!worksheet) {
-          throw new Error(`Sheet "${DEALS_SHEET}" not found in workbook`);
-        }
+        let deals: Deal[] = [];
+        let rentRoll: RentRollRow[] = [];
 
-        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
-
-        const deals = rows.map((row) => {
-          const normalized: Record<string, unknown> = {};
-
-          // Map Excel columns to Deal fields
-          Object.entries(row).forEach(([key, value]) => {
-            const lowerKey = key.toLowerCase().trim();
-            if (value === '') {
-              normalized[lowerKey] = null;
-            } else if (value === 'NULL' || value === 'null') {
-              normalized[lowerKey] = null;
-            } else {
-              normalized[lowerKey] = value;
-            }
+        for (const name of workbook.SheetNames) {
+          const ws = workbook.Sheets[name];
+          if (!ws) continue;
+          const headers = getSheetHeaders(ws);
+          const rows = XLSX.utils.sheet_to_json<RawRow>(ws, {
+            defval: null,
+            raw: false,
+            dateNF: 'yyyy-mm-dd',
           });
 
-          // Parse numbers and dates
-          if (normalized['squarefeet'] && typeof normalized['squarefeet'] === 'string') {
-            normalized['squarefeet'] = parseInt(normalized['squarefeet'] as string, 10) || null;
+          if (looksLikeRentRoll(headers)) {
+            rentRoll = rentRoll.concat(
+              rows.map(parseRentRollRow).filter((r): r is RentRollRow => r !== null)
+            );
+          } else if (looksLikeProspects(headers)) {
+            deals = deals.concat(
+              rows.map(parseProspectsRow).filter((d): d is Deal => d !== null)
+            );
           }
-          if (normalized['termmonths'] && typeof normalized['termmonths'] === 'string') {
-            normalized['termmonths'] = parseInt(normalized['termmonths'] as string, 10) || null;
-          }
-          if (normalized['freerentmonths'] && typeof normalized['freerentmonths'] === 'string') {
-            normalized['freerentmonths'] = parseInt(normalized['freerentmonths'] as string, 10) || null;
-          }
+        }
 
-          // Attempt to parse as Deal
-          const deal = DealSchema.safeParse(normalized);
-          if (!deal.success) {
-            console.warn('Failed to parse row:', normalized, deal.error);
-            return null;
-          }
-          return deal.data;
-        }).filter((d) => d !== null) as Deal[];
+        // Fall back: if no sheet matched, try the first sheet as Prospects
+        if (deals.length === 0 && rentRoll.length === 0 && workbook.SheetNames[0]) {
+          const ws = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json<RawRow>(ws, {
+            defval: null,
+            raw: false,
+            dateNF: 'yyyy-mm-dd',
+          });
+          deals = rows.map(parseProspectsRow).filter((d): d is Deal => d !== null);
+        }
 
-        resolve(deals);
+        resolve({ deals, rentRoll });
       } catch (err) {
         reject(err);
       }
@@ -66,105 +334,90 @@ export async function loadFromFile(file: File): Promise<Deal[]> {
   });
 }
 
-export function saveToFile(deals: Deal[], filename: string = 'leases.xlsx'): void {
-  // Convert deals to workbook format
-  const wsData = deals.map((deal) => ({
-    id: deal.id,
-    propertyName: deal.propertyName,
-    address: deal.address,
-    city: deal.city,
-    state: deal.state,
-    squareFeet: deal.squareFeet,
-    tenantName: deal.tenantName,
-    stage: deal.stage,
-    targetCloseDate: deal.targetCloseDate,
-    broker: deal.broker,
-    brokerCommissionPct: deal.brokerCommissionPct,
-    baseRentPSF: deal.baseRentPSF,
-    leaseStartDate: deal.leaseStartDate,
-    leaseEndDate: deal.leaseEndDate,
-    termMonths: deal.termMonths,
-    rentEscalationPct: deal.rentEscalationPct,
-    nnnPSF: deal.nnnPSF,
-    tiAllowancePSF: deal.tiAllowancePSF,
-    freeRentMonths: deal.freeRentMonths,
-    renewalOptions: deal.renewalOptions,
-    expansionRights: deal.expansionRights,
-    notes: deal.notes,
-    lastModifiedBy: deal.lastModifiedBy,
-    lastModifiedAt: deal.lastModifiedAt,
-  }));
+// ──────────────────────────────────────────────────────────────────
+// Export
+// ──────────────────────────────────────────────────────────────────
 
-  const ws = XLSX.utils.json_to_sheet(wsData);
+const formatSF = (min: number | null, max: number | null): string => {
+  if (min === null && max === null) return '';
+  if (min !== null && max !== null && min === max) return `${min.toLocaleString()} SF`;
+  if (min !== null && max !== null) return `${min.toLocaleString()}-${max.toLocaleString()} SF`;
+  return `${(min ?? max)?.toLocaleString() ?? ''} SF`;
+};
+const formatNum = (n: number | null, prefix = '', suffix = ''): string =>
+  n === null ? '' : `${prefix}${n}${suffix}`;
+const formatCurrency = (n: number | null): string => (n === null ? '' : `$${n.toFixed(2)}`);
+const formatPercent = (n: number | null): string => (n === null ? '' : `${n}%`);
+const formatStars = (n: number | null): string => (n === null ? '' : '★'.repeat(n));
 
-  // Set column widths for readability
-  const colWidths = [
-    { wch: 36 },  // id
-    { wch: 20 },  // propertyName
-    { wch: 25 },  // address
-    { wch: 12 },  // city
-    { wch: 8 },   // state
-    { wch: 12 },  // squareFeet
-    { wch: 15 },  // tenantName
-    { wch: 12 },  // stage
-    { wch: 15 },  // targetCloseDate
-    { wch: 15 },  // broker
-    { wch: 16 },  // brokerCommissionPct
-    { wch: 12 },  // baseRentPSF
-    { wch: 15 },  // leaseStartDate
-    { wch: 15 },  // leaseEndDate
-    { wch: 12 },  // termMonths
-    { wch: 16 },  // rentEscalationPct
-    { wch: 10 },  // nnnPSF
-    { wch: 14 },  // tiAllowancePSF
-    { wch: 15 },  // freeRentMonths
-    { wch: 20 },  // renewalOptions
-    { wch: 20 },  // expansionRights
-    { wch: 30 },  // notes
-    { wch: 15 },  // lastModifiedBy
-    { wch: 20 },  // lastModifiedAt
-  ];
-  ws['!cols'] = colWidths;
-
+export function saveToFile(deals: Deal[], rentRoll: RentRollRow[], filename: string = 'leases.xlsx'): void {
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, DEALS_SHEET);
 
-  // Add a Summary sheet with rollups
-  const summaryData = generateSummary(deals);
-  const wsSummary = XLSX.utils.json_to_sheet(summaryData);
-  XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+  if (deals.length > 0) {
+    const prospectsData = deals.map((d) => ({
+      'Deal Name': d.dealName,
+      'Space ID': d.spaceId ?? '',
+      'Building': d.building ?? '',
+      'Deal ID': d.dealId ?? '',
+      'Available SF': formatSF(d.minSF, d.maxSF),
+      'Prospect / Tenant': d.prospectTenant ?? '',
+      'Broker / Rep': d.brokerRep ?? '',
+      'Transaction': d.transaction ?? '',
+      'Status': d.status,
+      'Last Reval UW Rent ($/SF)': formatCurrency(d.lastRevalUWRent),
+      'Target Rent ($/SF)': formatCurrency(d.targetRent),
+      'Proposed Term (Months)': formatNum(d.proposedTermMonths, '', ' months'),
+      'Free Rent (Months)': formatNum(d.freeRentMonths, '', ' months'),
+      '$ TI / SF': d.tiPerSF !== null ? formatCurrency(d.tiPerSF) : d.tiNote ?? '',
+      'Probability of Lease %': formatPercent(d.probabilityPct),
+      'Expected Start': d.expectedStart ?? '',
+      'Last Updated': d.lastUpdated ?? '',
+      'Priority': d.priority,
+      'Notes': d.notes ?? '',
+    }));
+    const wsP = XLSX.utils.json_to_sheet(prospectsData);
+    wsP['!cols'] = [
+      { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 22 },
+      { wch: 14 }, { wch: 22 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 18 },
+      { wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 50 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsP, 'Prospects');
+  }
+
+  if (rentRoll.length > 0) {
+    const rrData = rentRoll.map((r) => ({
+      'Deal ID': r.dealId ?? '',
+      'Deal Name': r.dealName ?? '',
+      'Market': r.market ?? '',
+      'Property Type': r.propertyType ?? '',
+      'Tenant Name': r.tenantName ?? '',
+      'Tenant Rating (1-5)': formatStars(r.tenantRating),
+      'Building ID': r.buildingId ?? '',
+      'Space ID': r.spaceId ?? '',
+      'Building': r.building ?? '',
+      'Building Type': r.buildingType ?? '',
+      'Leasable SF': r.leasableSF ?? '',
+      'Occupied?': r.occupied ? 'Yes' : 'No',
+      'Actual or Prospective UW': r.uwBasis ?? '',
+      'Lease Start': r.leaseStart ?? '',
+      'Lease Term (Months)': r.leaseTermMonths ?? '',
+      'Lease End': r.leaseEnd ?? '',
+      'Free Rent (Months)': r.freeRentMonths ?? '',
+      'Annual Rent Bumps (%)': formatPercent(r.annualRentBumpsPct),
+      'Expiry Year Bucket': r.expiryYearBucket ?? '',
+      '$ TI/ TI Allowance': r.tiPerSF !== null ? formatCurrency(r.tiPerSF) : r.tiNote ?? '',
+      'Spec Office/lighting prior to additional $ TI spend': r.specOffice ?? '',
+      'Leasing Commission Structure': formatPercent(r.commissionStructurePct),
+      'Leasing Commission $': r.commissionDollar ?? '',
+      'Last Reval UW Rent ($/SF)': formatCurrency(r.lastRevalUWRent),
+      'Starting Annual Rent ($/SF)': formatCurrency(r.startingAnnualRentPSF),
+      'In-Place Rent': r.inPlaceRent ?? '',
+      'Annual Rent ($)': r.annualRent ?? '',
+      'Notes': r.notes ?? '',
+    }));
+    const wsR = XLSX.utils.json_to_sheet(rrData);
+    XLSX.utils.book_append_sheet(wb, wsR, 'Rent Roll');
+  }
 
   XLSX.writeFile(wb, filename);
-}
-
-function generateSummary(deals: Deal[]): Record<string, unknown>[] {
-  const metrics = {
-    totalDeals: deals.length,
-    totalSF: deals.reduce((sum, d) => sum + (d.squareFeet || 0), 0),
-    totalAnnualRent: deals.reduce((sum, d) => {
-      const sf = d.squareFeet || 0;
-      const psf = d.baseRentPSF || 0;
-      return sum + (sf * psf);
-    }, 0),
-  };
-
-  const byStageCounts = deals.reduce(
-    (acc, d) => {
-      acc[d.stage] = (acc[d.stage] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>
-  );
-
-  return [
-    { metric: 'Total Deals', value: metrics.totalDeals },
-    { metric: 'Total Square Feet', value: metrics.totalSF },
-    { metric: 'Total Annual Rent', value: metrics.totalAnnualRent },
-    { metric: '', value: '' },
-    { metric: 'Deals by Stage', value: '' },
-    ...Object.entries(byStageCounts).map(([stage, count]) => ({
-      metric: `  ${stage}`,
-      value: count,
-    })),
-  ];
 }

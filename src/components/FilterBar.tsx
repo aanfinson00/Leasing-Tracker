@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
-import type { Deal, DealStage } from '../types';
-import { DealStageEnum } from '../types';
-import { StageChip } from './StageBadge';
+import type { Deal, DealStatus } from '../types';
+import { StatusChip, STATUSES } from './StatusBadge';
 
 interface FilterBarProps {
   deals: Deal[];
@@ -11,38 +10,40 @@ interface FilterBarProps {
 
 export function FilterBar({ deals, onFilterChange }: FilterBarProps) {
   const [query, setQuery] = useState('');
-  const [selectedStages, setSelectedStages] = useState<Set<DealStage>>(new Set());
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<DealStatus>>(new Set());
 
   useEffect(() => {
     const q = query.trim().toLowerCase();
     const filtered = deals.filter((deal) => {
       const matchesQuery =
         q === '' ||
-        deal.propertyName.toLowerCase().includes(q) ||
-        deal.tenantName.toLowerCase().includes(q) ||
-        deal.address.toLowerCase().includes(q) ||
-        deal.city.toLowerCase().includes(q);
-      const matchesStage = selectedStages.size === 0 || selectedStages.has(deal.stage);
-      return matchesQuery && matchesStage;
+        deal.dealName.toLowerCase().includes(q) ||
+        (deal.prospectTenant ?? '').toLowerCase().includes(q) ||
+        (deal.brokerRep ?? '').toLowerCase().includes(q) ||
+        (deal.building ?? '').toLowerCase().includes(q) ||
+        (deal.spaceId ?? '').toLowerCase().includes(q) ||
+        (deal.notes ?? '').toLowerCase().includes(q);
+      const matchesStatus = selectedStatuses.size === 0 || selectedStatuses.has(deal.status);
+      return matchesQuery && matchesStatus;
     });
     onFilterChange(filtered);
-  }, [query, selectedStages, deals, onFilterChange]);
+  }, [query, selectedStatuses, deals, onFilterChange]);
 
-  const toggleStage = (stage: DealStage) => {
-    setSelectedStages((prev) => {
+  const toggleStatus = (status: DealStatus) => {
+    setSelectedStatuses((prev) => {
       const next = new Set(prev);
-      if (next.has(stage)) next.delete(stage);
-      else next.add(stage);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
       return next;
     });
   };
 
   const clearAll = () => {
     setQuery('');
-    setSelectedStages(new Set());
+    setSelectedStatuses(new Set());
   };
 
-  const hasActiveFilters = query !== '' || selectedStages.size > 0;
+  const hasActiveFilters = query !== '' || selectedStatuses.size > 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -55,7 +56,7 @@ export function FilterBar({ deals, onFilterChange }: FilterBarProps) {
         <input
           type="text"
           value={query}
-          placeholder="Search by property, tenant, address, or city…"
+          placeholder="Search deal, tenant, broker, building, notes…"
           onChange={(e) => setQuery(e.target.value)}
           className="w-full pl-11 pr-10 py-3 bg-bg-elevated rounded-2xl text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent transition-all shadow-soft"
         />
@@ -72,12 +73,12 @@ export function FilterBar({ deals, onFilterChange }: FilterBarProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        {DealStageEnum.options.map((stage) => (
-          <StageChip
-            key={stage}
-            stage={stage}
-            selected={selectedStages.has(stage)}
-            onClick={() => toggleStage(stage)}
+        {STATUSES.map((status) => (
+          <StatusChip
+            key={status}
+            status={status}
+            selected={selectedStatuses.has(status)}
+            onClick={() => toggleStatus(status)}
           />
         ))}
         {hasActiveFilters && (

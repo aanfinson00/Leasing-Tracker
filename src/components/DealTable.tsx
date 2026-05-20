@@ -7,11 +7,10 @@ import {
   getFilteredRowModel,
   useReactTable,
   type SortingState,
-  type ColumnFiltersState,
 } from '@tanstack/react-table';
 import { ArrowUpDown, ChevronUp, ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import type { Deal } from '../types';
-import { StageBadge } from './StageBadge';
+import { StatusBadge, PriorityLabel } from './StatusBadge';
 
 interface DealTableProps {
   deals: Deal[];
@@ -19,65 +18,115 @@ interface DealTableProps {
   onDeleteDeal: (id: string) => void;
 }
 
+const formatSFCell = (min: number | null, max: number | null): string => {
+  if (min === null && max === null) return '–';
+  if (min !== null && max !== null && min === max) return min.toLocaleString();
+  if (min !== null && max !== null) return `${min.toLocaleString()}–${max.toLocaleString()}`;
+  return (min ?? max)?.toLocaleString() ?? '–';
+};
+
+const formatTI = (deal: Deal): string => {
+  if (deal.tiPerSF !== null) return `$${deal.tiPerSF.toFixed(2)}`;
+  if (deal.tiNote) return deal.tiNote;
+  return '–';
+};
+
 export function DealTable({ deals, onSelectDeal, onDeleteDeal }: DealTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const columnHelper = createColumnHelper<Deal>();
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('propertyName', {
-        header: 'Property',
-        cell: (info) => (
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-fg tracking-tight leading-tight">
-              {info.getValue() || 'Untitled'}
-            </span>
-            {info.row.original.city && (
-              <span className="text-xs text-fg-subtle mt-0.5">
-                {info.row.original.city}
-                {info.row.original.state ? `, ${info.row.original.state}` : ''}
+      columnHelper.accessor('dealName', {
+        header: 'Deal',
+        cell: (info) => {
+          const d = info.row.original;
+          const sub = [d.building, d.spaceId].filter(Boolean).join(' · ');
+          return (
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold text-fg tracking-tight leading-tight">
+                {info.getValue() || 'Untitled'}
               </span>
-            )}
-          </div>
-        ),
+              {sub && <span className="text-xs text-fg-subtle mt-0.5 tabular-nums">{sub}</span>}
+            </div>
+          );
+        },
       }),
-      columnHelper.accessor('tenantName', {
-        header: 'Tenant',
+      columnHelper.accessor('prospectTenant', {
+        header: 'Prospect',
+        cell: (info) => {
+          const d = info.row.original;
+          return (
+            <div className="flex flex-col">
+              <span className="text-sm text-fg-muted">{info.getValue() || '–'}</span>
+              {d.brokerRep && (
+                <span className="text-xs text-fg-subtle mt-0.5">{d.brokerRep}</span>
+              )}
+            </div>
+          );
+        },
+      }),
+      columnHelper.accessor('transaction', {
+        header: 'Transaction',
         cell: (info) => <span className="text-sm text-fg-muted">{info.getValue() || '–'}</span>,
       }),
-      columnHelper.accessor('stage', {
-        header: 'Stage',
-        cell: (info) => <StageBadge stage={info.getValue()} />,
+      columnHelper.accessor('status', {
+        header: 'Status',
+        cell: (info) => <StatusBadge status={info.getValue()} />,
       }),
-      columnHelper.accessor('squareFeet', {
+      columnHelper.accessor((row) => row.maxSF ?? row.minSF ?? 0, {
+        id: 'sf',
         header: 'SF',
+        cell: (info) => {
+          const d = info.row.original;
+          return (
+            <span className="tabular-nums text-sm text-fg-muted whitespace-nowrap">
+              {formatSFCell(d.minSF, d.maxSF)}
+            </span>
+          );
+        },
+      }),
+      columnHelper.accessor('targetRent', {
+        header: 'Target $/SF',
         cell: (info) => (
           <span className="tabular-nums text-sm text-fg-muted">
-            {info.getValue()?.toLocaleString() ?? '–'}
+            {info.getValue() !== null ? `$${info.getValue()?.toFixed(2)}` : '–'}
           </span>
         ),
       }),
-      columnHelper.accessor('baseRentPSF', {
-        header: '$/SF',
+      columnHelper.accessor((row) => row.tiPerSF ?? -1, {
+        id: 'ti',
+        header: 'TI $/SF',
         cell: (info) => (
-          <span className="tabular-nums text-sm text-fg-muted">
-            {info.getValue() ? `$${info.getValue()?.toFixed(2)}` : '–'}
+          <span className="tabular-nums text-sm text-fg-muted whitespace-nowrap">
+            {formatTI(info.row.original)}
           </span>
         ),
       }),
-      columnHelper.accessor('leaseStartDate', {
+      columnHelper.accessor('probabilityPct', {
+        header: 'Prob',
+        cell: (info) => {
+          const v = info.getValue();
+          if (v === null) return <span className="text-sm text-fg-subtle">–</span>;
+          const color =
+            v >= 80 ? 'text-emerald-700 dark:text-emerald-300' :
+            v >= 40 ? 'text-amber-700 dark:text-amber-300' :
+            'text-fg-muted';
+          return (
+            <span className={`tabular-nums text-sm font-medium ${color}`}>{v}%</span>
+          );
+        },
+      }),
+      columnHelper.accessor('expectedStart', {
         header: 'Start',
         cell: (info) => (
-          <span className="tabular-nums text-sm text-fg-muted">{info.getValue() || '–'}</span>
+          <span className="tabular-nums text-sm text-fg-muted whitespace-nowrap">{info.getValue() || '–'}</span>
         ),
       }),
-      columnHelper.accessor('leaseEndDate', {
-        header: 'End',
-        cell: (info) => (
-          <span className="tabular-nums text-sm text-fg-muted">{info.getValue() || '–'}</span>
-        ),
+      columnHelper.accessor('priority', {
+        header: 'Priority',
+        cell: (info) => <PriorityLabel priority={info.getValue()} />,
       }),
       columnHelper.display({
         id: 'actions',
@@ -98,7 +147,7 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal }: DealTableProps)
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (confirm(`Delete deal for "${info.row.original.propertyName || 'this property'}"?`)) {
+                if (confirm(`Delete deal "${info.row.original.dealName || 'this deal'}"?`)) {
                   onDeleteDeal(info.row.original.id);
                 }
               }}
@@ -118,12 +167,8 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal }: DealTableProps)
   const table = useReactTable({
     data: deals,
     columns,
-    state: {
-      sorting,
-      columnFilters,
-    },
+    state: { sorting },
     onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -144,7 +189,7 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal }: DealTableProps)
                     <th
                       key={header.id}
                       className={[
-                        'px-5 py-3.5 text-left text-[11px] font-medium uppercase tracking-[0.1em] text-fg-subtle',
+                        'px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.1em] text-fg-subtle whitespace-nowrap',
                         canSort && !isActions
                           ? 'cursor-pointer hover:text-fg transition-colors select-none'
                           : '',
@@ -180,7 +225,7 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal }: DealTableProps)
                 className="group border-b border-border last:border-b-0 hover:bg-bg-subtle/50 cursor-pointer transition-colors"
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-5 py-4">
+                  <td key={cell.id} className="px-4 py-3">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}

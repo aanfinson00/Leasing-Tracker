@@ -1,4 +1,4 @@
-import { Building2, Maximize2, DollarSign, CircleCheck } from 'lucide-react';
+import { Briefcase, Maximize2, DollarSign, TrendingUp } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Deal } from '../types';
 
@@ -32,40 +32,46 @@ function Tile({ icon: Icon, label, value, caption, highlight }: TileProps) {
   );
 }
 
+const formatCurrency = (n: number) => {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n.toFixed(0)}`;
+};
+
 export function SummaryStrip({ deals }: SummaryStripProps) {
   const totalDeals = deals.length;
-  const totalSquareFeet = deals.reduce((sum, d) => sum + (d.squareFeet || 0), 0);
-  const totalAnnualRent = deals.reduce(
-    (sum, d) => sum + (d.squareFeet || 0) * (d.baseRentPSF || 0),
+  const totalMaxSF = deals.reduce((sum, d) => sum + (d.maxSF ?? 0), 0);
+  const grossRent = deals.reduce(
+    (sum, d) => sum + (d.maxSF ?? 0) * (d.targetRent ?? 0),
     0
   );
-  const activeLeases = deals.filter((d) => d.stage === 'Active').length;
-
-  const formatCurrency = (n: number) => {
-    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-    return `$${n.toFixed(0)}`;
-  };
+  const weightedRent = deals.reduce((sum, d) => {
+    const sf = d.maxSF ?? 0;
+    const rent = d.targetRent ?? 0;
+    const prob = (d.probabilityPct ?? 0) / 100;
+    return sum + sf * rent * prob;
+  }, 0);
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-      <Tile icon={Building2} label="Total Deals" value={totalDeals.toLocaleString()} />
+      <Tile icon={Briefcase} label="Pipeline Deals" value={totalDeals.toLocaleString()} />
       <Tile
         icon={Maximize2}
-        label="Total Sq Ft"
-        value={totalSquareFeet.toLocaleString()}
-        caption="across portfolio"
+        label="Pipeline SF"
+        value={totalMaxSF.toLocaleString()}
+        caption="max if ranges"
       />
       <Tile
         icon={DollarSign}
-        label="Annual Rent"
-        value={formatCurrency(totalAnnualRent)}
-        caption={`$${totalAnnualRent.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+        label="Gross at Target"
+        value={formatCurrency(grossRent)}
+        caption={`$${Math.round(grossRent).toLocaleString()}`}
       />
       <Tile
-        icon={CircleCheck}
-        label="Active Leases"
-        value={activeLeases.toLocaleString()}
+        icon={TrendingUp}
+        label="Prob-Weighted"
+        value={formatCurrency(weightedRent)}
+        caption={`$${Math.round(weightedRent).toLocaleString()}`}
         highlight
       />
     </div>

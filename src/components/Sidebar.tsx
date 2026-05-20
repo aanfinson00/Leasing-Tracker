@@ -1,22 +1,29 @@
-import { Briefcase, Clock, BarChart3, Settings } from 'lucide-react';
+import { Briefcase, Building, BarChart3, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 
+export type View = 'prospects' | 'rentroll';
+
 interface NavItem {
+  id: View | 'placeholder';
   icon: LucideIcon;
   label: string;
-  active?: boolean;
   disabled?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { icon: Briefcase, label: 'Deals', active: true },
-  { icon: Clock, label: 'Expiring (coming soon)', disabled: true },
-  { icon: BarChart3, label: 'Reports (coming soon)', disabled: true },
-  { icon: Settings, label: 'Settings (coming soon)', disabled: true },
+  { id: 'prospects', icon: Briefcase, label: 'Prospects' },
+  { id: 'rentroll', icon: Building, label: 'Rent Roll' },
+  { id: 'placeholder', icon: BarChart3, label: 'Reports (coming soon)', disabled: true },
+  { id: 'placeholder', icon: Settings, label: 'Settings (coming soon)', disabled: true },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  view: View;
+  onChangeView: (v: View) => void;
+}
+
+export function Sidebar({ view, onChangeView }: SidebarProps) {
   return (
     <aside className="hidden sm:flex flex-col items-center w-[68px] shrink-0 bg-bg-subtle/60 h-screen sticky top-0 py-5 z-20">
       <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-accent text-accent-fg shadow-soft mb-6">
@@ -24,26 +31,30 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-col items-center gap-1.5 flex-1">
-        {NAV_ITEMS.map(({ icon: Icon, label, active, disabled }) => (
-          <button
-            key={label}
-            type="button"
-            title={label}
-            disabled={disabled}
-            className={[
-              'inline-flex items-center justify-center w-11 h-11 rounded-xl transition-all',
-              active
-                ? 'bg-bg-elevated text-accent shadow-soft'
-                : disabled
-                  ? 'text-fg-subtle cursor-not-allowed opacity-50'
-                  : 'text-fg-muted hover:text-fg hover:bg-bg-elevated/70',
-            ].join(' ')}
-            aria-label={label}
-            aria-current={active ? 'page' : undefined}
-          >
-            <Icon size={19} strokeWidth={1.75} />
-          </button>
-        ))}
+        {NAV_ITEMS.map(({ id, icon: Icon, label, disabled }, idx) => {
+          const active = !disabled && id === view;
+          return (
+            <button
+              key={`${id}-${idx}`}
+              type="button"
+              title={label}
+              disabled={disabled}
+              onClick={() => !disabled && id !== 'placeholder' && onChangeView(id as View)}
+              className={[
+                'inline-flex items-center justify-center w-11 h-11 rounded-xl transition-all',
+                active
+                  ? 'bg-bg-elevated text-accent shadow-soft'
+                  : disabled
+                    ? 'text-fg-subtle cursor-not-allowed opacity-50'
+                    : 'text-fg-muted hover:text-fg hover:bg-bg-elevated/70',
+              ].join(' ')}
+              aria-label={label}
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon size={19} strokeWidth={1.75} />
+            </button>
+          );
+        })}
       </nav>
 
       <ThemeToggle />

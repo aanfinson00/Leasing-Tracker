@@ -5,14 +5,14 @@ import {
   Building2,
   Users,
   DollarSign,
-  Gift,
+  TrendingUp,
   NotebookPen,
   Trash2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { Deal, DealStage } from '../types';
-import { DealStageEnum } from '../types';
-import { StageBadge } from './StageBadge';
+import type { Deal, DealStatus, Priority } from '../types';
+import { DealStatusEnum, PriorityEnum } from '../types';
+import { StatusBadge } from './StatusBadge';
 
 interface DealDrawerProps {
   deal: Deal | null;
@@ -22,28 +22,27 @@ interface DealDrawerProps {
 }
 
 type FormValues = {
-  propertyName: string;
-  address: string;
-  city: string;
-  state: string;
-  squareFeet: string;
-  tenantName: string;
-  stage: DealStage;
-  targetCloseDate: string;
-  broker: string;
-  brokerCommissionPct: string;
-  baseRentPSF: string;
-  leaseStartDate: string;
-  leaseEndDate: string;
-  termMonths: string;
-  rentEscalationPct: string;
-  nnnPSF: string;
-  tiAllowancePSF: string;
+  dealName: string;
+  spaceId: string;
+  building: string;
+  dealId: string;
+  minSF: string;
+  maxSF: string;
+  prospectTenant: string;
+  brokerRep: string;
+  transaction: string;
+  status: DealStatus;
+  lastRevalUWRent: string;
+  targetRent: string;
+  proposedTermMonths: string;
   freeRentMonths: string;
-  renewalOptions: string;
-  expansionRights: string;
+  tiPerSF: string;
+  tiNote: string;
+  probabilityPct: string;
+  expectedStart: string;
+  lastUpdated: string;
+  priority: Priority;
   notes: string;
-  lastModifiedBy: string;
 };
 
 const toFormString = (v: string | number | null | undefined): string => {
@@ -52,14 +51,15 @@ const toFormString = (v: string | number | null | undefined): string => {
 };
 
 const parseNum = (v: string): number | null => {
-  if (!v || v.trim() === '') return null;
-  const n = Number(v);
+  const t = v.trim();
+  if (!t) return null;
+  const n = Number(t);
   return Number.isFinite(n) ? n : null;
 };
 
 const parseStr = (v: string): string | null => {
-  const trimmed = v.trim();
-  return trimmed === '' ? null : trimmed;
+  const t = v.trim();
+  return t === '' ? null : t;
 };
 
 const inputClass =
@@ -98,28 +98,27 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
   useEffect(() => {
     if (deal) {
       reset({
-        propertyName: deal.propertyName,
-        address: deal.address,
-        city: deal.city,
-        state: deal.state,
-        squareFeet: toFormString(deal.squareFeet),
-        tenantName: deal.tenantName,
-        stage: deal.stage,
-        targetCloseDate: toFormString(deal.targetCloseDate),
-        broker: toFormString(deal.broker),
-        brokerCommissionPct: toFormString(deal.brokerCommissionPct),
-        baseRentPSF: toFormString(deal.baseRentPSF),
-        leaseStartDate: toFormString(deal.leaseStartDate),
-        leaseEndDate: toFormString(deal.leaseEndDate),
-        termMonths: toFormString(deal.termMonths),
-        rentEscalationPct: toFormString(deal.rentEscalationPct),
-        nnnPSF: toFormString(deal.nnnPSF),
-        tiAllowancePSF: toFormString(deal.tiAllowancePSF),
+        dealName: deal.dealName,
+        spaceId: toFormString(deal.spaceId),
+        building: toFormString(deal.building),
+        dealId: toFormString(deal.dealId),
+        minSF: toFormString(deal.minSF),
+        maxSF: toFormString(deal.maxSF),
+        prospectTenant: toFormString(deal.prospectTenant),
+        brokerRep: toFormString(deal.brokerRep),
+        transaction: toFormString(deal.transaction),
+        status: deal.status,
+        lastRevalUWRent: toFormString(deal.lastRevalUWRent),
+        targetRent: toFormString(deal.targetRent),
+        proposedTermMonths: toFormString(deal.proposedTermMonths),
         freeRentMonths: toFormString(deal.freeRentMonths),
-        renewalOptions: toFormString(deal.renewalOptions),
-        expansionRights: toFormString(deal.expansionRights),
+        tiPerSF: toFormString(deal.tiPerSF),
+        tiNote: toFormString(deal.tiNote),
+        probabilityPct: toFormString(deal.probabilityPct),
+        expectedStart: toFormString(deal.expectedStart),
+        lastUpdated: toFormString(deal.lastUpdated),
+        priority: deal.priority,
         notes: toFormString(deal.notes),
-        lastModifiedBy: toFormString(deal.lastModifiedBy),
       });
     }
   }, [deal, reset]);
@@ -129,43 +128,41 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
   const onSubmit = (values: FormValues) => {
     const updated: Deal = {
       id: deal.id,
-      propertyName: values.propertyName.trim(),
-      address: values.address.trim(),
-      city: values.city.trim(),
-      state: values.state.trim(),
-      squareFeet: parseNum(values.squareFeet),
-      tenantName: values.tenantName.trim(),
-      stage: values.stage,
-      targetCloseDate: parseStr(values.targetCloseDate),
-      broker: parseStr(values.broker),
-      brokerCommissionPct: parseNum(values.brokerCommissionPct),
-      baseRentPSF: parseNum(values.baseRentPSF),
-      leaseStartDate: parseStr(values.leaseStartDate),
-      leaseEndDate: parseStr(values.leaseEndDate),
-      termMonths: parseNum(values.termMonths),
-      rentEscalationPct: parseNum(values.rentEscalationPct),
-      nnnPSF: parseNum(values.nnnPSF),
-      tiAllowancePSF: parseNum(values.tiAllowancePSF),
+      dealName: values.dealName.trim(),
+      spaceId: parseStr(values.spaceId),
+      building: parseStr(values.building),
+      dealId: parseStr(values.dealId),
+      minSF: parseNum(values.minSF),
+      maxSF: parseNum(values.maxSF) ?? parseNum(values.minSF),
+      prospectTenant: parseStr(values.prospectTenant),
+      brokerRep: parseStr(values.brokerRep),
+      transaction: parseStr(values.transaction),
+      status: values.status,
+      lastRevalUWRent: parseNum(values.lastRevalUWRent),
+      targetRent: parseNum(values.targetRent),
+      proposedTermMonths: parseNum(values.proposedTermMonths),
       freeRentMonths: parseNum(values.freeRentMonths),
-      renewalOptions: parseStr(values.renewalOptions),
-      expansionRights: parseStr(values.expansionRights),
+      tiPerSF: parseNum(values.tiPerSF),
+      tiNote: parseStr(values.tiNote),
+      probabilityPct: parseNum(values.probabilityPct),
+      expectedStart: parseStr(values.expectedStart),
+      lastUpdated: parseStr(values.lastUpdated) ?? new Date().toISOString().slice(0, 10),
+      priority: values.priority,
       notes: parseStr(values.notes),
-      lastModifiedBy: parseStr(values.lastModifiedBy),
-      lastModifiedAt: new Date().toISOString(),
     };
     onSave(updated);
     onClose();
   };
 
   const handleDelete = () => {
-    if (confirm(`Delete deal for "${deal.propertyName || 'this property'}"?`)) {
+    if (confirm(`Delete deal "${deal.dealName || 'this deal'}"?`)) {
       onDelete(deal.id);
       onClose();
     }
   };
 
-  const currentName = watch('propertyName') ?? deal.propertyName;
-  const currentStage = (watch('stage') ?? deal.stage) as DealStage;
+  const currentName = watch('dealName') ?? deal.dealName;
+  const currentStatus = (watch('status') ?? deal.status) as DealStatus;
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -182,7 +179,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
                 <h2 className="text-xl text-fg tracking-[-0.01em] font-semibold truncate">
                   {currentName || 'New Deal'}
                 </h2>
-                <StageBadge stage={currentStage} />
+                <StatusBadge status={currentStatus} />
               </div>
               <button
                 type="button"
@@ -196,57 +193,72 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
           </div>
 
           <div className="flex-1 px-7 py-6">
-            <Section icon={Building2} title="Property">
+            <Section icon={Building2} title="Property & Identifiers">
               <div className="grid grid-cols-2 gap-3.5">
                 <div className="col-span-2">
-                  <label className={labelClass}>Property Name *</label>
+                  <label className={labelClass}>Deal Name *</label>
                   <input
-                    {...register('propertyName', { required: 'Required' })}
+                    {...register('dealName', { required: 'Required' })}
                     className={inputClass}
                   />
-                  {errors.propertyName && (
-                    <p className="text-danger text-xs mt-1.5">{errors.propertyName.message}</p>
+                  {errors.dealName && (
+                    <p className="text-danger text-xs mt-1.5">{errors.dealName.message}</p>
                   )}
                 </div>
+                <div>
+                  <label className={labelClass}>Deal ID</label>
+                  <input {...register('dealId')} className={`${inputClass} tabular-nums`} />
+                </div>
+                <div>
+                  <label className={labelClass}>Building</label>
+                  <input {...register('building')} className={`${inputClass} tabular-nums`} />
+                </div>
                 <div className="col-span-2">
-                  <label className={labelClass}>Address</label>
-                  <input {...register('address')} className={inputClass} />
+                  <label className={labelClass}>Space ID</label>
+                  <input {...register('spaceId')} className={`${inputClass} tabular-nums`} />
                 </div>
                 <div>
-                  <label className={labelClass}>City</label>
-                  <input {...register('city')} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>State</label>
-                  <input {...register('state')} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Square Feet</label>
+                  <label className={labelClass}>Min SF</label>
                   <input
-                    {...register('squareFeet')}
+                    {...register('minSF')}
                     type="number"
                     className={`${inputClass} tabular-nums`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Max SF</label>
+                  <input
+                    {...register('maxSF')}
+                    type="number"
+                    className={`${inputClass} tabular-nums`}
+                    placeholder="Same as Min if exact"
                   />
                 </div>
               </div>
             </Section>
 
-            <Section icon={Users} title="Tenant & Pipeline">
+            <Section icon={Users} title="Prospect & Pipeline">
               <div className="grid grid-cols-2 gap-3.5">
                 <div className="col-span-2">
-                  <label className={labelClass}>Tenant Name *</label>
-                  <input
-                    {...register('tenantName', { required: 'Required' })}
-                    className={inputClass}
-                  />
-                  {errors.tenantName && (
-                    <p className="text-danger text-xs mt-1.5">{errors.tenantName.message}</p>
-                  )}
+                  <label className={labelClass}>Prospect / Tenant</label>
+                  <input {...register('prospectTenant')} className={inputClass} />
                 </div>
                 <div>
-                  <label className={labelClass}>Stage</label>
-                  <select {...register('stage')} className={inputClass}>
-                    {DealStageEnum.options.map((s) => (
+                  <label className={labelClass}>Broker / Rep</label>
+                  <input {...register('brokerRep')} className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Transaction Type</label>
+                  <input
+                    {...register('transaction')}
+                    placeholder="New Lease, Expansion, BTS…"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Status</label>
+                  <select {...register('status')} className={inputClass}>
+                    {DealStatusEnum.options.map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>
@@ -254,21 +266,14 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
                   </select>
                 </div>
                 <div>
-                  <label className={labelClass}>Target Close Date</label>
-                  <input {...register('targetCloseDate')} type="date" className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Broker</label>
-                  <input {...register('broker')} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Broker Commission %</label>
-                  <input
-                    {...register('brokerCommissionPct')}
-                    type="number"
-                    step="0.01"
-                    className={`${inputClass} tabular-nums`}
-                  />
+                  <label className={labelClass}>Priority</label>
+                  <select {...register('priority')} className={inputClass}>
+                    {PriorityEnum.options.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </Section>
@@ -276,59 +281,28 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
             <Section icon={DollarSign} title="Economics">
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className={labelClass}>Base Rent $/SF</label>
+                  <label className={labelClass}>Last Reval UW Rent ($/SF)</label>
                   <input
-                    {...register('baseRentPSF')}
+                    {...register('lastRevalUWRent')}
                     type="number"
                     step="0.01"
                     className={`${inputClass} tabular-nums`}
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>NNN $/SF</label>
+                  <label className={labelClass}>Target Rent ($/SF)</label>
                   <input
-                    {...register('nnnPSF')}
+                    {...register('targetRent')}
                     type="number"
                     step="0.01"
                     className={`${inputClass} tabular-nums`}
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Lease Start</label>
-                  <input {...register('leaseStartDate')} type="date" className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Lease End</label>
-                  <input {...register('leaseEndDate')} type="date" className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Term (Months)</label>
+                  <label className={labelClass}>Proposed Term (Months)</label>
                   <input
-                    {...register('termMonths')}
+                    {...register('proposedTermMonths')}
                     type="number"
-                    className={`${inputClass} tabular-nums`}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Annual Escalation %</label>
-                  <input
-                    {...register('rentEscalationPct')}
-                    type="number"
-                    step="0.01"
-                    className={`${inputClass} tabular-nums`}
-                  />
-                </div>
-              </div>
-            </Section>
-
-            <Section icon={Gift} title="Concessions & Options">
-              <div className="grid grid-cols-2 gap-3.5">
-                <div>
-                  <label className={labelClass}>TI Allowance $/SF</label>
-                  <input
-                    {...register('tiAllowancePSF')}
-                    type="number"
-                    step="0.01"
                     className={`${inputClass} tabular-nums`}
                   />
                 </div>
@@ -340,28 +314,51 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
                     className={`${inputClass} tabular-nums`}
                   />
                 </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>Renewal Options</label>
-                  <input {...register('renewalOptions')} className={inputClass} />
+                <div>
+                  <label className={labelClass}>TI ($/SF)</label>
+                  <input
+                    {...register('tiPerSF')}
+                    type="number"
+                    step="0.01"
+                    className={`${inputClass} tabular-nums`}
+                  />
                 </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>Expansion Rights</label>
-                  <input {...register('expansionRights')} className={inputClass} />
+                <div>
+                  <label className={labelClass}>TI Note</label>
+                  <input
+                    {...register('tiNote')}
+                    placeholder='e.g. "Minimal Addt’l TI"'
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            </Section>
+
+            <Section icon={TrendingUp} title="Forecast">
+              <div className="grid grid-cols-2 gap-3.5">
+                <div>
+                  <label className={labelClass}>Probability of Lease (%)</label>
+                  <input
+                    {...register('probabilityPct')}
+                    type="number"
+                    min="0"
+                    max="100"
+                    className={`${inputClass} tabular-nums`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Expected Start</label>
+                  <input {...register('expectedStart')} type="date" className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Last Updated</label>
+                  <input {...register('lastUpdated')} type="date" className={inputClass} />
                 </div>
               </div>
             </Section>
 
             <Section icon={NotebookPen} title="Notes">
-              <div className="grid grid-cols-2 gap-3.5">
-                <div className="col-span-2">
-                  <label className={labelClass}>Notes</label>
-                  <textarea {...register('notes')} rows={4} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Last Modified By</label>
-                  <input {...register('lastModifiedBy')} className={inputClass} />
-                </div>
-              </div>
+              <textarea {...register('notes')} rows={5} className={inputClass} />
             </Section>
           </div>
 
