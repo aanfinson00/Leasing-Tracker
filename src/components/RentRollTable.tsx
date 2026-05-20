@@ -50,14 +50,18 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
           const r = info.row.original;
           const sub = [r.market, r.propertyType].filter(Boolean).join(' · ');
           return (
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold text-fg tracking-tight leading-tight">
+            <div className="flex flex-col min-w-0">
+              <span
+                className="text-sm font-semibold text-fg tracking-tight leading-tight truncate"
+                title={info.getValue() || 'Untitled'}
+              >
                 {info.getValue() || 'Untitled'}
               </span>
-              {sub && <span className="text-xs text-fg-subtle mt-0.5">{sub}</span>}
+              {sub && <span className="text-xs text-fg-subtle mt-0.5 truncate">{sub}</span>}
             </div>
           );
         },
+        size: 220,
       }),
       columnHelper.accessor('spaceId', {
         header: 'Space',
@@ -65,12 +69,13 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
           const r = info.row.original;
           const sub = [r.building, r.buildingType].filter(Boolean).join(' · ');
           return (
-            <div className="flex flex-col">
-              <span className="text-sm tabular-nums text-fg-muted">{info.getValue() || '–'}</span>
-              {sub && <span className="text-xs text-fg-subtle mt-0.5">{sub}</span>}
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm tabular-nums text-fg-muted whitespace-nowrap">{info.getValue() || '–'}</span>
+              {sub && <span className="text-xs text-fg-subtle mt-0.5 truncate">{sub}</span>}
             </div>
           );
         },
+        size: 140,
       }),
       columnHelper.accessor('tenantName', {
         header: 'Tenant',
@@ -138,6 +143,7 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
             {formatNum(info.getValue())}
           </span>
         ),
+        meta: { numeric: true },
       }),
       columnHelper.accessor('startingAnnualRentPSF', {
         header: '$/SF',
@@ -146,6 +152,7 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
             {formatCurrency(info.getValue())}
           </span>
         ),
+        meta: { numeric: true },
       }),
       columnHelper.accessor('annualRent', {
         header: 'Annual Rent',
@@ -154,6 +161,7 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
             {formatCurrencyWhole(info.getValue())}
           </span>
         ),
+        meta: { numeric: true },
       }),
       columnHelper.accessor('leaseEnd', {
         header: 'Lease End',
@@ -177,7 +185,7 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
           const canStartProspect =
             !r.occupied && (!r.spaceId || !prospectsBySpaceId.has(r.spaceId));
           return (
-            <div className="flex justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex justify-end gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity">
               {canStartProspect && (
                 <button
                   onClick={(e) => {
@@ -237,26 +245,30 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
     <div className="overflow-hidden rounded-2xl bg-bg-elevated shadow-soft">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
-          <thead>
+          <thead className="sticky top-0 bg-bg-elevated z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-border">
                 {headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   const sorted = header.column.getIsSorted();
                   const isActions = header.column.id === 'actions';
+                  const isNumeric = (header.column.columnDef.meta as { numeric?: boolean } | undefined)?.numeric;
+                  const align = isActions || isNumeric ? 'text-right' : 'text-left';
+                  const colWidth = header.column.columnDef.size;
                   return (
                     <th
                       key={header.id}
+                      style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
                       className={[
-                        'px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.1em] text-fg-subtle whitespace-nowrap',
+                        'px-4 py-3 text-[11px] font-medium uppercase tracking-[0.1em] text-fg-subtle whitespace-nowrap',
+                        align,
                         canSort && !isActions
                           ? 'cursor-pointer hover:text-fg transition-colors select-none'
                           : '',
-                        isActions ? 'text-right' : '',
                       ].join(' ')}
                       onClick={canSort && !isActions ? header.column.getToggleSortingHandler() : undefined}
                     >
-                      <div className={`inline-flex items-center gap-1.5 ${isActions ? 'justify-end w-full' : ''}`}>
+                      <div className={`inline-flex items-center gap-1.5 ${isActions || isNumeric ? 'justify-end' : ''}`}>
                         {flexRender(header.column.columnDef.header, header.getContext())}
                         {canSort && !isActions && (
                           <span>
@@ -283,11 +295,16 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
                 onClick={() => onSelect(row.original)}
                 className="group border-b border-border last:border-b-0 hover:bg-bg-subtle/50 cursor-pointer transition-colors"
               >
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-4 py-3">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
+                {row.getVisibleCells().map((cell) => {
+                  const isActions = cell.column.id === 'actions';
+                  const isNumeric = (cell.column.columnDef.meta as { numeric?: boolean } | undefined)?.numeric;
+                  const align = isActions || isNumeric ? 'text-right' : '';
+                  return (
+                    <td key={cell.id} className={`px-4 py-3 ${align}`}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

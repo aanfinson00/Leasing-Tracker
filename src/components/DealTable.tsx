@@ -45,32 +45,37 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal, onPromote }: Deal
           const d = info.row.original;
           const sub = [d.building, d.spaceId].filter(Boolean).join(' · ');
           return (
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold text-fg tracking-tight leading-tight">
+            <div className="flex flex-col min-w-0">
+              <span
+                className="text-sm font-semibold text-fg tracking-tight leading-tight truncate"
+                title={info.getValue() || 'Untitled'}
+              >
                 {info.getValue() || 'Untitled'}
               </span>
-              {sub && <span className="text-xs text-fg-subtle mt-0.5 tabular-nums">{sub}</span>}
+              {sub && <span className="text-xs text-fg-subtle mt-0.5 tabular-nums truncate">{sub}</span>}
             </div>
           );
         },
+        size: 200,
       }),
       columnHelper.accessor('prospectTenant', {
         header: 'Prospect',
         cell: (info) => {
           const d = info.row.original;
           return (
-            <div className="flex flex-col">
-              <span className="text-sm text-fg-muted">{info.getValue() || '–'}</span>
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm text-fg-muted truncate">{info.getValue() || '–'}</span>
               {d.brokerRep && (
-                <span className="text-xs text-fg-subtle mt-0.5">{d.brokerRep}</span>
+                <span className="text-xs text-fg-subtle mt-0.5 truncate">{d.brokerRep}</span>
               )}
             </div>
           );
         },
+        size: 180,
       }),
       columnHelper.accessor('transaction', {
         header: 'Transaction',
-        cell: (info) => <span className="text-sm text-fg-muted">{info.getValue() || '–'}</span>,
+        cell: (info) => <span className="text-sm text-fg-muted whitespace-nowrap">{info.getValue() || '–'}</span>,
       }),
       columnHelper.accessor('status', {
         header: 'Status',
@@ -87,14 +92,16 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal, onPromote }: Deal
             </span>
           );
         },
+        meta: { numeric: true },
       }),
       columnHelper.accessor('targetRent', {
         header: 'Target $/SF',
         cell: (info) => (
-          <span className="tabular-nums text-sm text-fg-muted">
+          <span className="tabular-nums text-sm text-fg-muted whitespace-nowrap">
             {info.getValue() !== null ? `$${info.getValue()?.toFixed(2)}` : '–'}
           </span>
         ),
+        meta: { numeric: true },
       }),
       columnHelper.accessor((row) => row.tiPerSF ?? -1, {
         id: 'ti',
@@ -104,6 +111,7 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal, onPromote }: Deal
             {formatTI(info.row.original)}
           </span>
         ),
+        meta: { numeric: true },
       }),
       columnHelper.accessor('probabilityPct', {
         header: 'Prob',
@@ -118,6 +126,7 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal, onPromote }: Deal
             <span className={`tabular-nums text-sm font-medium ${color}`}>{v}%</span>
           );
         },
+        meta: { numeric: true },
       }),
       columnHelper.accessor('expectedStart', {
         header: 'Start',
@@ -135,7 +144,7 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal, onPromote }: Deal
         cell: (info) => {
           const isExecuted = info.row.original.status === 'Executed';
           return (
-            <div className="flex justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex justify-end gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity">
               {isExecuted && (
                 <button
                   onClick={(e) => {
@@ -195,26 +204,30 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal, onPromote }: Deal
     <div className="overflow-hidden rounded-2xl bg-bg-elevated shadow-soft">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
-          <thead>
+          <thead className="sticky top-0 bg-bg-elevated z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-border">
                 {headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   const sorted = header.column.getIsSorted();
                   const isActions = header.column.id === 'actions';
+                  const isNumeric = (header.column.columnDef.meta as { numeric?: boolean } | undefined)?.numeric;
+                  const align = isActions || isNumeric ? 'text-right' : 'text-left';
+                  const colWidth = header.column.columnDef.size;
                   return (
                     <th
                       key={header.id}
+                      style={colWidth ? { width: colWidth, minWidth: colWidth } : undefined}
                       className={[
-                        'px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.1em] text-fg-subtle whitespace-nowrap',
+                        'px-4 py-3 text-[11px] font-medium uppercase tracking-[0.1em] text-fg-subtle whitespace-nowrap',
+                        align,
                         canSort && !isActions
                           ? 'cursor-pointer hover:text-fg transition-colors select-none'
                           : '',
-                        isActions ? 'text-right' : '',
                       ].join(' ')}
                       onClick={canSort && !isActions ? header.column.getToggleSortingHandler() : undefined}
                     >
-                      <div className={`inline-flex items-center gap-1.5 ${isActions ? 'justify-end w-full' : ''}`}>
+                      <div className={`inline-flex items-center gap-1.5 ${isActions || isNumeric ? 'justify-end' : ''}`}>
                         {flexRender(header.column.columnDef.header, header.getContext())}
                         {canSort && !isActions && (
                           <span>
@@ -241,11 +254,16 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal, onPromote }: Deal
                 onClick={() => onSelectDeal(row.original)}
                 className="group border-b border-border last:border-b-0 hover:bg-bg-subtle/50 cursor-pointer transition-colors"
               >
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-4 py-3">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
+                {row.getVisibleCells().map((cell) => {
+                  const isActions = cell.column.id === 'actions';
+                  const isNumeric = (cell.column.columnDef.meta as { numeric?: boolean } | undefined)?.numeric;
+                  const align = isActions || isNumeric ? 'text-right' : '';
+                  return (
+                    <td key={cell.id} className={`px-4 py-3 ${align}`}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
