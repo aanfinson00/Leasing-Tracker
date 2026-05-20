@@ -29,10 +29,10 @@ jobs:
 
       - name: Compute password hash
         env:
-          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          APP_PASSCODE: ${{ secrets.APP_PASSCODE }}
         run: |
-          if [ -n "$APP_PASSWORD" ]; then
-            HASH=$(printf '%s' "$APP_PASSWORD" | sha256sum | cut -d' ' -f1)
+          if [ -n "$APP_PASSCODE" ]; then
+            HASH=$(printf '%s' "$APP_PASSCODE" | sha256sum | cut -d' ' -f1)
             echo "VITE_PASSWORD_HASH=$HASH" >> $GITHUB_ENV
           fi
 
