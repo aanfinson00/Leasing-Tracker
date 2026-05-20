@@ -25,13 +25,10 @@ export function TopBar({
       <div className="px-6 sm:px-10 pt-8 pb-6 max-w-7xl mx-auto">
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-[0.14em] text-fg-subtle mb-1.5">
-              Industrial Portfolio
-            </p>
-            <h1 className="text-[28px] sm:text-[32px] leading-[1.1] tracking-[-0.02em] text-fg font-semibold">
+            <h1 className="text-[26px] sm:text-[30px] leading-[1.1] tracking-[-0.02em] text-fg font-semibold">
               Leasing Tracker
             </h1>
-            <div className="mt-3 flex items-center gap-2 text-sm text-fg-muted">
+            <div className="mt-2 flex items-center gap-2 text-sm text-fg-muted flex-wrap">
               {filename ? (
                 <>
                   <FileSpreadsheet size={14} strokeWidth={1.75} className="shrink-0 text-fg-subtle" />
@@ -41,8 +38,16 @@ export function TopBar({
                     {dealCount} {dealCount === 1 ? 'deal' : 'deals'}
                   </span>
                 </>
+              ) : dealCount > 0 ? (
+                <>
+                  <span className="tabular-nums font-medium text-fg">
+                    {dealCount} {dealCount === 1 ? 'deal' : 'deals'}
+                  </span>
+                  <span className="text-fg-subtle">·</span>
+                  <span className="text-warning">Unsaved — click Save to export</span>
+                </>
               ) : (
-                <span className="italic text-fg-subtle">No file loaded yet</span>
+                <span className="text-fg-subtle">Open a workbook or create a new deal to begin</span>
               )}
             </div>
           </div>

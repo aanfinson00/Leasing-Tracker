@@ -35,7 +35,7 @@ export function Sidebar() {
               active
                 ? 'bg-bg-elevated text-accent shadow-soft'
                 : disabled
-                  ? 'text-fg-subtle/60 cursor-not-allowed'
+                  ? 'text-fg-subtle cursor-not-allowed opacity-50'
                   : 'text-fg-muted hover:text-fg hover:bg-bg-elevated/70',
             ].join(' ')}
             aria-label={label}

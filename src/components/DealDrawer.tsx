@@ -64,7 +64,7 @@ const parseStr = (v: string): string | null => {
 
 const inputClass =
   'w-full px-3.5 py-2.5 bg-bg rounded-xl text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent transition-all shadow-soft';
-const labelClass = 'block text-[11px] font-medium text-fg-subtle mb-1.5 uppercase tracking-[0.1em]';
+const labelClass = 'block text-xs font-medium text-fg-muted mb-1.5';
 
 interface SectionProps {
   icon: LucideIcon;
@@ -178,16 +178,11 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
           <div className="sticky top-0 bg-bg/90 backdrop-blur-md border-b border-border px-7 py-5 z-10">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-fg-subtle mb-1.5">
-                  {deal.propertyName ? 'Edit Deal' : 'New Deal'}
-                </p>
+              <div className="min-w-0 flex items-center gap-3 flex-wrap">
                 <h2 className="text-xl text-fg tracking-[-0.01em] font-semibold truncate">
-                  {currentName || 'Untitled Property'}
+                  {currentName || 'New Deal'}
                 </h2>
-                <div className="mt-2">
-                  <StageBadge stage={currentStage} />
-                </div>
+                <StageBadge stage={currentStage} />
               </div>
               <button
                 type="button"
