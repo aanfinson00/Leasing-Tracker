@@ -20,7 +20,7 @@ export function Sidebar() {
   return (
     <aside className="hidden sm:flex flex-col items-center w-[68px] shrink-0 bg-bg-subtle/60 h-screen sticky top-0 py-5 z-20">
       <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-accent text-accent-fg shadow-soft mb-6">
-        <span className="font-serif font-semibold text-[17px] leading-none tracking-tight">LT</span>
+        <span className="font-semibold text-sm leading-none tracking-tight">LT</span>
       </div>
 
       <nav className="flex flex-col items-center gap-1.5 flex-1">

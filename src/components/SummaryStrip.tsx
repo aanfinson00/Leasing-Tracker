@@ -24,7 +24,7 @@ function Tile({ icon: Icon, label, value, caption, highlight }: TileProps) {
         <span className="text-[11px] font-medium uppercase tracking-[0.14em]">{label}</span>
         <Icon size={16} strokeWidth={1.75} className={highlight ? 'text-accent' : 'text-fg-subtle'} />
       </div>
-      <p className="font-serif text-[34px] sm:text-[38px] leading-none tracking-tight text-fg font-semibold tabular-nums">
+      <p className="text-[28px] sm:text-[32px] leading-none tracking-[-0.02em] text-fg font-semibold tabular-nums">
         {value}
       </p>
       {caption && <p className="text-xs text-fg-subtle">{caption}</p>}

@@ -39,7 +39,6 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
-        serif: ['Fraunces', 'Source Serif Pro', 'Georgia', 'Times New Roman', 'serif'],
       },
       boxShadow: {
         soft: 'var(--shadow-sm)',

@@ -28,7 +28,7 @@ export function TopBar({
             <p className="text-xs font-medium uppercase tracking-[0.14em] text-fg-subtle mb-1.5">
               Industrial Portfolio
             </p>
-            <h1 className="font-serif text-[34px] sm:text-[40px] leading-[1.05] tracking-tight text-fg font-semibold">
+            <h1 className="text-[28px] sm:text-[32px] leading-[1.1] tracking-[-0.02em] text-fg font-semibold">
               Leasing Tracker
             </h1>
             <div className="mt-3 flex items-center gap-2 text-sm text-fg-muted">

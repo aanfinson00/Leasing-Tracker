@@ -31,7 +31,7 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal }: DealTableProps)
         header: 'Property',
         cell: (info) => (
           <div className="flex flex-col">
-            <span className="font-serif text-[15px] font-medium text-fg tracking-tight leading-tight">
+            <span className="text-sm font-semibold text-fg tracking-tight leading-tight">
               {info.getValue() || 'Untitled'}
             </span>
             {info.row.original.city && (

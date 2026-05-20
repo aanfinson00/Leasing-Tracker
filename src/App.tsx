@@ -109,7 +109,7 @@ function App() {
 
               <section className="space-y-4">
                 <div className="flex items-baseline justify-between">
-                  <h2 className="font-serif text-2xl tracking-tight text-fg font-semibold">
+                  <h2 className="text-lg tracking-tight text-fg font-semibold">
                     Portfolio
                   </h2>
                   <p className="text-sm text-fg-subtle tabular-nums">
@@ -150,7 +150,7 @@ function EmptyHero({ onNewDeal }: { onNewDeal: () => void }) {
       <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-accent-tint text-accent mb-6">
         <Sparkles size={24} strokeWidth={1.5} />
       </div>
-      <h2 className="font-serif text-3xl text-fg font-semibold tracking-tight">
+      <h2 className="text-2xl sm:text-3xl text-fg font-semibold tracking-[-0.02em]">
         Your portfolio, beautifully tracked
       </h2>
       <p className="text-base text-fg-muted mt-3 max-w-md leading-relaxed">
@@ -171,7 +171,7 @@ function EmptyHero({ onNewDeal }: { onNewDeal: () => void }) {
 function EmptyMatches() {
   return (
     <div className="text-center py-12 px-6 bg-bg-elevated rounded-2xl shadow-soft">
-      <p className="font-serif text-lg text-fg">No matches</p>
+      <p className="text-base font-semibold text-fg tracking-tight">No matches</p>
       <p className="text-sm text-fg-muted mt-1">
         Try clearing some filters or broadening your search.
       </p>

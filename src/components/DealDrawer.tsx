@@ -79,7 +79,7 @@ function Section({ icon: Icon, title, children }: SectionProps) {
         <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent-tint text-accent">
           <Icon size={14} strokeWidth={2} />
         </div>
-        <h3 className="font-serif text-lg font-medium text-fg tracking-tight">{title}</h3>
+        <h3 className="text-base font-semibold text-fg tracking-tight">{title}</h3>
       </div>
       {children}
     </section>
@@ -182,7 +182,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete }: DealDrawerProps)
                 <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-fg-subtle mb-1.5">
                   {deal.propertyName ? 'Edit Deal' : 'New Deal'}
                 </p>
-                <h2 className="font-serif text-2xl text-fg tracking-tight font-semibold truncate">
+                <h2 className="text-xl text-fg tracking-[-0.01em] font-semibold truncate">
                   {currentName || 'Untitled Property'}
                 </h2>
                 <div className="mt-2">
