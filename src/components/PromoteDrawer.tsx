@@ -124,7 +124,6 @@ export function PromoteDrawer({
       leaseStart: previewedStart,
       leaseTermMonths: previewedTerm,
       leaseEnd: previewedLeaseEnd,
-      expiryYearBucket: previewedExpiry ?? initialPreview.expiryYearBucket,
       startingAnnualRentPSF: previewedRent,
       freeRentMonths: previewedFreeRent,
       tiPerSF: previewedTI,

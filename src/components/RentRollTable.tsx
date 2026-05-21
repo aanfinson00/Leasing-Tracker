@@ -159,12 +159,6 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
           </span>
         ),
       }),
-      columnHelper.accessor('expiryYearBucket', {
-        header: 'Expiry',
-        cell: (info) => (
-          <span className="text-sm text-fg-muted whitespace-nowrap">{info.getValue() || '–'}</span>
-        ),
-      }),
       columnHelper.display({
         id: 'actions',
         header: '',

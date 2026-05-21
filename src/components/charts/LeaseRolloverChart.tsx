@@ -14,6 +14,7 @@ type Any = any;
 import type { RentRollRow } from '../../types';
 import { useChartColors, colorFor } from '../../lib/chartTokens';
 import { formatCurrencyShort, formatNumber } from '../../lib/format';
+import { reportExpiryBucket } from '../../lib/promote';
 import { ChartCard } from './ChartCard';
 
 interface LeaseRolloverChartProps {
@@ -23,21 +24,9 @@ interface LeaseRolloverChartProps {
 
 const BUCKET_ORDER = ['Past', '2028', '2029', '2030', '2031', '2032+', 'Unknown'];
 
-const todayYear = new Date().getFullYear();
-
 function categorize(r: RentRollRow): string {
-  if (r.expiryYearBucket && BUCKET_ORDER.includes(r.expiryYearBucket)) {
-    return r.expiryYearBucket;
-  }
-  if (r.leaseEnd) {
-    const y = parseInt(r.leaseEnd.slice(0, 4), 10);
-    if (!Number.isNaN(y)) {
-      if (y < todayYear) return 'Past';
-      if (y >= 2032) return '2032+';
-      if (y >= 2028 && y <= 2031) return String(y);
-    }
-  }
-  return 'Unknown';
+  const bucket = reportExpiryBucket(r.leaseEnd);
+  return BUCKET_ORDER.includes(bucket) ? bucket : 'Unknown';
 }
 
 export function LeaseRolloverChart({ rows, onYearBucketClick }: LeaseRolloverChartProps) {

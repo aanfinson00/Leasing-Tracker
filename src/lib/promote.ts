@@ -18,6 +18,19 @@ export function computeExpiryBucket(leaseEnd: string | null): string | null {
   return String(year);
 }
 
+// Bucketed expiry used by the rollover chart and the report filters. Same
+// year math as computeExpiryBucket but with 'Past' and 'Unknown' fallbacks
+// so every row lands somewhere.
+export function reportExpiryBucket(leaseEnd: string | null): string {
+  if (!leaseEnd) return 'Unknown';
+  const year = parseInt(leaseEnd.slice(0, 4), 10);
+  if (!Number.isFinite(year)) return 'Unknown';
+  const todayYear = new Date().getFullYear();
+  if (year < todayYear) return 'Past';
+  if (year >= 2032) return '2032+';
+  return String(year);
+}
+
 // Build the Rent Roll row that should result from promoting this prospect.
 // If `existing` is provided, keep its non-prospect metadata (market,
 // propertyType, buildingType, tenantRating, commissions, etc.) and overwrite
@@ -29,8 +42,6 @@ export function previewPromote(
   const sf = deal.maxSF ?? deal.minSF ?? existing?.leasableSF ?? null;
   const startingRent = deal.targetRent ?? existing?.startingAnnualRentPSF ?? null;
   const leaseEnd = computeLeaseEnd(deal.expectedStart, deal.proposedTermMonths);
-  const expiryYearBucket =
-    computeExpiryBucket(leaseEnd) ?? existing?.expiryYearBucket ?? null;
 
   return {
     id: existing?.id ?? crypto.randomUUID(),
@@ -57,12 +68,12 @@ export function previewPromote(
     leaseEnd: leaseEnd ?? existing?.leaseEnd ?? null,
     freeRentMonths: deal.freeRentMonths ?? existing?.freeRentMonths ?? null,
     annualRentBumpsPct: existing?.annualRentBumpsPct ?? null,
-    expiryYearBucket,
 
     tiPerSF: deal.tiPerSF ?? existing?.tiPerSF ?? null,
     tiNote: deal.tiNote ?? existing?.tiNote ?? null,
     uwTiPerSF: existing?.uwTiPerSF ?? null,
-    specOffice: existing?.specOffice ?? null,
+    specOffice: existing?.specOffice ?? false,
+    specTIPerSF: existing?.specTIPerSF ?? null,
     commissionStructurePct: existing?.commissionStructurePct ?? null,
     commissionDollar: existing?.commissionDollar ?? null,
 

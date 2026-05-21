@@ -315,15 +315,30 @@ const parseProspectsRow = (rawRow: RawRow): Deal | null => {
   const tenant = cleanString(get('Prospect / Tenant', 'Prospect/Tenant', 'Tenant', 'Prospect'));
   const broker = cleanString(get('Broker / Rep', 'Broker/Rep', 'Broker', 'Rep'));
   const transaction = cleanString(get('Transaction', 'Transaction Type', 'Deal Type'));
+  const minSFRaw = get('Min SF');
+  const maxSFRaw = get('Max SF');
   const availSF = cleanString(get('Available SF', 'SF', 'Square Feet'));
-  if (!tenant && !broker && !transaction && !availSF) {
+  if (!tenant && !broker && !transaction && !availSF && !minSFRaw && !maxSFRaw) {
     // Probable summary/calculation row — skip.
     return null;
   }
   // Defensive: skip rows whose Deal Name matches known summary labels.
   if (SUMMARY_KEYWORDS.has(HEADER_NORMALIZE(dealName))) return null;
 
-  const { min: minSF, max: maxSF } = parseSFRange(get('Available SF', 'SF', 'Square Feet'));
+  // Prefer the new numeric Min SF / Max SF columns; fall back to the legacy
+  // single "Available SF" string column for older workbooks.
+  let minSF: number | null;
+  let maxSF: number | null;
+  if (minSFRaw !== null || maxSFRaw !== null) {
+    minSF = parseNumber(minSFRaw);
+    maxSF = parseNumber(maxSFRaw);
+    if (minSF === null && maxSF !== null) minSF = maxSF;
+    if (maxSF === null && minSF !== null) maxSF = minSF;
+  } else {
+    const range = parseSFRange(get('Available SF', 'SF', 'Square Feet'));
+    minSF = range.min;
+    maxSF = range.max;
+  }
   const ti = parseTI(get('$ TI / SF', 'TI', 'TI/SF', 'TI Allowance'));
   const existingId = cleanString(get('ID'));
   const parsed = {
@@ -400,11 +415,11 @@ const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
     leaseEnd: parseDate(get('Lease End')),
     freeRentMonths: parseNumber(get('Free Rent (Months)', 'Free Rent')),
     annualRentBumpsPct: parsePercent(get('Annual Rent Bumps (%)', 'Annual Rent Bumps', 'Rent Bumps')),
-    expiryYearBucket: cleanString(get('Expiry Year Bucket', 'Expiry')),
     tiPerSF: ti.num,
     tiNote: ti.note,
     uwTiPerSF: parseNumber(get('Underwritten TI ($/SF)', 'UW TI ($/SF)', 'Underwritten TI', 'UW TI')),
-    specOffice: cleanString(get('Spec Office/lighting prior to additional $ TI spend', 'Spec Office')),
+    specOffice: parseBool(get('Spec Office', 'Spec Office/lighting prior to additional $ TI spend')),
+    specTIPerSF: parseNumber(get('Spec TI ($/SF)', 'Spec TI')),
     commissionStructurePct: parsePercent(get('Leasing Commission Structure', 'Commission Structure')),
     commissionDollar: parseNumber(get('Leasing Commission $', 'Commission $')),
     lastRevalUWRent: parseNumber(get('Last Reval UW Rent ($/SF)', 'Last Reval UW Rent')),
@@ -513,12 +528,6 @@ export async function loadFromFile(file: File): Promise<LoadResult> {
 // Export
 // ──────────────────────────────────────────────────────────────────
 
-const formatSF = (min: number | null, max: number | null): string => {
-  if (min === null && max === null) return '';
-  if (min !== null && max !== null && min === max) return `${min.toLocaleString()} SF`;
-  if (min !== null && max !== null) return `${min.toLocaleString()}-${max.toLocaleString()} SF`;
-  return `${(min ?? max)?.toLocaleString() ?? ''} SF`;
-};
 const formatNum = (n: number | null, prefix = '', suffix = ''): string =>
   n === null ? '' : `${prefix}${n}${suffix}`;
 const formatCurrency = (n: number | null): string => (n === null ? '' : `$${n.toFixed(2)}`);
@@ -538,7 +547,8 @@ function buildWorkbook(
       'Space ID': d.spaceId ?? '',
       'Building': d.building ?? '',
       'Deal ID': d.dealId ?? '',
-      'Available SF': formatSF(d.minSF, d.maxSF),
+      'Min SF': d.minSF ?? '',
+      'Max SF': d.maxSF ?? '',
       'Prospect / Tenant': d.prospectTenant ?? '',
       'Broker / Rep': d.brokerRep ?? '',
       'Transaction': d.transaction ?? '',
@@ -558,10 +568,10 @@ function buildWorkbook(
     }));
     const wsP = XLSX.utils.json_to_sheet(prospectsData);
     wsP['!cols'] = [
-      { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 22 },
-      { wch: 14 }, { wch: 22 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 18 },
-      { wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 50 },
-      { wch: 50 }, { wch: 38 },
+      { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 10 },
+      { wch: 22 }, { wch: 14 }, { wch: 22 }, { wch: 16 }, { wch: 22 }, { wch: 18 },
+      { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 14 }, { wch: 14 },
+      { wch: 10 }, { wch: 50 }, { wch: 50 }, { wch: 38 },
     ];
     XLSX.utils.book_append_sheet(wb, wsP, 'Prospects');
   }
@@ -586,10 +596,10 @@ function buildWorkbook(
       'Lease End': r.leaseEnd ?? '',
       'Free Rent (Months)': r.freeRentMonths ?? '',
       'Annual Rent Bumps (%)': formatPercent(r.annualRentBumpsPct),
-      'Expiry Year Bucket': r.expiryYearBucket ?? '',
       '$ TI/ TI Allowance': r.tiPerSF !== null ? formatCurrency(r.tiPerSF) : r.tiNote ?? '',
       'Underwritten TI ($/SF)': formatCurrency(r.uwTiPerSF),
-      'Spec Office/lighting prior to additional $ TI spend': r.specOffice ?? '',
+      'Spec Office': r.specOffice ? 'Yes' : 'No',
+      'Spec TI ($/SF)': formatCurrency(r.specTIPerSF),
       'Leasing Commission Structure': formatPercent(r.commissionStructurePct),
       'Leasing Commission $': r.commissionDollar ?? '',
       'Last Reval UW Rent ($/SF)': formatCurrency(r.lastRevalUWRent),
@@ -604,10 +614,21 @@ function buildWorkbook(
   }
 
   if (activities.length > 0) {
+    // Denormalize the parent's display name onto each activity row so the
+    // sheet is readable in Excel without cross-referencing IDs. Parent ID
+    // remains the source of truth on import.
+    const dealNameById = new Map(deals.map((d) => [d.id, d.dealName]));
+    const rrNameById = new Map(
+      rentRoll.map((r) => [r.id, r.dealName ?? r.tenantName ?? r.spaceId ?? ''])
+    );
     const aData = activities.map((a) => ({
       'ID': a.id,
       'Parent Type': a.parentType === 'deal' ? 'Deal' : 'Rent Roll',
       'Parent ID': a.parentId,
+      'Parent Name':
+        a.parentType === 'deal'
+          ? dealNameById.get(a.parentId) ?? ''
+          : rrNameById.get(a.parentId) ?? '',
       'Date': a.date,
       'Type': a.type,
       'Summary': a.summary,
@@ -617,7 +638,7 @@ function buildWorkbook(
     }));
     const wsA = XLSX.utils.json_to_sheet(aData);
     wsA['!cols'] = [
-      { wch: 38 }, { wch: 10 }, { wch: 38 }, { wch: 12 },
+      { wch: 38 }, { wch: 10 }, { wch: 38 }, { wch: 28 }, { wch: 12 },
       { wch: 14 }, { wch: 60 }, { wch: 40 }, { wch: 16 }, { wch: 22 },
     ];
     XLSX.utils.book_append_sheet(wb, wsA, 'Activity');

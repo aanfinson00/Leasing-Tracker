@@ -45,10 +45,11 @@ type FormValues = {
   leaseEnd: string;
   freeRentMonths: string;
   annualRentBumpsPct: string;
-  expiryYearBucket: string;
   tiPerSF: string;
   tiNote: string;
   uwTiPerSF: string;
+  specOffice: boolean;
+  specTIPerSF: string;
   commissionStructurePct: string;
   commissionDollar: string;
   lastRevalUWRent: string;
@@ -134,10 +135,11 @@ export function RentRollDrawer({
         leaseEnd: toFormString(row.leaseEnd),
         freeRentMonths: toFormString(row.freeRentMonths),
         annualRentBumpsPct: toFormString(row.annualRentBumpsPct),
-        expiryYearBucket: toFormString(row.expiryYearBucket),
         tiPerSF: toFormString(row.tiPerSF),
         tiNote: toFormString(row.tiNote),
         uwTiPerSF: toFormString(row.uwTiPerSF),
+        specOffice: row.specOffice,
+        specTIPerSF: toFormString(row.specTIPerSF),
         commissionStructurePct: toFormString(row.commissionStructurePct),
         commissionDollar: toFormString(row.commissionDollar),
         lastRevalUWRent: toFormString(row.lastRevalUWRent),
@@ -171,11 +173,11 @@ export function RentRollDrawer({
       leaseEnd: parseStr(v.leaseEnd),
       freeRentMonths: parseNum(v.freeRentMonths),
       annualRentBumpsPct: parseNum(v.annualRentBumpsPct),
-      expiryYearBucket: parseStr(v.expiryYearBucket),
       tiPerSF: parseNum(v.tiPerSF),
       tiNote: parseStr(v.tiNote),
       uwTiPerSF: parseNum(v.uwTiPerSF),
-      specOffice: row.specOffice,
+      specOffice: !!v.specOffice,
+      specTIPerSF: parseNum(v.specTIPerSF),
       commissionStructurePct: parseNum(v.commissionStructurePct),
       commissionDollar: parseNum(v.commissionDollar),
       lastRevalUWRent: parseNum(v.lastRevalUWRent),
@@ -339,10 +341,6 @@ export function RentRollDrawer({
                   <label className={labelClass}>Annual Rent Bumps (%)</label>
                   <input {...register('annualRentBumpsPct')} type="number" step="0.01" className={`${inputClass} tabular-nums`} />
                 </div>
-                <div>
-                  <label className={labelClass}>Expiry Year Bucket</label>
-                  <input {...register('expiryYearBucket')} placeholder="2030, 2032+, …" className={inputClass} />
-                </div>
               </div>
             </Section>
 
@@ -373,6 +371,20 @@ export function RentRollDrawer({
                 <div className="col-span-2">
                   <label className={labelClass}>TI Note</label>
                   <input {...register('tiNote')} className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Spec TI ($/SF)</label>
+                  <input {...register('specTIPerSF')} type="number" step="0.01" className={`${inputClass} tabular-nums`} />
+                </div>
+                <div className="flex items-end">
+                  <label className="inline-flex items-center gap-2 text-sm text-fg cursor-pointer select-none">
+                    <input
+                      {...register('specOffice')}
+                      type="checkbox"
+                      className="size-4 rounded border-border accent-accent"
+                    />
+                    Spec Office
+                  </label>
                 </div>
                 <div>
                   <label className={labelClass}>Commission Structure (%)</label>

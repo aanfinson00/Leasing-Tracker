@@ -1,4 +1,5 @@
 import type { RentRollRow } from '../types';
+import { reportExpiryBucket } from './promote';
 
 export interface ReportFilters {
   query: string;
@@ -38,7 +39,7 @@ export function applyFilters(rows: RentRollRow[], f: ReportFilters): RentRollRow
     if (f.markets.size > 0 && (!r.market || !f.markets.has(r.market))) return false;
     if (f.propertyTypes.size > 0 && (!r.propertyType || !f.propertyTypes.has(r.propertyType))) return false;
     if (f.buildingTypes.size > 0 && (!r.buildingType || !f.buildingTypes.has(r.buildingType))) return false;
-    if (f.yearBuckets.size > 0 && (!r.expiryYearBucket || !f.yearBuckets.has(r.expiryYearBucket))) return false;
+    if (f.yearBuckets.size > 0 && !f.yearBuckets.has(reportExpiryBucket(r.leaseEnd))) return false;
     if (f.occupancy === 'occupied' && !r.occupied) return false;
     if (f.occupancy === 'vacant' && r.occupied) return false;
     return true;
