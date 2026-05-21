@@ -526,12 +526,11 @@ const formatCurrency = (n: number | null): string => (n === null ? '' : `$${n.to
 const formatPercent = (n: number | null): string => (n === null ? '' : `${n}%`);
 const formatStars = (n: number | null): string => (n === null ? '' : '★'.repeat(n));
 
-export function saveToFile(
+function buildWorkbook(
   deals: Deal[],
   rentRoll: RentRollRow[],
-  activities: ActivityEntry[] = [],
-  filename: string = 'leases.xlsx'
-): void {
+  activities: ActivityEntry[]
+): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
 
   if (deals.length > 0) {
@@ -626,5 +625,27 @@ export function saveToFile(
     XLSX.utils.book_append_sheet(wb, wsA, 'Activity');
   }
 
+  return wb;
+}
+
+export function buildWorkbookBlob(
+  deals: Deal[],
+  rentRoll: RentRollRow[],
+  activities: ActivityEntry[] = []
+): Blob {
+  const wb = buildWorkbook(deals, rentRoll, activities);
+  const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([bytes], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
+export function saveToFile(
+  deals: Deal[],
+  rentRoll: RentRollRow[],
+  activities: ActivityEntry[] = [],
+  filename: string = 'leases.xlsx'
+): void {
+  const wb = buildWorkbook(deals, rentRoll, activities);
   XLSX.writeFile(wb, filename);
 }

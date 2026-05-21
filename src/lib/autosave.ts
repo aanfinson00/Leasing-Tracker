@@ -10,18 +10,31 @@ interface AutosaveRecord {
   savedAt: string;
 }
 
+export interface FileHandleRecord {
+  id: 'current';
+  handle: FileSystemFileHandle;
+  name: string;
+  lastSeenModified: number;
+  savedAt: string;
+}
+
 class AutosaveDB extends Dexie {
   snapshots!: Table<AutosaveRecord, string>;
+  fileHandles!: Table<FileHandleRecord, string>;
 
   constructor() {
     super('LeasingTrackerAutosave');
     this.version(3).stores({
       snapshots: 'id, savedAt',
     });
+    this.version(4).stores({
+      snapshots: 'id, savedAt',
+      fileHandles: 'id',
+    });
   }
 }
 
-const db = new AutosaveDB();
+export const db = new AutosaveDB();
 const SNAPSHOT_ID = 'current';
 
 export async function saveSnapshot(

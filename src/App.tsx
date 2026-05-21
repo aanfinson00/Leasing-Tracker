@@ -1,11 +1,36 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { FilePlus, Sparkles, FolderOpen, Download, Plus, FileSpreadsheet, Link2, Check, X } from 'lucide-react';
+import {
+  FilePlus,
+  Sparkles,
+  FolderOpen,
+  Download,
+  Plus,
+  FileSpreadsheet,
+  Link2,
+  Check,
+  X,
+  Cloud,
+  CloudOff,
+  Unlink,
+} from 'lucide-react';
 import type { ActivityEntry, Deal, DealStatus, RentRollRow } from './types';
 import { defaultDeal, defaultRentRollRow } from './types';
-import { loadFromFile, saveToFile } from './lib/excel';
+import { loadFromFile, saveToFile, buildWorkbookBlob } from './lib/excel';
 import { saveSnapshot, loadSnapshot, clearSnapshot } from './lib/autosave';
 import { encodeShare, decodeShare, readShareFromUrl, clearShareFromUrl } from './lib/share';
 import { makeStatusChangeEntry } from './lib/activity';
+import {
+  isFileSystemAccessSupported,
+  loadHandle,
+  saveHandle,
+  clearHandle,
+  updateLastSeenModified,
+  queryHandlePermission,
+  requestHandlePermission,
+  pickFile,
+  readFromHandle,
+  writeToHandle,
+} from './lib/fileHandle';
 import { DealTable } from './components/DealTable';
 import { FilterBar } from './components/FilterBar';
 import { SummaryStrip } from './components/SummaryStrip';
@@ -30,9 +55,21 @@ function App() {
   const [editingRow, setEditingRow] = useState<RentRollRow | null>(null);
   const [promotingDeal, setPromotingDeal] = useState<Deal | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [shareToast, setShareToast] = useState<string | null>(null);
+  const [appToast, setAppToast] = useState<string | null>(null);
   const [sharedSnapshot, setSharedSnapshot] = useState<{ filename: string; sharedAt: string } | null>(null);
+  const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
+  const [needsReconnect, setNeedsReconnect] = useState(false);
+  const [lastSeenModified, setLastSeenModified] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fsAccessSupported = isFileSystemAccessSupported();
+
+  const showToast = (msg: string) => {
+    setAppToast(msg);
+    setTimeout(() => setAppToast((prev) => (prev === msg ? null : prev)), 3500);
+  };
+
+  const formatTime = (d: Date): string =>
+    d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
   // Cross-tab lookup: which prospects have an active deal for a given Space ID?
   const prospectsBySpaceId = useMemo(() => {
@@ -44,6 +81,24 @@ function App() {
     });
     return m;
   }, [deals]);
+
+  const loadFromHandleResult = async (handle: FileSystemFileHandle): Promise<boolean> => {
+    try {
+      const file = await readFromHandle(handle);
+      const result = await loadFromFile(file);
+      setDeals(result.deals);
+      setFilteredDeals(result.deals);
+      setRentRoll(result.rentRoll);
+      setFilteredRentRoll(result.rentRoll);
+      setActivities(result.activities);
+      setFilename(file.name);
+      setLastSeenModified(file.lastModified);
+      return true;
+    } catch (err) {
+      console.error('Failed to load from handle:', err);
+      return false;
+    }
+  };
 
   useEffect(() => {
     const encoded = readShareFromUrl();
@@ -66,7 +121,31 @@ function App() {
       return;
     }
 
-    loadSnapshot().then((snapshot) => {
+    (async () => {
+      // Try to reconnect to a previously-saved file handle first. If it
+      // resolves cleanly with granted permission, we skip the autosave-restore
+      // prompt entirely — the canonical file IS the source of truth.
+      if (fsAccessSupported) {
+        const rec = await loadHandle();
+        if (rec) {
+          setFileHandle(rec.handle);
+          setFilename(rec.name);
+          const perm = await queryHandlePermission(rec.handle);
+          if (perm === 'granted') {
+            const ok = await loadFromHandleResult(rec.handle);
+            if (ok) {
+              setHydrated(true);
+              return;
+            }
+          } else {
+            setNeedsReconnect(true);
+            setHydrated(true);
+            return;
+          }
+        }
+      }
+
+      const snapshot = await loadSnapshot();
       if (snapshot && (snapshot.deals.length > 0 || snapshot.rentRoll.length > 0)) {
         const restore = confirm(
           `Found unsaved work from ${new Date(snapshot.savedAt).toLocaleString()} (${snapshot.deals.length} deals, ${snapshot.rentRoll.length} rent roll rows). Restore?`
@@ -83,8 +162,8 @@ function App() {
         }
       }
       setHydrated(true);
-    });
-  }, []);
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!hydrated) return;
@@ -94,6 +173,33 @@ function App() {
     }
     saveSnapshot(deals, rentRoll, activities, filename);
   }, [deals, rentRoll, activities, filename, hydrated]);
+
+  const handleOpenClick = async () => {
+    if (fsAccessSupported) {
+      try {
+        const handle = await pickFile();
+        if (!handle) return;
+        const file = await readFromHandle(handle);
+        const result = await loadFromFile(file);
+        setDeals(result.deals);
+        setFilteredDeals(result.deals);
+        setRentRoll(result.rentRoll);
+        setFilteredRentRoll(result.rentRoll);
+        setActivities(result.activities);
+        setFilename(file.name);
+        setFileHandle(handle);
+        setLastSeenModified(file.lastModified);
+        setNeedsReconnect(false);
+        await saveHandle(handle, file.lastModified);
+        showToast(`Connected to ${file.name}`);
+      } catch (err) {
+        alert(`Error opening file: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+      return;
+    }
+    // Fallback for browsers without File System Access (Firefox, Safari)
+    fileInputRef.current?.click();
+  };
 
   const handleOpenFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -113,26 +219,95 @@ function App() {
     }
   };
 
-  const handleSaveFile = () => {
+  const handleSaveFile = async () => {
+    if (fileHandle) {
+      try {
+        // Conflict detection: did the file change since we loaded it?
+        const current = await readFromHandle(fileHandle);
+        if (
+          lastSeenModified !== null &&
+          current.lastModified > lastSeenModified &&
+          current.lastModified - lastSeenModified > 1500 // ignore sub-2s clock noise
+        ) {
+          const diffSec = Math.round((current.lastModified - lastSeenModified) / 1000);
+          const diffLabel =
+            diffSec < 60
+              ? `${diffSec}s ago`
+              : diffSec < 3600
+                ? `${Math.round(diffSec / 60)} min ago`
+                : `${Math.round(diffSec / 3600)}h ago`;
+          const choice = confirm(
+            `${current.name} was modified externally (${diffLabel}). Overwrite anyway?\n\nClick Cancel to reload their version instead.`
+          );
+          if (!choice) {
+            const ok = await loadFromHandleResult(fileHandle);
+            if (ok) showToast('Reloaded latest version');
+            return;
+          }
+        }
+        const blob = buildWorkbookBlob(deals, rentRoll, activities);
+        await writeToHandle(fileHandle, blob);
+        // Re-read to grab the new mtime (after the write)
+        const after = await readFromHandle(fileHandle);
+        setLastSeenModified(after.lastModified);
+        await updateLastSeenModified(after.lastModified);
+        showToast(`Saved · ${formatTime(new Date())}`);
+      } catch (err) {
+        console.error('Save failed:', err);
+        alert(`Save failed: ${err instanceof Error ? err.message : err}`);
+      }
+      return;
+    }
     const name = filename || 'leases.xlsx';
     saveToFile(deals, rentRoll, activities, name);
+  };
+
+  const handleReconnect = async () => {
+    if (!fileHandle) return;
+    const perm = await requestHandlePermission(fileHandle);
+    if (perm !== 'granted') {
+      showToast('Permission denied');
+      return;
+    }
+    const ok = await loadFromHandleResult(fileHandle);
+    if (ok) {
+      setNeedsReconnect(false);
+      showToast(`Reconnected to ${fileHandle.name}`);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!fileHandle) return;
+    if (!confirm(`Disconnect from ${fileHandle.name}? Future saves will download instead.`)) return;
+    await clearHandle();
+    setFileHandle(null);
+    setLastSeenModified(null);
+    setNeedsReconnect(false);
+    showToast('Disconnected — saves will download');
   };
 
   const handleShareLink = async () => {
     try {
       const encoded = await encodeShare(deals, rentRoll, activities, filename || 'leases.xlsx');
       const url = `${window.location.origin}${window.location.pathname}#data=${encoded}`;
-      // Soft size warning — URLs over ~30KB break some chat apps / email
+      // Microsoft SafeLinks (Teams + Outlook) routes through Akamai, which
+      // rejects URLs over ~8 KB. Warn early so people don't paste broken
+      // links into Teams chats.
       const sizeKB = Math.round(url.length / 1024);
-      if (sizeKB > 30) {
+      if (sizeKB > 6) {
         const proceed = confirm(
-          `Share link is ${sizeKB} KB. Some chat apps / email clients truncate long URLs (~30 KB safe). Copy anyway?`
+          `Share link is ${sizeKB} KB.\n\n` +
+            `Microsoft Teams and Outlook reject links over ~8 KB (SafeLinks limit), ` +
+            `and many chat apps truncate long URLs.\n\n` +
+            (fileHandle
+              ? `For your team, the connected file in OneDrive is the better channel — Save in place, then Share from OneDrive.\n\n`
+              : `For your team, save the workbook into a shared OneDrive folder and share it from there.\n\n`) +
+            `Copy this link anyway?`
         );
         if (!proceed) return;
       }
       await navigator.clipboard.writeText(url);
-      setShareToast(`Share link copied (${sizeKB} KB)`);
-      setTimeout(() => setShareToast(null), 3500);
+      showToast(`Share link copied (${sizeKB} KB)`);
     } catch (err) {
       alert(`Could not create share link: ${err instanceof Error ? err.message : err}`);
     }
@@ -300,10 +475,37 @@ function App() {
                   {viewTitle}
                 </h1>
                 <div className="mt-2 flex items-center gap-2 text-sm text-fg-muted flex-wrap">
-                  {filename ? (
+                  {needsReconnect && fileHandle ? (
+                    <button
+                      onClick={handleReconnect}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-warning bg-warning/10 border border-warning/40 rounded-lg hover:bg-warning/15 transition-colors"
+                    >
+                      <CloudOff size={14} strokeWidth={1.75} />
+                      Reconnect to {fileHandle.name}
+                    </button>
+                  ) : filename ? (
                     <>
                       <FileSpreadsheet size={14} strokeWidth={1.75} className="shrink-0 text-fg-subtle" />
                       <span className="font-medium text-fg">{filename}</span>
+                      {fileHandle && (
+                        <>
+                          <span
+                            title="Connected — saves go directly to this file"
+                            className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"
+                          >
+                            <Cloud size={13} strokeWidth={2} />
+                            <span className="text-[11px] font-medium uppercase tracking-wide">Connected</span>
+                          </span>
+                          <button
+                            onClick={handleDisconnect}
+                            title="Disconnect from this file"
+                            className="p-1 rounded-md text-fg-subtle hover:text-fg hover:bg-bg-hover transition-colors"
+                            aria-label="Disconnect"
+                          >
+                            <Unlink size={12} strokeWidth={1.75} />
+                          </button>
+                        </>
+                      )}
                       {view !== 'reports' && (
                         <>
                           <span className="text-fg-subtle">·</span>
@@ -331,7 +533,12 @@ function App() {
 
               <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={handleOpenClick}
+                  title={
+                    fsAccessSupported
+                      ? 'Pick a workbook — the app will save back to it in place'
+                      : 'Open a workbook'
+                  }
                   className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-fg bg-bg-elevated rounded-xl hover:bg-bg-hover transition-colors shadow-soft"
                 >
                   <FolderOpen size={15} strokeWidth={1.75} />
@@ -348,9 +555,14 @@ function App() {
                 <button
                   onClick={handleSaveFile}
                   disabled={!hasData}
+                  title={fileHandle ? 'Save in place' : 'Download workbook'}
                   className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-fg bg-bg-elevated rounded-xl hover:bg-bg-hover transition-colors shadow-soft disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-bg-elevated"
                 >
-                  <Download size={15} strokeWidth={1.75} />
+                  {fileHandle ? (
+                    <Cloud size={15} strokeWidth={1.75} />
+                  ) : (
+                    <Download size={15} strokeWidth={1.75} />
+                  )}
                   Save
                 </button>
 
@@ -397,10 +609,10 @@ function App() {
           </div>
         )}
 
-        {shareToast && (
+        {appToast && (
           <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-fg text-bg rounded-xl shadow-lift text-sm font-medium">
             <Check size={15} strokeWidth={2.5} />
-            {shareToast}
+            {appToast}
           </div>
         )}
 
