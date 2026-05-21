@@ -75,6 +75,7 @@ export function previewPromote(
     inPlaceRent: existing?.inPlaceRent ?? null,
     annualRent,
 
+    currentSummary: deal.currentSummary ?? existing?.currentSummary ?? null,
     notes: deal.notes ?? existing?.notes ?? null,
   };
 }

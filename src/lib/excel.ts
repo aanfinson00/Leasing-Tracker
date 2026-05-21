@@ -1,6 +1,23 @@
 import * as XLSX from 'xlsx';
-import type { Deal, DealStatus, Priority, RentRollRow, UWBasis } from '../types';
-import { DealSchema, DealStatusEnum, RentRollRowSchema, UWBasisEnum } from '../types';
+import type {
+  ActivityEntry,
+  ActivityParentType,
+  ActivityType,
+  Deal,
+  DealStatus,
+  Priority,
+  RentRollRow,
+  UWBasis,
+} from '../types';
+import {
+  ActivityEntrySchema,
+  ActivityParentTypeEnum,
+  ActivityTypeEnum,
+  DealSchema,
+  DealStatusEnum,
+  RentRollRowSchema,
+  UWBasisEnum,
+} from '../types';
 
 const MISSING_TOKENS = new Set(['', '?', '#n/a', '#na', 'n/a', 'na', '-', '—', 'tbd', 'unknown']);
 
@@ -90,19 +107,66 @@ const parseStars = (v: unknown): number | null => {
   return null;
 };
 
+// Legacy → current status map. Applied on read; one-way migration.
+const LEGACY_STATUS_MAP: Record<string, DealStatus> = {
+  'prospect': 'New Prospect',
+  'rfp out': 'Proposal Sent',
+  'rfp for approval': 'Proposal Pending Approval',
+};
+
 const parseStatus = (v: unknown): DealStatus => {
   const s = cleanString(v);
-  if (!s) return 'Prospect';
-  const opts = DealStatusEnum.options;
-  const exact = opts.find((o) => o.toLowerCase() === s.toLowerCase());
-  if (exact) return exact;
+  if (!s) return 'New Prospect';
   const lower = s.toLowerCase();
-  if (lower.includes('rfp') && lower.includes('approval')) return 'RFP for Approval';
-  if (lower.includes('rfp')) return 'RFP Out';
+
+  // Exact match on a current enum value first.
+  const opts = DealStatusEnum.options;
+  const exact = opts.find((o) => o.toLowerCase() === lower);
+  if (exact) return exact;
+
+  // Legacy migration.
+  if (LEGACY_STATUS_MAP[lower]) return LEGACY_STATUS_MAP[lower];
+
+  // Loose matching for the current vocabulary.
+  if (lower.includes('lease') && lower.includes('negot')) return 'Lease Negotiations';
+  if (lower.includes('loi')) return 'LOI Negotiations';
+  if (lower.includes('proposal') && (lower.includes('pending') || lower.includes('approval'))) {
+    return 'Proposal Pending Approval';
+  }
+  if (lower.includes('proposal') && lower.includes('sent')) return 'Proposal Sent';
+  if (lower.includes('proposal')) return 'Proposal Sent';
+  if (lower.includes('rfp') && (lower.includes('request') || lower.includes('req'))) return 'RFP Requested';
+  if (lower.includes('rfp') && lower.includes('approval')) return 'Proposal Pending Approval';
+  if (lower.includes('rfp')) return 'Proposal Sent';
+  if (lower.includes('unsolicited') || lower.includes('draft')) return 'Drafting Unsolicited';
   if (lower.includes('hold')) return 'On Hold';
   if (lower.includes('execut')) return 'Executed';
   if (lower.includes('lost') || lower.includes('dead')) return 'Lost';
-  return 'Prospect';
+  if (lower.includes('new') || lower.includes('prospect')) return 'New Prospect';
+  return 'New Prospect';
+};
+
+const parseActivityType = (v: unknown): ActivityType | null => {
+  const s = cleanString(v)?.toLowerCase().replace(/\s+/g, '-') ?? '';
+  if (!s) return null;
+  const opts = ActivityTypeEnum.options;
+  const exact = opts.find((o) => o === s);
+  if (exact) return exact;
+  if (s.includes('out')) return 'email-out';
+  if (s.includes('in')) return 'email-in';
+  if (s.includes('call')) return 'call';
+  if (s.includes('meet')) return 'meeting';
+  if (s.includes('status')) return 'status-change';
+  return 'note';
+};
+
+const parseParentType = (v: unknown): ActivityParentType | null => {
+  const s = cleanString(v)?.toLowerCase() ?? '';
+  if (!s) return null;
+  if (s.includes('deal')) return 'deal';
+  if (s.includes('rent')) return 'rentroll';
+  const opts = ActivityParentTypeEnum.options;
+  return (opts.find((o) => o === s) ?? null) as ActivityParentType | null;
 };
 
 const parsePriority = (v: unknown): Priority => {
@@ -151,6 +215,7 @@ const buildGetter = (rawRow: RawRow) => {
 
 const RENT_ROLL_HEADER_HINTS = ['leasablesf', 'occupied', 'tenantrating', 'actualorprospectiveuw'];
 const PROSPECTS_HEADER_HINTS = ['prospecttenant', 'probabilityoflease', 'targetrent'];
+const ACTIVITY_HEADER_HINTS = ['parentid', 'parenttype', 'summary'];
 
 const readRow = (sheet: XLSX.WorkSheet, rowIdx: number): string[] => {
   const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1');
@@ -165,12 +230,16 @@ const readRow = (sheet: XLSX.WorkSheet, rowIdx: number): string[] => {
 
 // Look at the first ~10 rows to find one that contains expected column names.
 // Returns the row index of the header row, or 0 if none found.
-const findHeaderRow = (sheet: XLSX.WorkSheet): { rowIdx: number; type: 'rentroll' | 'prospects' | 'unknown' } => {
+type SheetType = 'rentroll' | 'prospects' | 'activity' | 'unknown';
+
+const findHeaderRow = (sheet: XLSX.WorkSheet): { rowIdx: number; type: SheetType } => {
   const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1');
   const maxScan = Math.min(range.s.r + 12, range.e.r);
   for (let r = range.s.r; r <= maxScan; r++) {
     const headers = readRow(sheet, r);
     const norm = new Set(headers.map(HEADER_NORMALIZE));
+    const aHits = ACTIVITY_HEADER_HINTS.filter((h) => norm.has(h)).length;
+    if (aHits >= 2) return { rowIdx: r, type: 'activity' };
     const rrHits = RENT_ROLL_HEADER_HINTS.filter((h) => norm.has(h)).length;
     const pHits = PROSPECTS_HEADER_HINTS.filter((h) => norm.has(h)).length;
     if (rrHits >= 2) return { rowIdx: r, type: 'rentroll' };
@@ -256,8 +325,9 @@ const parseProspectsRow = (rawRow: RawRow): Deal | null => {
 
   const { min: minSF, max: maxSF } = parseSFRange(get('Available SF', 'SF', 'Square Feet'));
   const ti = parseTI(get('$ TI / SF', 'TI', 'TI/SF', 'TI Allowance'));
+  const existingId = cleanString(get('ID'));
   const parsed = {
-    id: crypto.randomUUID(),
+    id: existingId ?? crypto.randomUUID(),
     dealName,
     spaceId: cleanString(get('Space ID')),
     building: cleanString(get('Building')),
@@ -278,6 +348,7 @@ const parseProspectsRow = (rawRow: RawRow): Deal | null => {
     expectedStart: parseDate(get('Expected Start', 'Lease Start Date', 'Start Date')),
     lastUpdated: parseDate(get('Last Updated', 'Last Modified')),
     priority: parsePriority(get('Priority')),
+    currentSummary: cleanString(get('Current Summary', 'Summary')),
     notes: cleanString(get('Notes', 'Comment', 'Comments')),
   };
   const result = DealSchema.safeParse(parsed);
@@ -307,9 +378,10 @@ const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
   if (!dealName && !tenant && !leasableSFRaw) return null;
 
   const ti = parseTI(get('$ TI/ TI Allowance', '$ TI / TI Allowance', '$ TI', 'TI Allowance'));
+  const existingId = cleanString(get('ID'));
 
   const parsed = {
-    id: crypto.randomUUID(),
+    id: existingId ?? crypto.randomUUID(),
     dealId: cleanString(get('Deal ID')),
     dealName,
     buildingId: cleanString(get('Building ID')),
@@ -339,12 +411,44 @@ const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
     startingAnnualRentPSF: parseNumber(get('Starting Annual Rent ($/SF)', 'Starting Annual Rent')),
     inPlaceRent: parseNumber(get('In-Place Rent')),
     annualRent: parseNumber(get('Annual Rent ($)', 'Annual Rent')),
+    currentSummary: cleanString(get('Current Summary', 'Summary')),
     notes: cleanString(get('Notes')),
   };
 
   const result = RentRollRowSchema.safeParse(parsed);
   if (!result.success) {
     console.warn('Skipping unparsable rent roll row:', parsed, result.error.format());
+    return null;
+  }
+  return result.data;
+};
+
+const parseActivityRow = (rawRow: RawRow): ActivityEntry | null => {
+  const get = buildGetter(rawRow);
+  const parentId = cleanString(get('Parent ID', 'ParentID'));
+  const summary = cleanString(get('Summary'));
+  if (!parentId || !summary) return null;
+  const type = parseActivityType(get('Type'));
+  const parentType = parseParentType(get('Parent Type', 'ParentType'));
+  if (!type || !parentType) return null;
+  const id = cleanString(get('ID')) ?? crypto.randomUUID();
+  const date = parseDate(get('Date')) ?? new Date().toISOString().slice(0, 10);
+  const createdAt = parseDate(get('Created At', 'CreatedAt')) ?? new Date().toISOString();
+
+  const parsed = {
+    id,
+    parentType,
+    parentId,
+    date,
+    type,
+    summary,
+    link: cleanString(get('Link', 'URL')),
+    author: cleanString(get('Author')),
+    createdAt,
+  };
+  const result = ActivityEntrySchema.safeParse(parsed);
+  if (!result.success) {
+    console.warn('Skipping unparsable activity row:', parsed, result.error.format());
     return null;
   }
   return result.data;
@@ -357,6 +461,7 @@ const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
 export interface LoadResult {
   deals: Deal[];
   rentRoll: RentRollRow[];
+  activities: ActivityEntry[];
 }
 
 export async function loadFromFile(file: File): Promise<LoadResult> {
@@ -371,6 +476,7 @@ export async function loadFromFile(file: File): Promise<LoadResult> {
 
         let deals: Deal[] = [];
         let rentRoll: RentRollRow[] = [];
+        let activities: ActivityEntry[] = [];
 
         for (const name of workbook.SheetNames) {
           const ws = workbook.Sheets[name];
@@ -387,10 +493,14 @@ export async function loadFromFile(file: File): Promise<LoadResult> {
             deals = deals.concat(
               rows.map(parseProspectsRow).filter((d): d is Deal => d !== null)
             );
+          } else if (type === 'activity') {
+            activities = activities.concat(
+              rows.map(parseActivityRow).filter((a): a is ActivityEntry => a !== null)
+            );
           }
         }
 
-        resolve({ deals, rentRoll });
+        resolve({ deals, rentRoll, activities });
       } catch (err) {
         reject(err);
       }
@@ -416,7 +526,12 @@ const formatCurrency = (n: number | null): string => (n === null ? '' : `$${n.to
 const formatPercent = (n: number | null): string => (n === null ? '' : `${n}%`);
 const formatStars = (n: number | null): string => (n === null ? '' : '★'.repeat(n));
 
-export function saveToFile(deals: Deal[], rentRoll: RentRollRow[], filename: string = 'leases.xlsx'): void {
+export function saveToFile(
+  deals: Deal[],
+  rentRoll: RentRollRow[],
+  activities: ActivityEntry[] = [],
+  filename: string = 'leases.xlsx'
+): void {
   const wb = XLSX.utils.book_new();
 
   if (deals.length > 0) {
@@ -439,13 +554,16 @@ export function saveToFile(deals: Deal[], rentRoll: RentRollRow[], filename: str
       'Expected Start': d.expectedStart ?? '',
       'Last Updated': d.lastUpdated ?? '',
       'Priority': d.priority,
+      'Current Summary': d.currentSummary ?? '',
       'Notes': d.notes ?? '',
+      'ID': d.id,
     }));
     const wsP = XLSX.utils.json_to_sheet(prospectsData);
     wsP['!cols'] = [
       { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 22 },
       { wch: 14 }, { wch: 22 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 18 },
       { wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 50 },
+      { wch: 50 }, { wch: 38 },
     ];
     XLSX.utils.book_append_sheet(wb, wsP, 'Prospects');
   }
@@ -480,10 +598,32 @@ export function saveToFile(deals: Deal[], rentRoll: RentRollRow[], filename: str
       'Starting Annual Rent ($/SF)': formatCurrency(r.startingAnnualRentPSF),
       'In-Place Rent': r.inPlaceRent ?? '',
       'Annual Rent ($)': r.annualRent ?? '',
+      'Current Summary': r.currentSummary ?? '',
       'Notes': r.notes ?? '',
+      'ID': r.id,
     }));
     const wsR = XLSX.utils.json_to_sheet(rrData);
     XLSX.utils.book_append_sheet(wb, wsR, 'Rent Roll');
+  }
+
+  if (activities.length > 0) {
+    const aData = activities.map((a) => ({
+      'ID': a.id,
+      'Parent Type': a.parentType === 'deal' ? 'Deal' : 'Rent Roll',
+      'Parent ID': a.parentId,
+      'Date': a.date,
+      'Type': a.type,
+      'Summary': a.summary,
+      'Link': a.link ?? '',
+      'Author': a.author ?? '',
+      'Created At': a.createdAt,
+    }));
+    const wsA = XLSX.utils.json_to_sheet(aData);
+    wsA['!cols'] = [
+      { wch: 38 }, { wch: 10 }, { wch: 38 }, { wch: 12 },
+      { wch: 14 }, { wch: 60 }, { wch: 40 }, { wch: 16 }, { wch: 22 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsA, 'Activity');
   }
 
   XLSX.writeFile(wb, filename);

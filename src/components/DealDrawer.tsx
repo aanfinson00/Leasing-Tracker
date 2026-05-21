@@ -9,18 +9,27 @@ import {
   NotebookPen,
   Trash2,
   ArrowRight,
+  Activity as ActivityIcon,
+  ListChecks,
+  Workflow,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { Deal, DealStatus, Priority } from '../types';
-import { DealStatusEnum, PriorityEnum } from '../types';
+import type { ActivityEntry, Deal, DealStatus, Priority } from '../types';
+import { PriorityEnum } from '../types';
 import { StatusBadge } from './StatusBadge';
+import { PipelineStepper } from './PipelineStepper';
+import { ActivityLog } from './ActivityLog';
 
 interface DealDrawerProps {
   deal: Deal | null;
+  activities: ActivityEntry[];
   onClose: () => void;
   onSave: (deal: Deal) => void;
   onDelete: (id: string) => void;
   onPromote?: (deal: Deal) => void;
+  onAddActivity: (entry: Omit<ActivityEntry, 'id' | 'createdAt'>) => void;
+  onDeleteActivity: (id: string) => void;
+  onStatusChange?: (deal: Deal, from: DealStatus, to: DealStatus) => void;
 }
 
 type FormValues = {
@@ -44,6 +53,7 @@ type FormValues = {
   expectedStart: string;
   lastUpdated: string;
   priority: Priority;
+  currentSummary: string;
   notes: string;
 };
 
@@ -93,12 +103,23 @@ function Section({ icon: Icon, title, children }: SectionProps) {
   );
 }
 
-export function DealDrawer({ deal, onClose, onSave, onDelete, onPromote }: DealDrawerProps) {
+export function DealDrawer({
+  deal,
+  activities,
+  onClose,
+  onSave,
+  onDelete,
+  onPromote,
+  onAddActivity,
+  onDeleteActivity,
+  onStatusChange,
+}: DealDrawerProps) {
   const {
     register,
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>();
 
@@ -125,6 +146,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete, onPromote }: DealD
         expectedStart: toFormString(deal.expectedStart),
         lastUpdated: toFormString(deal.lastUpdated),
         priority: deal.priority,
+        currentSummary: toFormString(deal.currentSummary),
         notes: toFormString(deal.notes),
       });
     }
@@ -155,10 +177,20 @@ export function DealDrawer({ deal, onClose, onSave, onDelete, onPromote }: DealD
       expectedStart: parseStr(values.expectedStart),
       lastUpdated: parseStr(values.lastUpdated) ?? new Date().toISOString().slice(0, 10),
       priority: values.priority,
+      currentSummary: parseStr(values.currentSummary),
       notes: parseStr(values.notes),
     };
     onSave(updated);
     onClose();
+  };
+
+  const handleStepperChange = (next: DealStatus) => {
+    if (!deal) return;
+    const from = (watch('status') ?? deal.status) as DealStatus;
+    setValue('status', next, { shouldDirty: true });
+    if (from !== next && onStatusChange) {
+      onStatusChange(deal, from, next);
+    }
   };
 
   const handleDelete = () => {
@@ -200,6 +232,20 @@ export function DealDrawer({ deal, onClose, onSave, onDelete, onPromote }: DealD
           </div>
 
           <div className="flex-1 px-7 py-6">
+            <Section icon={ListChecks} title="Current Summary">
+              <textarea
+                {...register('currentSummary')}
+                rows={3}
+                placeholder="Where things stand right now — counter-proposal pending, awaiting reply on TI ask, etc."
+                className={inputClass}
+              />
+            </Section>
+
+            <Section icon={Workflow} title="Pipeline Stage">
+              <input type="hidden" {...register('status')} />
+              <PipelineStepper status={currentStatus} onChange={handleStepperChange} />
+            </Section>
+
             <Section icon={Building2} title="Property & Identifiers">
               <div className="grid grid-cols-2 gap-3.5">
                 <div className="col-span-2">
@@ -262,17 +308,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete, onPromote }: DealD
                     className={inputClass}
                   />
                 </div>
-                <div>
-                  <label className={labelClass}>Status</label>
-                  <select {...register('status')} className={inputClass}>
-                    {DealStatusEnum.options.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
+                <div className="col-span-2">
                   <label className={labelClass}>Priority</label>
                   <select {...register('priority')} className={inputClass}>
                     {PriorityEnum.options.map((p) => (
@@ -367,6 +403,16 @@ export function DealDrawer({ deal, onClose, onSave, onDelete, onPromote }: DealD
             <Section icon={NotebookPen} title="Notes">
               <textarea {...register('notes')} rows={5} className={inputClass} />
             </Section>
+
+            <Section icon={ActivityIcon} title="Activity">
+              <ActivityLog
+                parentType="deal"
+                parentId={deal.id}
+                entries={activities}
+                onAdd={onAddActivity}
+                onDelete={onDeleteActivity}
+              />
+            </Section>
           </div>
 
           <div className="sticky bottom-0 bg-bg/90 backdrop-blur-md border-t border-border px-7 py-4 flex items-center justify-between gap-2 flex-wrap">
@@ -408,6 +454,7 @@ export function DealDrawer({ deal, onClose, onSave, onDelete, onPromote }: DealD
                           expectedStart: parseStr(values.expectedStart),
                           lastUpdated: parseStr(values.lastUpdated) ?? new Date().toISOString().slice(0, 10),
                           priority: values.priority,
+                          currentSummary: parseStr(values.currentSummary),
                           notes: parseStr(values.notes),
                         },
                       };

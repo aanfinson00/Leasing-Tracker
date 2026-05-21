@@ -1,10 +1,11 @@
 import Dexie, { type Table } from 'dexie';
-import type { Deal, RentRollRow } from '../types';
+import type { ActivityEntry, Deal, RentRollRow } from '../types';
 
 interface AutosaveRecord {
   id: string;
   deals: Deal[];
   rentRoll: RentRollRow[];
+  activities: ActivityEntry[];
   filename: string;
   savedAt: string;
 }
@@ -14,7 +15,7 @@ class AutosaveDB extends Dexie {
 
   constructor() {
     super('LeasingTrackerAutosave');
-    this.version(2).stores({
+    this.version(3).stores({
       snapshots: 'id, savedAt',
     });
   }
@@ -23,11 +24,17 @@ class AutosaveDB extends Dexie {
 const db = new AutosaveDB();
 const SNAPSHOT_ID = 'current';
 
-export async function saveSnapshot(deals: Deal[], rentRoll: RentRollRow[], filename: string): Promise<void> {
+export async function saveSnapshot(
+  deals: Deal[],
+  rentRoll: RentRollRow[],
+  activities: ActivityEntry[],
+  filename: string
+): Promise<void> {
   await db.snapshots.put({
     id: SNAPSHOT_ID,
     deals,
     rentRoll,
+    activities,
     filename,
     savedAt: new Date().toISOString(),
   });
@@ -36,6 +43,7 @@ export async function saveSnapshot(deals: Deal[], rentRoll: RentRollRow[], filen
 export async function loadSnapshot(): Promise<{
   deals: Deal[];
   rentRoll: RentRollRow[];
+  activities: ActivityEntry[];
   filename: string;
   savedAt: string;
 } | null> {
@@ -44,6 +52,7 @@ export async function loadSnapshot(): Promise<{
   return {
     deals: snapshot.deals ?? [],
     rentRoll: snapshot.rentRoll ?? [],
+    activities: snapshot.activities ?? [],
     filename: snapshot.filename,
     savedAt: snapshot.savedAt,
   };

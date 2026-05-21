@@ -8,16 +8,22 @@ import {
   CalendarClock,
   NotebookPen,
   Trash2,
+  Activity as ActivityIcon,
+  ListChecks,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { RentRollRow, UWBasis } from '../types';
+import type { ActivityEntry, RentRollRow, UWBasis } from '../types';
 import { UWBasisEnum } from '../types';
+import { ActivityLog } from './ActivityLog';
 
 interface RentRollDrawerProps {
   row: RentRollRow | null;
+  activities: ActivityEntry[];
   onClose: () => void;
   onSave: (row: RentRollRow) => void;
   onDelete: (id: string) => void;
+  onAddActivity: (entry: Omit<ActivityEntry, 'id' | 'createdAt'>) => void;
+  onDeleteActivity: (id: string) => void;
 }
 
 type FormValues = {
@@ -48,6 +54,7 @@ type FormValues = {
   lastRevalUWRent: string;
   startingAnnualRentPSF: string;
   annualRent: string;
+  currentSummary: string;
   notes: string;
 };
 
@@ -96,7 +103,15 @@ function Section({ icon: Icon, title, children }: SectionProps) {
   );
 }
 
-export function RentRollDrawer({ row, onClose, onSave, onDelete }: RentRollDrawerProps) {
+export function RentRollDrawer({
+  row,
+  activities,
+  onClose,
+  onSave,
+  onDelete,
+  onAddActivity,
+  onDeleteActivity,
+}: RentRollDrawerProps) {
   const { register, handleSubmit, reset, watch } = useForm<FormValues>();
 
   useEffect(() => {
@@ -129,6 +144,7 @@ export function RentRollDrawer({ row, onClose, onSave, onDelete }: RentRollDrawe
         lastRevalUWRent: toFormString(row.lastRevalUWRent),
         startingAnnualRentPSF: toFormString(row.startingAnnualRentPSF),
         annualRent: toFormString(row.annualRent),
+        currentSummary: toFormString(row.currentSummary),
         notes: toFormString(row.notes),
       });
     }
@@ -168,6 +184,7 @@ export function RentRollDrawer({ row, onClose, onSave, onDelete }: RentRollDrawe
       startingAnnualRentPSF: parseNum(v.startingAnnualRentPSF),
       inPlaceRent: row.inPlaceRent,
       annualRent: parseNum(v.annualRent),
+      currentSummary: parseStr(v.currentSummary),
       notes: parseStr(v.notes),
     };
     onSave(updated);
@@ -224,6 +241,15 @@ export function RentRollDrawer({ row, onClose, onSave, onDelete }: RentRollDrawe
           </div>
 
           <div className="flex-1 px-7 py-6">
+            <Section icon={ListChecks} title="Current Summary">
+              <textarea
+                {...register('currentSummary')}
+                rows={3}
+                placeholder="Current tenant state — renewal posture, expansion request, defaults, etc."
+                className={inputClass}
+              />
+            </Section>
+
             <Section icon={Building2} title="Property">
               <div className="grid grid-cols-2 gap-3.5">
                 <div className="col-span-2">
@@ -368,6 +394,16 @@ export function RentRollDrawer({ row, onClose, onSave, onDelete }: RentRollDrawe
 
             <Section icon={NotebookPen} title="Notes">
               <textarea {...register('notes')} rows={4} className={inputClass} />
+            </Section>
+
+            <Section icon={ActivityIcon} title="Activity">
+              <ActivityLog
+                parentType="rentroll"
+                parentId={row.id}
+                entries={activities}
+                onAdd={onAddActivity}
+                onDelete={onDeleteActivity}
+              />
             </Section>
           </div>
 

@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { FilePlus, Sparkles, FolderOpen, Download, Plus, FileSpreadsheet, Link2, Check, X } from 'lucide-react';
-import type { Deal, RentRollRow } from './types';
+import type { ActivityEntry, Deal, DealStatus, RentRollRow } from './types';
 import { defaultDeal, defaultRentRollRow } from './types';
 import { loadFromFile, saveToFile } from './lib/excel';
 import { saveSnapshot, loadSnapshot, clearSnapshot } from './lib/autosave';
 import { encodeShare, decodeShare, readShareFromUrl, clearShareFromUrl } from './lib/share';
+import { makeStatusChangeEntry } from './lib/activity';
 import { DealTable } from './components/DealTable';
 import { FilterBar } from './components/FilterBar';
 import { SummaryStrip } from './components/SummaryStrip';
@@ -23,6 +24,7 @@ function App() {
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([]);
   const [rentRoll, setRentRoll] = useState<RentRollRow[]>([]);
   const [filteredRentRoll, setFilteredRentRoll] = useState<RentRollRow[]>([]);
+  const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [filename, setFilename] = useState<string>('');
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [editingRow, setEditingRow] = useState<RentRollRow | null>(null);
@@ -52,6 +54,7 @@ function App() {
           setFilteredDeals(payload.deals);
           setRentRoll(payload.rentRoll);
           setFilteredRentRoll(payload.rentRoll);
+          setActivities(payload.activities ?? []);
           setFilename(payload.filename);
           setSharedSnapshot({ filename: payload.filename, sharedAt: payload.sharedAt });
         } else {
@@ -73,6 +76,7 @@ function App() {
           setFilteredDeals(snapshot.deals);
           setRentRoll(snapshot.rentRoll);
           setFilteredRentRoll(snapshot.rentRoll);
+          setActivities(snapshot.activities ?? []);
           setFilename(snapshot.filename);
         } else {
           clearSnapshot();
@@ -84,12 +88,12 @@ function App() {
 
   useEffect(() => {
     if (!hydrated) return;
-    if (deals.length === 0 && rentRoll.length === 0) {
+    if (deals.length === 0 && rentRoll.length === 0 && activities.length === 0) {
       clearSnapshot();
       return;
     }
-    saveSnapshot(deals, rentRoll, filename);
-  }, [deals, rentRoll, filename, hydrated]);
+    saveSnapshot(deals, rentRoll, activities, filename);
+  }, [deals, rentRoll, activities, filename, hydrated]);
 
   const handleOpenFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -100,6 +104,7 @@ function App() {
       setFilteredDeals(result.deals);
       setRentRoll(result.rentRoll);
       setFilteredRentRoll(result.rentRoll);
+      setActivities(result.activities);
       setFilename(file.name);
     } catch (err) {
       alert(`Error loading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -110,12 +115,12 @@ function App() {
 
   const handleSaveFile = () => {
     const name = filename || 'leases.xlsx';
-    saveToFile(deals, rentRoll, name);
+    saveToFile(deals, rentRoll, activities, name);
   };
 
   const handleShareLink = async () => {
     try {
-      const encoded = await encodeShare(deals, rentRoll, filename || 'leases.xlsx');
+      const encoded = await encodeShare(deals, rentRoll, activities, filename || 'leases.xlsx');
       const url = `${window.location.origin}${window.location.pathname}#data=${encoded}`;
       // Soft size warning — URLs over ~30KB break some chat apps / email
       const sizeKB = Math.round(url.length / 1024);
@@ -151,6 +156,9 @@ function App() {
     const newDeals = deals.filter((d) => d.id !== id);
     setDeals(newDeals);
     setFilteredDeals((prev) => prev.filter((d) => d.id !== id));
+    setActivities((prev) =>
+      prev.filter((a) => !(a.parentType === 'deal' && a.parentId === id))
+    );
   };
 
   // ── Rent Roll handlers
@@ -171,6 +179,27 @@ function App() {
     const newRows = rentRoll.filter((r) => r.id !== id);
     setRentRoll(newRows);
     setFilteredRentRoll((prev) => prev.filter((r) => r.id !== id));
+    setActivities((prev) =>
+      prev.filter((a) => !(a.parentType === 'rentroll' && a.parentId === id))
+    );
+  };
+
+  // ── Activity handlers
+  const handleAddActivity = (entry: Omit<ActivityEntry, 'id' | 'createdAt'>) => {
+    const full: ActivityEntry = {
+      ...entry,
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+    };
+    setActivities((prev) => [...prev, full]);
+  };
+  const handleDeleteActivity = (id: string) => {
+    setActivities((prev) => prev.filter((a) => a.id !== id));
+  };
+  const handleDealStatusChange = (deal: Deal, from: DealStatus, to: DealStatus) => {
+    if (from === to) return;
+    const entry = makeStatusChangeEntry('deal', deal.id, from, to);
+    setActivities((prev) => [...prev, entry]);
   };
 
   // ── Cross-tab: Promote a prospect → Rent Roll
@@ -190,6 +219,24 @@ function App() {
     const newDeals = deals.filter((d) => d.id !== promotingDeal.id);
     setDeals(newDeals);
     setFilteredDeals(newDeals);
+
+    // Reassign existing activities from the prospect to the rent roll row,
+    // and append a transition entry so the timeline shows the handoff.
+    const transition = makeStatusChangeEntry(
+      'rentroll',
+      rrRow.id,
+      'Executed',
+      'Promoted to Rent Roll'
+    );
+    setActivities((prev) => [
+      ...prev.map((a) =>
+        a.parentType === 'deal' && a.parentId === promotingDeal.id
+          ? { ...a, parentType: 'rentroll' as const, parentId: rrRow.id }
+          : a
+      ),
+      transition,
+    ]);
+
     setPromotingDeal(null);
     setView('rentroll');
   };
@@ -213,7 +260,7 @@ function App() {
       maxSF: sf,
       lastRevalUWRent: row.lastRevalUWRent,
       targetRent: row.startingAnnualRentPSF ?? row.lastRevalUWRent,
-      status: 'Prospect',
+      status: 'New Prospect',
       priority: 'Low',
       lastUpdated: todayIso(),
     };
@@ -407,16 +454,23 @@ function App() {
 
       <DealDrawer
         deal={editingDeal}
+        activities={activities}
         onClose={() => setEditingDeal(null)}
         onSave={handleSaveDeal}
         onDelete={handleDeleteDeal}
         onPromote={handleOpenPromote}
+        onAddActivity={handleAddActivity}
+        onDeleteActivity={handleDeleteActivity}
+        onStatusChange={handleDealStatusChange}
       />
       <RentRollDrawer
         row={editingRow}
+        activities={activities}
         onClose={() => setEditingRow(null)}
         onSave={handleSaveRow}
         onDelete={handleDeleteRow}
+        onAddActivity={handleAddActivity}
+        onDeleteActivity={handleDeleteActivity}
       />
       <PromoteDrawer
         deal={promotingDeal}

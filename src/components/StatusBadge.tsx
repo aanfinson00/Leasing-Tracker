@@ -1,26 +1,44 @@
 import type { DealStatus, Priority } from '../types';
 
 const STATUS_STYLES: Record<DealStatus, string> = {
-  Prospect:
+  // Sourcing — stone
+  'New Prospect':
     'bg-stone-100 text-stone-700 dark:bg-stone-800/60 dark:text-stone-300',
-  'RFP Out':
+  // Pre-proposal — amber
+  'RFP Requested':
     'bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
-  'RFP for Approval':
+  'Drafting Unsolicited':
+    'bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
+  // Proposal — blue / indigo
+  'Proposal Pending Approval':
     'bg-blue-50 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300',
-  'On Hold':
-    'bg-zinc-100 text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-400',
+  'Proposal Sent':
+    'bg-indigo-50 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300',
+  // Negotiation — violet
+  'LOI Negotiations':
+    'bg-violet-50 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300',
+  'Lease Negotiations':
+    'bg-violet-100 text-violet-900 dark:bg-violet-500/20 dark:text-violet-200',
+  // Closed-positive — emerald
   Executed:
     'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300',
+  // Side-states
+  'On Hold':
+    'bg-zinc-100 text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-400',
   Lost:
     'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
 };
 
 const STATUSES: DealStatus[] = [
-  'Prospect',
-  'RFP Out',
-  'RFP for Approval',
-  'On Hold',
+  'New Prospect',
+  'RFP Requested',
+  'Drafting Unsolicited',
+  'Proposal Pending Approval',
+  'Proposal Sent',
+  'LOI Negotiations',
+  'Lease Negotiations',
   'Executed',
+  'On Hold',
   'Lost',
 ];
 
@@ -89,4 +107,4 @@ export function PriorityLabel({ priority }: PriorityLabelProps) {
   );
 }
 
-export { STATUSES };
+export { STATUSES, STATUS_STYLES };

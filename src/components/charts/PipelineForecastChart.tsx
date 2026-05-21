@@ -21,11 +21,15 @@ interface PipelineForecastChartProps {
 }
 
 const STATUS_ORDER: DealStatus[] = [
-  'Prospect',
-  'RFP Out',
-  'RFP for Approval',
-  'On Hold',
+  'New Prospect',
+  'RFP Requested',
+  'Drafting Unsolicited',
+  'Proposal Pending Approval',
+  'Proposal Sent',
+  'LOI Negotiations',
+  'Lease Negotiations',
   'Executed',
+  'On Hold',
   'Lost',
 ];
 

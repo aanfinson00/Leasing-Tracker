@@ -1,14 +1,34 @@
 import { z } from 'zod';
 
 export const DealStatusEnum = z.enum([
-  'Prospect',
-  'RFP Out',
-  'RFP for Approval',
-  'On Hold',
+  'New Prospect',
+  'RFP Requested',
+  'Drafting Unsolicited',
+  'Proposal Pending Approval',
+  'Proposal Sent',
+  'LOI Negotiations',
+  'Lease Negotiations',
   'Executed',
+  'On Hold',
   'Lost',
 ]);
 export type DealStatus = z.infer<typeof DealStatusEnum>;
+
+// Linear pipeline order — 'On Hold' and 'Lost' are side states, off-flow.
+// Slots 2a / 2b ('RFP Requested' and 'Drafting Unsolicited') collapse into
+// one visual step 2 in the stepper.
+export const PIPELINE_ORDER: DealStatus[] = [
+  'New Prospect',
+  'RFP Requested',
+  'Drafting Unsolicited',
+  'Proposal Pending Approval',
+  'Proposal Sent',
+  'LOI Negotiations',
+  'Lease Negotiations',
+  'Executed',
+];
+
+export const SIDE_STATUSES: DealStatus[] = ['On Hold', 'Lost'];
 
 export const PriorityEnum = z.enum(['High', 'Medium', 'Low']);
 export type Priority = z.infer<typeof PriorityEnum>;
@@ -49,6 +69,7 @@ export const DealSchema = z.object({
   // Meta
   lastUpdated: z.string().nullable().optional(),
   priority: PriorityEnum,
+  currentSummary: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
 }).transform((d) => ({
   ...d,
@@ -69,6 +90,7 @@ export const DealSchema = z.object({
   probabilityPct: d.probabilityPct ?? null,
   expectedStart: d.expectedStart ?? null,
   lastUpdated: d.lastUpdated ?? null,
+  currentSummary: d.currentSummary ?? null,
   notes: d.notes ?? null,
 }));
 
@@ -128,6 +150,7 @@ export const RentRollRowSchema = z.object({
   annualRent: z.number().nullable().optional(),
 
   // Meta
+  currentSummary: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
 }).transform((r) => ({
   ...r,
@@ -159,6 +182,7 @@ export const RentRollRowSchema = z.object({
   startingAnnualRentPSF: r.startingAnnualRentPSF ?? null,
   inPlaceRent: r.inPlaceRent ?? null,
   annualRent: r.annualRent ?? null,
+  currentSummary: r.currentSummary ?? null,
   notes: r.notes ?? null,
 }));
 
@@ -195,6 +219,7 @@ export const defaultRentRollRow = (): RentRollRow => ({
   startingAnnualRentPSF: null,
   inPlaceRent: null,
   annualRent: null,
+  currentSummary: null,
   notes: null,
 });
 
@@ -216,7 +241,7 @@ export const defaultDeal = (): Deal => ({
   prospectTenant: null,
   brokerRep: null,
   transaction: null,
-  status: 'Prospect',
+  status: 'New Prospect',
   lastRevalUWRent: null,
   targetRent: null,
   proposedTermMonths: null,
@@ -227,5 +252,41 @@ export const defaultDeal = (): Deal => ({
   expectedStart: null,
   lastUpdated: todayIso(),
   priority: 'Low',
+  currentSummary: null,
   notes: null,
 });
+
+// ──────────────────────────────────────────────────────────────────
+// Activity Log
+// ──────────────────────────────────────────────────────────────────
+
+export const ActivityTypeEnum = z.enum([
+  'note',
+  'email-out',
+  'email-in',
+  'call',
+  'meeting',
+  'status-change',
+]);
+export type ActivityType = z.infer<typeof ActivityTypeEnum>;
+
+export const ActivityParentTypeEnum = z.enum(['deal', 'rentroll']);
+export type ActivityParentType = z.infer<typeof ActivityParentTypeEnum>;
+
+export const ActivityEntrySchema = z.object({
+  id: z.string().uuid(),
+  parentType: ActivityParentTypeEnum,
+  parentId: z.string(),
+  date: z.string(),
+  type: ActivityTypeEnum,
+  summary: z.string(),
+  link: z.string().nullable().optional(),
+  author: z.string().nullable().optional(),
+  createdAt: z.string(),
+}).transform((a) => ({
+  ...a,
+  link: a.link ?? null,
+  author: a.author ?? null,
+}));
+
+export type ActivityEntry = z.infer<typeof ActivityEntrySchema>;
