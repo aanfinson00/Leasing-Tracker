@@ -55,7 +55,10 @@ export function LeaseRolloverChart({ rows, onYearBucketClick }: LeaseRolloverCha
     rows.forEach((r) => {
       const bucket = categorize(r);
       const market = r.market ?? 'Unknown';
-      const value = metric === 'sf' ? r.leasableSF ?? 0 : r.annualRent ?? 0;
+      const value =
+        metric === 'sf'
+          ? r.leasableSF ?? 0
+          : (r.leasableSF ?? 0) * (r.inPlaceRent ?? r.startingAnnualRentPSF ?? 0);
       byBucket[bucket][market] = (byBucket[bucket][market] ?? 0) + value;
     });
 

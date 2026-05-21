@@ -62,7 +62,10 @@ export function RentRollSummary({ rows }: RentRollSummaryProps) {
     (sum, r) => sum + (r.leasableSF ?? 0) * (r.lastRevalUWRent ?? 0),
     0
   );
-  const inPlaceAnnual = occupiedRows.reduce((sum, r) => sum + (r.annualRent ?? 0), 0);
+  const inPlaceAnnual = occupiedRows.reduce(
+    (sum, r) => sum + (r.leasableSF ?? 0) * (r.inPlaceRent ?? r.startingAnnualRentPSF ?? 0),
+    0
+  );
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

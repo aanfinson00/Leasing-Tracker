@@ -147,7 +147,6 @@ export const RentRollRowSchema = z.object({
   lastRevalUWRent: z.number().nullable().optional(),
   startingAnnualRentPSF: z.number().nullable().optional(),
   inPlaceRent: z.number().nullable().optional(),
-  annualRent: z.number().nullable().optional(),
 
   // Meta
   currentSummary: z.string().nullable().optional(),
@@ -181,7 +180,6 @@ export const RentRollRowSchema = z.object({
   lastRevalUWRent: r.lastRevalUWRent ?? null,
   startingAnnualRentPSF: r.startingAnnualRentPSF ?? null,
   inPlaceRent: r.inPlaceRent ?? null,
-  annualRent: r.annualRent ?? null,
   currentSummary: r.currentSummary ?? null,
   notes: r.notes ?? null,
 }));
@@ -218,7 +216,6 @@ export const defaultRentRollRow = (): RentRollRow => ({
   lastRevalUWRent: null,
   startingAnnualRentPSF: null,
   inPlaceRent: null,
-  annualRent: null,
   currentSummary: null,
   notes: null,
 });

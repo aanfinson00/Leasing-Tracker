@@ -410,7 +410,6 @@ const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
     lastRevalUWRent: parseNumber(get('Last Reval UW Rent ($/SF)', 'Last Reval UW Rent')),
     startingAnnualRentPSF: parseNumber(get('Starting Annual Rent ($/SF)', 'Starting Annual Rent')),
     inPlaceRent: parseNumber(get('In-Place Rent')),
-    annualRent: parseNumber(get('Annual Rent ($)', 'Annual Rent')),
     currentSummary: cleanString(get('Current Summary', 'Summary')),
     notes: cleanString(get('Notes')),
   };
@@ -596,7 +595,6 @@ function buildWorkbook(
       'Last Reval UW Rent ($/SF)': formatCurrency(r.lastRevalUWRent),
       'Starting Annual Rent ($/SF)': formatCurrency(r.startingAnnualRentPSF),
       'In-Place Rent': r.inPlaceRent ?? '',
-      'Annual Rent ($)': r.annualRent ?? '',
       'Current Summary': r.currentSummary ?? '',
       'Notes': r.notes ?? '',
       'ID': r.id,

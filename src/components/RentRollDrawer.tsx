@@ -53,7 +53,6 @@ type FormValues = {
   commissionDollar: string;
   lastRevalUWRent: string;
   startingAnnualRentPSF: string;
-  annualRent: string;
   currentSummary: string;
   notes: string;
 };
@@ -143,7 +142,6 @@ export function RentRollDrawer({
         commissionDollar: toFormString(row.commissionDollar),
         lastRevalUWRent: toFormString(row.lastRevalUWRent),
         startingAnnualRentPSF: toFormString(row.startingAnnualRentPSF),
-        annualRent: toFormString(row.annualRent),
         currentSummary: toFormString(row.currentSummary),
         notes: toFormString(row.notes),
       });
@@ -183,7 +181,6 @@ export function RentRollDrawer({
       lastRevalUWRent: parseNum(v.lastRevalUWRent),
       startingAnnualRentPSF: parseNum(v.startingAnnualRentPSF),
       inPlaceRent: row.inPlaceRent,
-      annualRent: parseNum(v.annualRent),
       currentSummary: parseStr(v.currentSummary),
       notes: parseStr(v.notes),
     };
@@ -358,10 +355,6 @@ export function RentRollDrawer({
                 <div>
                   <label className={labelClass}>Last Reval UW Rent ($/SF)</label>
                   <input {...register('lastRevalUWRent')} type="number" step="0.01" className={`${inputClass} tabular-nums`} />
-                </div>
-                <div>
-                  <label className={labelClass}>Annual Rent ($)</label>
-                  <input {...register('annualRent')} type="number" className={`${inputClass} tabular-nums`} />
                 </div>
                 <div>
                   <label className={labelClass}>TI ($/SF)</label>

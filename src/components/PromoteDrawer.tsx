@@ -128,7 +128,6 @@ export function PromoteDrawer({
       startingAnnualRentPSF: previewedRent,
       freeRentMonths: previewedFreeRent,
       tiPerSF: previewedTI,
-      annualRent: previewedAnnualRent,
     };
     onConfirm(finalRow, isNew);
   };

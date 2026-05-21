@@ -25,9 +25,6 @@ const formatNum = (n: number | null | undefined): string =>
 const formatCurrency = (n: number | null | undefined): string =>
   n === null || n === undefined ? '–' : `$${n.toFixed(2)}`;
 
-const formatCurrencyWhole = (n: number | null | undefined): string =>
-  n === null || n === undefined ? '–' : `$${Math.round(n).toLocaleString()}`;
-
 const Stars = ({ n }: { n: number | null }) => {
   if (n === null) return <span className="text-fg-subtle">–</span>;
   return (
@@ -150,15 +147,6 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
         cell: (info) => (
           <span className="tabular-nums text-sm text-fg-muted whitespace-nowrap">
             {formatCurrency(info.getValue())}
-          </span>
-        ),
-        meta: { numeric: true },
-      }),
-      columnHelper.accessor('annualRent', {
-        header: 'Annual Rent',
-        cell: (info) => (
-          <span className="tabular-nums text-sm text-fg-muted whitespace-nowrap">
-            {formatCurrencyWhole(info.getValue())}
           </span>
         ),
         meta: { numeric: true },

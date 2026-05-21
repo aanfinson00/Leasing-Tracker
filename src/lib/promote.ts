@@ -29,10 +29,6 @@ export function previewPromote(
   const sf = deal.maxSF ?? deal.minSF ?? existing?.leasableSF ?? null;
   const startingRent = deal.targetRent ?? existing?.startingAnnualRentPSF ?? null;
   const leaseEnd = computeLeaseEnd(deal.expectedStart, deal.proposedTermMonths);
-  const annualRent =
-    sf !== null && startingRent !== null
-      ? Math.round(sf * startingRent)
-      : existing?.annualRent ?? null;
   const expiryYearBucket =
     computeExpiryBucket(leaseEnd) ?? existing?.expiryYearBucket ?? null;
 
@@ -73,7 +69,6 @@ export function previewPromote(
     lastRevalUWRent: deal.lastRevalUWRent ?? existing?.lastRevalUWRent ?? null,
     startingAnnualRentPSF: startingRent,
     inPlaceRent: existing?.inPlaceRent ?? null,
-    annualRent,
 
     currentSummary: deal.currentSummary ?? existing?.currentSummary ?? null,
     notes: deal.notes ?? existing?.notes ?? null,

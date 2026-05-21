@@ -31,7 +31,7 @@ export function MarketBreakdownChart({ rows, onMarketClick }: MarketBreakdownCha
       const key = r.market ?? 'Unknown';
       let v = 0;
       if (metric === 'sf') v = r.leasableSF ?? 0;
-      else if (metric === 'rent') v = r.annualRent ?? 0;
+      else if (metric === 'rent') v = (r.leasableSF ?? 0) * (r.inPlaceRent ?? r.startingAnnualRentPSF ?? 0);
       else if (metric === 'vacant') v = !r.occupied ? (r.leasableSF ?? 0) : 0;
       map.set(key, (map.get(key) ?? 0) + v);
     });
