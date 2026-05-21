@@ -609,11 +609,18 @@ export async function loadFromFile(file: File): Promise<LoadResult> {
 // Export
 // ──────────────────────────────────────────────────────────────────
 
-const formatNum = (n: number | null, prefix = '', suffix = ''): string =>
-  n === null ? '' : `${prefix}${n}${suffix}`;
-const formatCurrency = (n: number | null): string => (n === null ? '' : `$${n.toFixed(2)}`);
-const formatPercent = (n: number | null): string => (n === null ? '' : `${n}%`);
-const formatStars = (n: number | null): string => (n === null ? '' : '★'.repeat(n));
+// Use `== null` so the formatters also tolerate `undefined`, not just
+// `null`. Schema-additions (e.g. specTIPerSF, uwTiPerSF) leave older
+// autosave-restored or shared rows with `undefined` in the new slots —
+// without this coercion the export would crash on `.toFixed(2)`.
+const formatNum = (n: number | null | undefined, prefix = '', suffix = ''): string =>
+  n == null ? '' : `${prefix}${n}${suffix}`;
+const formatCurrency = (n: number | null | undefined): string =>
+  n == null ? '' : `$${n.toFixed(2)}`;
+const formatPercent = (n: number | null | undefined): string =>
+  n == null ? '' : `${n}%`;
+const formatStars = (n: number | null | undefined): string =>
+  n == null ? '' : '★'.repeat(n);
 
 function buildWorkbook(
   deals: Deal[],
