@@ -227,6 +227,17 @@ const todayIso = () => {
   return `${d.getFullYear()}-${m}-${day}`;
 };
 
+export const defaultOnboardingChecklist = (
+  rentRollId: string,
+  items: OnboardingItem[]
+): OnboardingChecklist => ({
+  id: crypto.randomUUID(),
+  rentRollId,
+  createdAt: new Date().toISOString(),
+  templateVersion: 1,
+  items,
+});
+
 export const defaultDeal = (): Deal => ({
   id: crypto.randomUUID(),
   dealName: '',
@@ -287,3 +298,33 @@ export const ActivityEntrySchema = z.object({
 }));
 
 export type ActivityEntry = z.infer<typeof ActivityEntrySchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Onboarding checklist — per Rent Roll tenant, one record with N
+// checkbox items. Template lives in src/lib/onboarding.ts.
+// ──────────────────────────────────────────────────────────────────
+
+export const OnboardingItemSchema = z.object({
+  itemId: z.string(),
+  checked: z.boolean(),
+  notes: z.string().nullable().optional(),
+  link: z.string().nullable().optional(),
+  completedAt: z.string().nullable().optional(),
+}).transform((i) => ({
+  ...i,
+  notes: i.notes ?? null,
+  link: i.link ?? null,
+  completedAt: i.completedAt ?? null,
+}));
+
+export type OnboardingItem = z.infer<typeof OnboardingItemSchema>;
+
+export const OnboardingChecklistSchema = z.object({
+  id: z.string().uuid(),
+  rentRollId: z.string(),
+  createdAt: z.string(),
+  templateVersion: z.number().int().default(1),
+  items: z.array(OnboardingItemSchema),
+});
+
+export type OnboardingChecklist = z.infer<typeof OnboardingChecklistSchema>;

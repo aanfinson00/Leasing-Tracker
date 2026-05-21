@@ -5,6 +5,8 @@ import type {
   ActivityType,
   Deal,
   DealStatus,
+  OnboardingChecklist,
+  OnboardingItem,
   Priority,
   RentRollRow,
   UWBasis,
@@ -15,9 +17,11 @@ import {
   ActivityTypeEnum,
   DealSchema,
   DealStatusEnum,
+  OnboardingChecklistSchema,
   RentRollRowSchema,
   UWBasisEnum,
 } from '../types';
+import { getTemplateItem, reconcileWithTemplate } from './onboarding';
 
 const MISSING_TOKENS = new Set(['', '?', '#n/a', '#na', 'n/a', 'na', '-', '—', 'tbd', 'unknown']);
 
@@ -216,6 +220,7 @@ const buildGetter = (rawRow: RawRow) => {
 const RENT_ROLL_HEADER_HINTS = ['leasablesf', 'occupied', 'tenantrating', 'actualorprospectiveuw'];
 const PROSPECTS_HEADER_HINTS = ['prospecttenant', 'probabilityoflease', 'targetrent'];
 const ACTIVITY_HEADER_HINTS = ['parentid', 'parenttype', 'summary'];
+const ONBOARDING_HEADER_HINTS = ['checklistid', 'itemid', 'checked'];
 
 const readRow = (sheet: XLSX.WorkSheet, rowIdx: number): string[] => {
   const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1');
@@ -230,7 +235,7 @@ const readRow = (sheet: XLSX.WorkSheet, rowIdx: number): string[] => {
 
 // Look at the first ~10 rows to find one that contains expected column names.
 // Returns the row index of the header row, or 0 if none found.
-type SheetType = 'rentroll' | 'prospects' | 'activity' | 'unknown';
+type SheetType = 'rentroll' | 'prospects' | 'activity' | 'onboarding' | 'unknown';
 
 const findHeaderRow = (sheet: XLSX.WorkSheet): { rowIdx: number; type: SheetType } => {
   const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1');
@@ -238,6 +243,8 @@ const findHeaderRow = (sheet: XLSX.WorkSheet): { rowIdx: number; type: SheetType
   for (let r = range.s.r; r <= maxScan; r++) {
     const headers = readRow(sheet, r);
     const norm = new Set(headers.map(HEADER_NORMALIZE));
+    const oHits = ONBOARDING_HEADER_HINTS.filter((h) => norm.has(h)).length;
+    if (oHits >= 2) return { rowIdx: r, type: 'onboarding' };
     const aHits = ACTIVITY_HEADER_HINTS.filter((h) => norm.has(h)).length;
     if (aHits >= 2) return { rowIdx: r, type: 'activity' };
     const rrHits = RENT_ROLL_HEADER_HINTS.filter((h) => norm.has(h)).length;
@@ -468,6 +475,46 @@ const parseActivityRow = (rawRow: RawRow): ActivityEntry | null => {
   return result.data;
 };
 
+// Each Onboarding sheet row is one (checklist, item) pair. The grouping
+// pass after import collapses them back into OnboardingChecklist[].
+interface OnboardingRowParsed {
+  checklistId: string;
+  rentRollId: string;
+  createdAt: string;
+  templateVersion: number;
+  item: OnboardingItem;
+}
+
+const parseOnboardingRow = (rawRow: RawRow): OnboardingRowParsed | null => {
+  const get = buildGetter(rawRow);
+  const checklistId = cleanString(get('Checklist ID', 'ChecklistID'));
+  const rentRollId = cleanString(get('Rent Roll ID', 'RentRollID'));
+  const itemId = cleanString(get('Item ID', 'ItemID'));
+  if (!checklistId || !rentRollId || !itemId) return null;
+
+  const checked = parseBool(get('Checked'));
+  const notes = cleanString(get('Notes'));
+  const link = cleanString(get('Link', 'URL'));
+  const completedAt = cleanString(get('Completed At', 'CompletedAt'));
+  const createdAt = cleanString(get('Created At', 'CreatedAt')) ?? new Date().toISOString();
+  const tvRaw = parseNumber(get('Template Version', 'TemplateVersion'));
+  const templateVersion = tvRaw === null ? 1 : Math.max(1, Math.round(tvRaw));
+
+  return {
+    checklistId,
+    rentRollId,
+    createdAt,
+    templateVersion,
+    item: {
+      itemId,
+      checked,
+      notes,
+      link,
+      completedAt,
+    },
+  };
+};
+
 // ──────────────────────────────────────────────────────────────────
 // Public API
 // ──────────────────────────────────────────────────────────────────
@@ -476,6 +523,7 @@ export interface LoadResult {
   deals: Deal[];
   rentRoll: RentRollRow[];
   activities: ActivityEntry[];
+  onboardings: OnboardingChecklist[];
 }
 
 export async function loadFromFile(file: File): Promise<LoadResult> {
@@ -491,6 +539,7 @@ export async function loadFromFile(file: File): Promise<LoadResult> {
         let deals: Deal[] = [];
         let rentRoll: RentRollRow[] = [];
         let activities: ActivityEntry[] = [];
+        const onboardingRows: OnboardingRowParsed[] = [];
 
         for (const name of workbook.SheetNames) {
           const ws = workbook.Sheets[name];
@@ -511,10 +560,42 @@ export async function loadFromFile(file: File): Promise<LoadResult> {
             activities = activities.concat(
               rows.map(parseActivityRow).filter((a): a is ActivityEntry => a !== null)
             );
+          } else if (type === 'onboarding') {
+            for (const raw of rows) {
+              const parsed = parseOnboardingRow(raw);
+              if (parsed) onboardingRows.push(parsed);
+            }
           }
         }
 
-        resolve({ deals, rentRoll, activities });
+        // Group onboarding rows back into checklists by Checklist ID, then
+        // reconcile with the current template (inject missing items, preserve
+        // unknown ones).
+        const byChecklist = new Map<string, OnboardingRowParsed[]>();
+        for (const r of onboardingRows) {
+          const list = byChecklist.get(r.checklistId) ?? [];
+          list.push(r);
+          byChecklist.set(r.checklistId, list);
+        }
+        const onboardings: OnboardingChecklist[] = [];
+        for (const [checklistId, rows] of byChecklist) {
+          const first = rows[0];
+          const candidate = {
+            id: checklistId,
+            rentRollId: first.rentRollId,
+            createdAt: first.createdAt,
+            templateVersion: first.templateVersion,
+            items: rows.map((r) => r.item),
+          };
+          const result = OnboardingChecklistSchema.safeParse(candidate);
+          if (!result.success) {
+            console.warn('Skipping unparsable onboarding checklist:', candidate, result.error.format());
+            continue;
+          }
+          onboardings.push(reconcileWithTemplate(result.data));
+        }
+
+        resolve({ deals, rentRoll, activities, onboardings });
       } catch (err) {
         reject(err);
       }
@@ -537,7 +618,8 @@ const formatStars = (n: number | null): string => (n === null ? '' : '★'.repea
 function buildWorkbook(
   deals: Deal[],
   rentRoll: RentRollRow[],
-  activities: ActivityEntry[]
+  activities: ActivityEntry[],
+  onboardings: OnboardingChecklist[] = []
 ): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
 
@@ -644,15 +726,53 @@ function buildWorkbook(
     XLSX.utils.book_append_sheet(wb, wsA, 'Activity');
   }
 
+  if (onboardings.length > 0) {
+    // Flatten to one row per (checklist, item) pair. Department / Group /
+    // Item columns are denormalized from the template for skimmability in
+    // Excel; they're ignored on import (Item ID is the source of truth).
+    const rrNameById = new Map(
+      rentRoll.map((r) => [r.id, r.tenantName ?? r.dealName ?? r.spaceId ?? ''])
+    );
+    const oData: Record<string, string | number>[] = [];
+    for (const c of onboardings) {
+      for (const item of c.items) {
+        const t = getTemplateItem(item.itemId);
+        oData.push({
+          'Checklist ID': c.id,
+          'Rent Roll ID': c.rentRollId,
+          'Tenant': rrNameById.get(c.rentRollId) ?? '',
+          'Department': t?.department ?? '',
+          'Group': t?.group ?? '',
+          'Item': t?.label ?? '',
+          'Item ID': item.itemId,
+          'Checked': item.checked ? 'Yes' : 'No',
+          'Notes': item.notes ?? '',
+          'Link': item.link ?? '',
+          'Completed At': item.completedAt ?? '',
+          'Created At': c.createdAt,
+          'Template Version': c.templateVersion,
+        });
+      }
+    }
+    const wsO = XLSX.utils.json_to_sheet(oData);
+    wsO['!cols'] = [
+      { wch: 38 }, { wch: 38 }, { wch: 28 }, { wch: 8 }, { wch: 30 },
+      { wch: 50 }, { wch: 32 }, { wch: 10 }, { wch: 40 }, { wch: 40 },
+      { wch: 22 }, { wch: 22 }, { wch: 10 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsO, 'Onboarding');
+  }
+
   return wb;
 }
 
 export function buildWorkbookBlob(
   deals: Deal[],
   rentRoll: RentRollRow[],
-  activities: ActivityEntry[] = []
+  activities: ActivityEntry[] = [],
+  onboardings: OnboardingChecklist[] = []
 ): Blob {
-  const wb = buildWorkbook(deals, rentRoll, activities);
+  const wb = buildWorkbook(deals, rentRoll, activities, onboardings);
   const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   return new Blob([bytes], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -663,8 +783,9 @@ export function saveToFile(
   deals: Deal[],
   rentRoll: RentRollRow[],
   activities: ActivityEntry[] = [],
+  onboardings: OnboardingChecklist[] = [],
   filename: string = 'leases.xlsx'
 ): void {
-  const wb = buildWorkbook(deals, rentRoll, activities);
+  const wb = buildWorkbook(deals, rentRoll, activities, onboardings);
   XLSX.writeFile(wb, filename);
 }

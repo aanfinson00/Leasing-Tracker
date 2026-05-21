@@ -8,15 +8,17 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, ChevronUp, ChevronDown, Pencil, Trash2, Sparkles, UserPlus } from 'lucide-react';
+import { ArrowUpDown, ChevronUp, ChevronDown, Pencil, Trash2, Sparkles, UserPlus, ClipboardCheck } from 'lucide-react';
 import type { RentRollRow, Deal } from '../types';
 
 interface RentRollTableProps {
   rows: RentRollRow[];
   prospectsBySpaceId: Map<string, Deal>;
+  onboardingsByRentRollId: Set<string>;
   onSelect: (row: RentRollRow) => void;
   onDelete: (id: string) => void;
   onStartProspect: (row: RentRollRow) => void;
+  onStartOnboarding: (row: RentRollRow) => void;
 }
 
 const formatNum = (n: number | null | undefined): string =>
@@ -35,7 +37,15 @@ const Stars = ({ n }: { n: number | null }) => {
   );
 };
 
-export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, onStartProspect }: RentRollTableProps) {
+export function RentRollTable({
+  rows,
+  prospectsBySpaceId,
+  onboardingsByRentRollId,
+  onSelect,
+  onDelete,
+  onStartProspect,
+  onStartOnboarding,
+}: RentRollTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const columnHelper = createColumnHelper<RentRollRow>();
 
@@ -166,6 +176,7 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
           const r = info.row.original;
           const canStartProspect =
             !r.occupied && (!r.spaceId || !prospectsBySpaceId.has(r.spaceId));
+          const canStartOnboarding = r.occupied && !onboardingsByRentRollId.has(r.id);
           return (
             <div className="flex justify-end gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity">
               {canStartProspect && (
@@ -179,6 +190,19 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
                   className="p-2 rounded-lg text-accent hover:bg-accent-soft transition-colors"
                 >
                   <UserPlus size={14} strokeWidth={2} />
+                </button>
+              )}
+              {canStartOnboarding && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStartOnboarding(r);
+                  }}
+                  title="Start onboarding checklist"
+                  aria-label="Start onboarding"
+                  className="p-2 rounded-lg text-accent hover:bg-accent-soft transition-colors"
+                >
+                  <ClipboardCheck size={14} strokeWidth={2} />
                 </button>
               )}
               <button
@@ -210,7 +234,7 @@ export function RentRollTable({ rows, prospectsBySpaceId, onSelect, onDelete, on
         },
       }),
     ],
-    [columnHelper, prospectsBySpaceId, onSelect, onDelete, onStartProspect]
+    [columnHelper, prospectsBySpaceId, onboardingsByRentRollId, onSelect, onDelete, onStartProspect, onStartOnboarding]
   );
 
   const table = useReactTable({

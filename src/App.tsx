@@ -13,12 +13,20 @@ import {
   CloudOff,
   Unlink,
 } from 'lucide-react';
-import type { ActivityEntry, Deal, DealStatus, RentRollRow } from './types';
-import { defaultDeal, defaultRentRollRow } from './types';
+import type {
+  ActivityEntry,
+  Deal,
+  DealStatus,
+  OnboardingChecklist,
+  OnboardingItem,
+  RentRollRow,
+} from './types';
+import { defaultDeal, defaultOnboardingChecklist, defaultRentRollRow } from './types';
 import { loadFromFile, saveToFile, buildWorkbookBlob } from './lib/excel';
 import { saveSnapshot, loadSnapshot, clearSnapshot } from './lib/autosave';
 import { encodeShare, decodeShare, readShareFromUrl, clearShareFromUrl } from './lib/share';
 import { makeStatusChangeEntry } from './lib/activity';
+import { getOnboardingFor, makeBlankItems, reconcileWithTemplate } from './lib/onboarding';
 import {
   isFileSystemAccessSupported,
   loadHandle,
@@ -41,6 +49,7 @@ import { RentRollSummary } from './components/RentRollSummary';
 import { RentRollDrawer } from './components/RentRollDrawer';
 import { PromoteDrawer } from './components/PromoteDrawer';
 import { ReportsView } from './components/ReportsView';
+import { OnboardingView } from './components/Onboarding/OnboardingView';
 import { Sidebar, type View } from './components/Sidebar';
 
 function App() {
@@ -50,6 +59,7 @@ function App() {
   const [rentRoll, setRentRoll] = useState<RentRollRow[]>([]);
   const [filteredRentRoll, setFilteredRentRoll] = useState<RentRollRow[]>([]);
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
+  const [onboardings, setOnboardings] = useState<OnboardingChecklist[]>([]);
   const [filename, setFilename] = useState<string>('');
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [editingRow, setEditingRow] = useState<RentRollRow | null>(null);
@@ -91,6 +101,7 @@ function App() {
       setRentRoll(result.rentRoll);
       setFilteredRentRoll(result.rentRoll);
       setActivities(result.activities);
+      setOnboardings(result.onboardings);
       setFilename(file.name);
       setLastSeenModified(file.lastModified);
       return true;
@@ -110,6 +121,7 @@ function App() {
           setRentRoll(payload.rentRoll);
           setFilteredRentRoll(payload.rentRoll);
           setActivities(payload.activities ?? []);
+          setOnboardings((payload.onboardings ?? []).map(reconcileWithTemplate));
           setFilename(payload.filename);
           setSharedSnapshot({ filename: payload.filename, sharedAt: payload.sharedAt });
         } else {
@@ -156,6 +168,7 @@ function App() {
           setRentRoll(snapshot.rentRoll);
           setFilteredRentRoll(snapshot.rentRoll);
           setActivities(snapshot.activities ?? []);
+          setOnboardings((snapshot.onboardings ?? []).map(reconcileWithTemplate));
           setFilename(snapshot.filename);
         } else {
           clearSnapshot();
@@ -167,12 +180,17 @@ function App() {
 
   useEffect(() => {
     if (!hydrated) return;
-    if (deals.length === 0 && rentRoll.length === 0 && activities.length === 0) {
+    if (
+      deals.length === 0 &&
+      rentRoll.length === 0 &&
+      activities.length === 0 &&
+      onboardings.length === 0
+    ) {
       clearSnapshot();
       return;
     }
-    saveSnapshot(deals, rentRoll, activities, filename);
-  }, [deals, rentRoll, activities, filename, hydrated]);
+    saveSnapshot(deals, rentRoll, activities, onboardings, filename);
+  }, [deals, rentRoll, activities, onboardings, filename, hydrated]);
 
   const handleOpenClick = async () => {
     if (fsAccessSupported) {
@@ -186,6 +204,7 @@ function App() {
         setRentRoll(result.rentRoll);
         setFilteredRentRoll(result.rentRoll);
         setActivities(result.activities);
+        setOnboardings(result.onboardings);
         setFilename(file.name);
         setFileHandle(handle);
         setLastSeenModified(file.lastModified);
@@ -211,6 +230,7 @@ function App() {
       setRentRoll(result.rentRoll);
       setFilteredRentRoll(result.rentRoll);
       setActivities(result.activities);
+      setOnboardings(result.onboardings);
       setFilename(file.name);
     } catch (err) {
       alert(`Error loading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -245,7 +265,7 @@ function App() {
             return;
           }
         }
-        const blob = buildWorkbookBlob(deals, rentRoll, activities);
+        const blob = buildWorkbookBlob(deals, rentRoll, activities, onboardings);
         await writeToHandle(fileHandle, blob);
         // Re-read to grab the new mtime (after the write)
         const after = await readFromHandle(fileHandle);
@@ -259,7 +279,7 @@ function App() {
       return;
     }
     const name = filename || 'leases.xlsx';
-    saveToFile(deals, rentRoll, activities, name);
+    saveToFile(deals, rentRoll, activities, onboardings, name);
   };
 
   const handleReconnect = async () => {
@@ -288,7 +308,13 @@ function App() {
 
   const handleShareLink = async () => {
     try {
-      const encoded = await encodeShare(deals, rentRoll, activities, filename || 'leases.xlsx');
+      const encoded = await encodeShare(
+        deals,
+        rentRoll,
+        activities,
+        onboardings,
+        filename || 'leases.xlsx'
+      );
       const url = `${window.location.origin}${window.location.pathname}#data=${encoded}`;
       // Microsoft SafeLinks (Teams + Outlook) routes through Akamai, which
       // rejects URLs over ~8 KB. Warn early so people don't paste broken
@@ -357,6 +383,7 @@ function App() {
     setActivities((prev) =>
       prev.filter((a) => !(a.parentType === 'rentroll' && a.parentId === id))
     );
+    setOnboardings((prev) => prev.filter((o) => o.rentRollId !== id));
   };
 
   // ── Activity handlers
@@ -412,6 +439,15 @@ function App() {
       transition,
     ]);
 
+    // Auto-start an onboarding checklist for this tenant if one doesn't
+    // already exist. Idempotent so re-promoting the same rent roll row
+    // reuses the existing checklist (preserving any prior checkmarks).
+    setOnboardings((prev) =>
+      getOnboardingFor(prev, rrRow.id)
+        ? prev
+        : [...prev, defaultOnboardingChecklist(rrRow.id, makeBlankItems())]
+    );
+
     setPromotingDeal(null);
     setView('rentroll');
   };
@@ -446,6 +482,41 @@ function App() {
     setEditingDeal(newDeal);
   };
 
+  // ── Onboarding handlers
+  const handleStartOnboarding = (row: RentRollRow) => {
+    setOnboardings((prev) => {
+      if (getOnboardingFor(prev, row.id)) return prev;
+      return [...prev, defaultOnboardingChecklist(row.id, makeBlankItems())];
+    });
+    setView('onboarding');
+  };
+  const handleUpdateOnboardingItem = (
+    checklistId: string,
+    itemId: string,
+    patch: Partial<OnboardingItem>
+  ) => {
+    setOnboardings((prev) =>
+      prev.map((c) =>
+        c.id !== checklistId
+          ? c
+          : {
+              ...c,
+              items: c.items.map((i) => (i.itemId === itemId ? { ...i, ...patch } : i)),
+            }
+      )
+    );
+  };
+  const handleDeleteOnboarding = (id: string) => {
+    setOnboardings((prev) => prev.filter((o) => o.id !== id));
+  };
+
+  // Lookup: which rent roll rows already have an onboarding (so the
+  // RentRollTable can hide the "+ Onboarding" button for them).
+  const onboardingsByRentRollId = useMemo(
+    () => new Set(onboardings.map((o) => o.rentRollId)),
+    [onboardings]
+  );
+
   // Find the matched Rent Roll row for a prospect being promoted
   const matchedRentRollRow = useMemo<RentRollRow | null>(() => {
     if (!promotingDeal?.spaceId) return null;
@@ -454,13 +525,20 @@ function App() {
     );
   }, [promotingDeal, rentRoll]);
 
-  const hasData = deals.length > 0 || rentRoll.length > 0;
+  const hasData = deals.length > 0 || rentRoll.length > 0 || onboardings.length > 0;
+  const showsCounts = view === 'prospects' || view === 'rentroll';
   const currentCount =
     view === 'prospects' ? filteredDeals.length : view === 'rentroll' ? filteredRentRoll.length : 0;
   const totalCount =
     view === 'prospects' ? deals.length : view === 'rentroll' ? rentRoll.length : 0;
   const viewTitle =
-    view === 'prospects' ? 'Prospects' : view === 'rentroll' ? 'Rent Roll' : 'Reports';
+    view === 'prospects'
+      ? 'Prospects'
+      : view === 'rentroll'
+        ? 'Rent Roll'
+        : view === 'onboarding'
+          ? 'Onboarding'
+          : 'Reports';
 
   return (
     <div className="flex min-h-screen bg-bg text-fg">
@@ -506,7 +584,7 @@ function App() {
                           </button>
                         </>
                       )}
-                      {view !== 'reports' && (
+                      {showsCounts && (
                         <>
                           <span className="text-fg-subtle">·</span>
                           <span className="tabular-nums">
@@ -517,12 +595,12 @@ function App() {
                     </>
                   ) : hasData ? (
                     <>
-                      {view !== 'reports' && (
+                      {showsCounts && (
                         <span className="tabular-nums font-medium text-fg">
                           {currentCount} of {totalCount}
                         </span>
                       )}
-                      {view !== 'reports' && <span className="text-fg-subtle">·</span>}
+                      {showsCounts && <span className="text-fg-subtle">·</span>}
                       <span className="text-warning">Unsaved — click Save to export</span>
                     </>
                   ) : (
@@ -576,7 +654,7 @@ function App() {
                   Share
                 </button>
 
-                {view !== 'reports' && (
+                {showsCounts && (
                   <button
                     onClick={view === 'prospects' ? handleNewDeal : handleNewRow}
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
@@ -619,6 +697,13 @@ function App() {
         <main className="flex-1 px-6 sm:px-10 pb-12 max-w-7xl w-full mx-auto space-y-8">
           {view === 'reports' ? (
             <ReportsView deals={deals} rentRoll={rentRoll} />
+          ) : view === 'onboarding' ? (
+            <OnboardingView
+              onboardings={onboardings}
+              rentRoll={rentRoll}
+              onUpdateItem={handleUpdateOnboardingItem}
+              onDelete={handleDeleteOnboarding}
+            />
           ) : view === 'prospects' ? (
             deals.length === 0 ? (
               <EmptyHero onAction={handleNewDeal} ctaLabel="Create your first deal" />
@@ -653,9 +738,11 @@ function App() {
                   <RentRollTable
                     rows={filteredRentRoll}
                     prospectsBySpaceId={prospectsBySpaceId}
+                    onboardingsByRentRollId={onboardingsByRentRollId}
                     onSelect={handleSelectRow}
                     onDelete={handleDeleteRow}
                     onStartProspect={handleStartProspect}
+                    onStartOnboarding={handleStartOnboarding}
                   />
                 )}
               </section>

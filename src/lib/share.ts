@@ -1,4 +1,4 @@
-import type { ActivityEntry, Deal, RentRollRow } from '../types';
+import type { ActivityEntry, Deal, OnboardingChecklist, RentRollRow } from '../types';
 
 export interface SharedPayload {
   v: 1;
@@ -6,6 +6,7 @@ export interface SharedPayload {
   deals: Deal[];
   rentRoll: RentRollRow[];
   activities?: ActivityEntry[];
+  onboardings?: OnboardingChecklist[];
   sharedAt: string;
 }
 
@@ -46,6 +47,7 @@ export async function encodeShare(
   deals: Deal[],
   rentRoll: RentRollRow[],
   activities: ActivityEntry[],
+  onboardings: OnboardingChecklist[],
   filename: string
 ): Promise<string> {
   const payload: SharedPayload = {
@@ -54,6 +56,7 @@ export async function encodeShare(
     deals,
     rentRoll,
     activities,
+    onboardings: onboardings.length > 0 ? onboardings : undefined,
     sharedAt: new Date().toISOString(),
   };
   const json = JSON.stringify(payload);
