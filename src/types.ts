@@ -528,3 +528,178 @@ export const DevelopmentProjectSchema = z.object({
 }));
 
 export type DevelopmentProject = z.infer<typeof DevelopmentProjectSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Property Tax Appeals — one row per filed/considered appeal for a
+// given property and tax year. Backs Asset Management workflows
+// + .claude/skills/property-tax-appeal-{intake,watcher}.
+// ──────────────────────────────────────────────────────────────────
+
+export const PropertyTaxAppealStatusEnum = z.enum([
+  'Considering',
+  'Filed',
+  'Under Review',
+  'Hearing Scheduled',
+  'Settled',
+  'Withdrawn',
+  'Lost',
+]);
+export type PropertyTaxAppealStatus = z.infer<typeof PropertyTaxAppealStatusEnum>;
+
+// Statuses that close out the appeal — exclude from "open work" reports.
+export const APPEAL_OPEN_STATUSES: PropertyTaxAppealStatus[] = [
+  'Considering',
+  'Filed',
+  'Under Review',
+  'Hearing Scheduled',
+];
+
+export const PropertyTaxAppealSchema = z.object({
+  id: z.string().uuid(),
+
+  // Property reference (soft link)
+  buildingId: z.string().nullable().optional(),
+  building: z.string().nullable().optional(),
+  parcelNumber: z.string().nullable().optional(),
+  jurisdiction: z.string().nullable().optional(),
+
+  // Required: which tax year we're appealing
+  taxYear: z.number().int().min(2000).max(2100),
+
+  // Valuation triangle
+  assessedValue: z.number().nullable().optional(),
+  proposedValue: z.number().nullable().optional(),
+  marketValue: z.number().nullable().optional(),
+
+  status: PropertyTaxAppealStatusEnum,
+
+  // Dates (ISO YYYY-MM-DD)
+  filedDate: z.string().nullable().optional(),
+  hearingDate: z.string().nullable().optional(),
+  resolutionDate: z.string().nullable().optional(),
+
+  // Outcome
+  initialAssessedValue: z.number().nullable().optional(),
+  finalAssessedValue: z.number().nullable().optional(),
+  estimatedSavings: z.number().nullable().optional(),
+
+  // Consultant
+  consultantName: z.string().nullable().optional(),
+  consultantFeePct: z.number().min(0).max(1).nullable().optional(),
+  consultantFeeDollar: z.number().min(0).nullable().optional(),
+
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((a) => ({
+  ...a,
+  buildingId: a.buildingId ?? null,
+  building: a.building ?? null,
+  parcelNumber: a.parcelNumber ?? null,
+  jurisdiction: a.jurisdiction ?? null,
+  assessedValue: a.assessedValue ?? null,
+  proposedValue: a.proposedValue ?? null,
+  marketValue: a.marketValue ?? null,
+  filedDate: a.filedDate ?? null,
+  hearingDate: a.hearingDate ?? null,
+  resolutionDate: a.resolutionDate ?? null,
+  initialAssessedValue: a.initialAssessedValue ?? null,
+  finalAssessedValue: a.finalAssessedValue ?? null,
+  estimatedSavings: a.estimatedSavings ?? null,
+  consultantName: a.consultantName ?? null,
+  consultantFeePct: a.consultantFeePct ?? null,
+  consultantFeeDollar: a.consultantFeeDollar ?? null,
+  notes: a.notes ?? null,
+}));
+
+export type PropertyTaxAppeal = z.infer<typeof PropertyTaxAppealSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Lease Comps — historical observed deals stored as reference data
+// for underwriting. Not generated from existing deals — these are
+// market data points the user gathers from brokers, reports, etc.
+// ──────────────────────────────────────────────────────────────────
+
+export const TransactionTypeEnum = z.enum([
+  'New Lease',
+  'Renewal',
+  'Sublease',
+  'Expansion',
+  'Other',
+]);
+export type TransactionType = z.infer<typeof TransactionTypeEnum>;
+
+export const RentTypeEnum = z.enum([
+  'NNN',
+  'Modified Gross',
+  'Full Service',
+  'Industrial Gross',
+]);
+export type RentType = z.infer<typeof RentTypeEnum>;
+
+export const CompConfidenceEnum = z.enum(['High', 'Medium', 'Low']);
+export type CompConfidence = z.infer<typeof CompConfidenceEnum>;
+
+export const LeaseCompSchema = z.object({
+  id: z.string().uuid(),
+
+  propertyName: z.string().nullable().optional(),
+  buildingAddress: z.string().nullable().optional(),
+  market: z.string().nullable().optional(),
+  propertyType: z.string().nullable().optional(),
+  buildingType: z.string().nullable().optional(),
+
+  tenantName: z.string().nullable().optional(),
+  tenantIndustry: z.string().nullable().optional(),
+  transactionType: TransactionTypeEnum.nullable().optional(),
+  signedDate: z.string().nullable().optional(),
+  deliveryDate: z.string().nullable().optional(),
+
+  leaseSF: z.number().positive().nullable().optional(),
+  buildingSF: z.number().positive().nullable().optional(),
+  baseRentPSF: z.number().min(0).nullable().optional(),
+  effectiveRentPSF: z.number().min(0).nullable().optional(),
+  rentType: RentTypeEnum.nullable().optional(),
+  termMonths: z.number().int().positive().nullable().optional(),
+  freeRentMonths: z.number().min(0).nullable().optional(),
+  tiPSF: z.number().min(0).nullable().optional(),
+  // Stored as fraction (0.03 for 3%).
+  escalationPct: z.number().nullable().optional(),
+  options: z.string().nullable().optional(),
+
+  source: z.string().nullable().optional(),
+  sourceUrl: z.string().nullable().optional(),
+  confidence: CompConfidenceEnum,
+  confidential: z.boolean(),
+
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((c) => ({
+  ...c,
+  propertyName: c.propertyName ?? null,
+  buildingAddress: c.buildingAddress ?? null,
+  market: c.market ?? null,
+  propertyType: c.propertyType ?? null,
+  buildingType: c.buildingType ?? null,
+  tenantName: c.tenantName ?? null,
+  tenantIndustry: c.tenantIndustry ?? null,
+  transactionType: c.transactionType ?? null,
+  signedDate: c.signedDate ?? null,
+  deliveryDate: c.deliveryDate ?? null,
+  leaseSF: c.leaseSF ?? null,
+  buildingSF: c.buildingSF ?? null,
+  baseRentPSF: c.baseRentPSF ?? null,
+  effectiveRentPSF: c.effectiveRentPSF ?? null,
+  rentType: c.rentType ?? null,
+  termMonths: c.termMonths ?? null,
+  freeRentMonths: c.freeRentMonths ?? null,
+  tiPSF: c.tiPSF ?? null,
+  escalationPct: c.escalationPct ?? null,
+  options: c.options ?? null,
+  source: c.source ?? null,
+  sourceUrl: c.sourceUrl ?? null,
+  notes: c.notes ?? null,
+}));
+
+export type LeaseComp = z.infer<typeof LeaseCompSchema>;

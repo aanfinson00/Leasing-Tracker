@@ -9,7 +9,10 @@ import type {
   Building,
   Deal,
   DevelopmentProject,
+  LeaseComp,
   OnboardingChecklist,
+  PropertyTaxAppeal,
+  PropertyTaxAppealStatus,
   RentRollRow,
   Scenario,
 } from '../../types';
@@ -392,6 +395,11 @@ export const rowToBuilding = (r: BuildingRow): Building => ({
   updatedAt: r.updated_at,
 });
 
+// Shared helper used by all numeric-or-string DB columns. Postgres
+// `numeric` columns come back as strings in supabase-js; coerce here.
+const numOrNull = (v: number | string | null | undefined): number | null =>
+  v == null ? null : Number(v);
+
 // ── DevelopmentProject ────────────────────────────────────────────
 
 export interface DevelopmentProjectRow {
@@ -418,9 +426,6 @@ export interface DevelopmentProjectRow {
   created_at: string;
   updated_at: string;
 }
-
-const numOr = (v: number | string | null | undefined): number | null =>
-  v == null ? null : Number(v);
 
 export const developmentProjectToRow = (
   p: DevelopmentProject
@@ -460,20 +465,202 @@ export const rowToDevelopmentProject = (
   market: r.market,
   address: r.address,
   phase: r.phase,
-  totalSF: numOr(r.total_sf),
-  acres: numOr(r.acres),
+  totalSF: numOrNull(r.total_sf),
+  acres: numOrNull(r.acres),
   buildingCount: r.building_count,
   startDate: r.start_date,
   expectedDeliveryDate: r.expected_delivery_date,
   actualDeliveryDate: r.actual_delivery_date,
-  totalBudget: numOr(r.total_budget),
-  spentToDate: numOr(r.spent_to_date),
+  totalBudget: numOrNull(r.total_budget),
+  spentToDate: numOrNull(r.spent_to_date),
   pmName: r.pm_name,
   gcName: r.gc_name,
   gcContact: r.gc_contact,
   architect: r.architect,
   riskLevel: r.risk_level,
   statusSummary: r.status_summary,
+  notes: r.notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── PropertyTaxAppeal ─────────────────────────────────────────────
+
+export interface PropertyTaxAppealRow {
+  id: string;
+  building_id: string | null;
+  building: string | null;
+  parcel_number: string | null;
+  jurisdiction: string | null;
+  tax_year: number;
+  assessed_value: number | string | null;
+  proposed_value: number | string | null;
+  market_value: number | string | null;
+  status: PropertyTaxAppealStatus;
+  filed_date: string | null;
+  hearing_date: string | null;
+  resolution_date: string | null;
+  initial_assessed_value: number | string | null;
+  final_assessed_value: number | string | null;
+  estimated_savings: number | string | null;
+  consultant_name: string | null;
+  consultant_fee_pct: number | string | null;
+  consultant_fee_dollar: number | string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const propertyTaxAppealToRow = (
+  a: PropertyTaxAppeal
+): Omit<PropertyTaxAppealRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: a.id,
+  building_id: a.buildingId,
+  building: a.building,
+  parcel_number: a.parcelNumber,
+  jurisdiction: a.jurisdiction,
+  tax_year: a.taxYear,
+  assessed_value: a.assessedValue,
+  proposed_value: a.proposedValue,
+  market_value: a.marketValue,
+  status: a.status,
+  filed_date: a.filedDate,
+  hearing_date: a.hearingDate,
+  resolution_date: a.resolutionDate,
+  initial_assessed_value: a.initialAssessedValue,
+  final_assessed_value: a.finalAssessedValue,
+  estimated_savings: a.estimatedSavings,
+  consultant_name: a.consultantName,
+  consultant_fee_pct: a.consultantFeePct,
+  consultant_fee_dollar: a.consultantFeeDollar,
+  notes: a.notes,
+  created_at: a.createdAt,
+  updated_at: a.updatedAt,
+});
+
+export const rowToPropertyTaxAppeal = (r: PropertyTaxAppealRow): PropertyTaxAppeal => ({
+  id: r.id,
+  buildingId: r.building_id,
+  building: r.building,
+  parcelNumber: r.parcel_number,
+  jurisdiction: r.jurisdiction,
+  taxYear: r.tax_year,
+  assessedValue: numOrNull(r.assessed_value),
+  proposedValue: numOrNull(r.proposed_value),
+  marketValue: numOrNull(r.market_value),
+  status: r.status,
+  filedDate: r.filed_date,
+  hearingDate: r.hearing_date,
+  resolutionDate: r.resolution_date,
+  initialAssessedValue: numOrNull(r.initial_assessed_value),
+  finalAssessedValue: numOrNull(r.final_assessed_value),
+  estimatedSavings: numOrNull(r.estimated_savings),
+  consultantName: r.consultant_name,
+  consultantFeePct: numOrNull(r.consultant_fee_pct),
+  consultantFeeDollar: numOrNull(r.consultant_fee_dollar),
+  notes: r.notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── LeaseComp ─────────────────────────────────────────────────────
+
+export interface LeaseCompRow {
+  id: string;
+  property_name: string | null;
+  building_address: string | null;
+  market: string | null;
+  property_type: string | null;
+  building_type: string | null;
+  tenant_name: string | null;
+  tenant_industry: string | null;
+  transaction_type: LeaseComp['transactionType'];
+  signed_date: string | null;
+  delivery_date: string | null;
+  lease_sf: number | string | null;
+  building_sf: number | string | null;
+  base_rent_psf: number | string | null;
+  effective_rent_psf: number | string | null;
+  rent_type: LeaseComp['rentType'];
+  term_months: number | null;
+  free_rent_months: number | string | null;
+  ti_psf: number | string | null;
+  escalation_pct: number | string | null;
+  options: string | null;
+  source: string | null;
+  source_url: string | null;
+  confidence: LeaseComp['confidence'];
+  confidential: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const leaseCompToRow = (
+  c: LeaseComp
+): Omit<LeaseCompRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: c.id,
+  property_name: c.propertyName,
+  building_address: c.buildingAddress,
+  market: c.market,
+  property_type: c.propertyType,
+  building_type: c.buildingType,
+  tenant_name: c.tenantName,
+  tenant_industry: c.tenantIndustry,
+  transaction_type: c.transactionType,
+  signed_date: c.signedDate,
+  delivery_date: c.deliveryDate,
+  lease_sf: c.leaseSF,
+  building_sf: c.buildingSF,
+  base_rent_psf: c.baseRentPSF,
+  effective_rent_psf: c.effectiveRentPSF,
+  rent_type: c.rentType,
+  term_months: c.termMonths,
+  free_rent_months: c.freeRentMonths,
+  ti_psf: c.tiPSF,
+  escalation_pct: c.escalationPct,
+  options: c.options,
+  source: c.source,
+  source_url: c.sourceUrl,
+  confidence: c.confidence,
+  confidential: c.confidential,
+  notes: c.notes,
+  created_at: c.createdAt,
+  updated_at: c.updatedAt,
+});
+
+export const rowToLeaseComp = (r: LeaseCompRow): LeaseComp => ({
+  id: r.id,
+  propertyName: r.property_name,
+  buildingAddress: r.building_address,
+  market: r.market,
+  propertyType: r.property_type,
+  buildingType: r.building_type,
+  tenantName: r.tenant_name,
+  tenantIndustry: r.tenant_industry,
+  transactionType: r.transaction_type,
+  signedDate: r.signed_date,
+  deliveryDate: r.delivery_date,
+  leaseSF: numOrNull(r.lease_sf),
+  buildingSF: numOrNull(r.building_sf),
+  baseRentPSF: numOrNull(r.base_rent_psf),
+  effectiveRentPSF: numOrNull(r.effective_rent_psf),
+  rentType: r.rent_type,
+  termMonths: r.term_months,
+  freeRentMonths: numOrNull(r.free_rent_months),
+  tiPSF: numOrNull(r.ti_psf),
+  escalationPct: numOrNull(r.escalation_pct),
+  options: r.options,
+  source: r.source,
+  sourceUrl: r.source_url,
+  confidence: r.confidence,
+  confidential: r.confidential,
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   X,
@@ -12,13 +12,15 @@ import {
   ListChecks,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ActivityEntry, RentRollRow, UWBasis } from '../types';
+import type { ActivityEntry, Building, RentRollRow, UWBasis } from '../types';
 import { UWBasisEnum } from '../types';
+import { listSpaceOptions, findSpaceOption } from '../lib/spaces';
 import { ActivityLog } from './ActivityLog';
 
 interface RentRollDrawerProps {
   row: RentRollRow | null;
   activities: ActivityEntry[];
+  buildings: Building[];
   onClose: () => void;
   onSave: (row: RentRollRow) => void;
   onDelete: (id: string) => void;
@@ -106,13 +108,40 @@ function Section({ icon: Icon, title, children }: SectionProps) {
 export function RentRollDrawer({
   row,
   activities,
+  buildings,
   onClose,
   onSave,
   onDelete,
   onAddActivity,
   onDeleteActivity,
 }: RentRollDrawerProps) {
-  const { register, handleSubmit, reset, watch } = useForm<FormValues>();
+  const { register, handleSubmit, reset, watch, setValue } = useForm<FormValues>();
+
+  const spaceOptions = useMemo(() => listSpaceOptions(buildings), [buildings]);
+  const currentBuildingId = watch('buildingId') ?? row?.buildingId ?? '';
+  const currentSpaceIdLive = watch('spaceId') ?? row?.spaceId ?? '';
+  const matchedOption = useMemo(
+    () => findSpaceOption(spaceOptions, currentBuildingId || null, currentSpaceIdLive || null),
+    [spaceOptions, currentBuildingId, currentSpaceIdLive]
+  );
+
+  // When the user picks a space from the dropdown, push all three
+  // canonical fields. Leaves dealName / market alone since those are
+  // per-tenant, not per-space.
+  const handleSpacePick = (key: string) => {
+    if (key === '') {
+      // "Custom" — clear the structured fields so the user can free-type.
+      setValue('buildingId', '', { shouldDirty: true });
+      setValue('spaceId', '', { shouldDirty: true });
+      setValue('building', '', { shouldDirty: true });
+      return;
+    }
+    const opt = spaceOptions.find((o) => o.key === key);
+    if (!opt) return;
+    setValue('buildingId', opt.buildingId, { shouldDirty: true });
+    setValue('spaceId', opt.spaceId, { shouldDirty: true });
+    setValue('building', opt.buildingName, { shouldDirty: true });
+  };
 
   useEffect(() => {
     if (row) {
@@ -251,6 +280,38 @@ export function RentRollDrawer({
 
             <Section icon={Building2} title="Property">
               <div className="grid grid-cols-2 gap-3.5">
+                <div className="col-span-2">
+                  <label className={labelClass}>
+                    Building / Space
+                    {spaceOptions.length === 0 && (
+                      <span className="ml-2 text-fg-subtle font-normal">
+                        — no buildings drawn yet; use the free-text fields below
+                      </span>
+                    )}
+                  </label>
+                  <select
+                    value={matchedOption?.key ?? ''}
+                    onChange={(e) => handleSpacePick(e.target.value)}
+                    className={inputClass}
+                    disabled={spaceOptions.length === 0}
+                  >
+                    <option value="">
+                      {spaceOptions.length === 0
+                        ? 'No buildings — type IDs manually below'
+                        : 'Pick a space from your buildings…'}
+                    </option>
+                    {spaceOptions.map((o) => (
+                      <option key={o.key} value={o.key}>
+                        {o.buildingName} — {o.spaceId}
+                      </option>
+                    ))}
+                  </select>
+                  {matchedOption == null && (currentBuildingId || currentSpaceIdLive) && (
+                    <p className="text-xs text-fg-subtle mt-1.5">
+                      Custom IDs — doesn't match any drawn space.
+                    </p>
+                  )}
+                </div>
                 <div className="col-span-2">
                   <label className={labelClass}>Deal Name</label>
                   <input {...register('dealName')} className={inputClass} />
