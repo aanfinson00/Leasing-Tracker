@@ -20,8 +20,12 @@ import type {
   OnboardingChecklist,
   OnboardingItem,
   RentRollRow,
+  Scenario,
 } from './types';
 import { defaultDeal, defaultOnboardingChecklist, defaultRentRollRow } from './types';
+import { DEFAULT_GLOBALS, DEFAULT_INPUTS_BASE } from './lib/lease-math/types';
+import type { ScenarioInputs } from './lib/lease-math/types';
+import { runScenario } from './lib/lease-math/calc';
 import { loadFromFile, saveToFile, buildWorkbookBlob } from './lib/excel';
 import { saveSnapshot, loadSnapshot, clearSnapshot } from './lib/autosave';
 import { encodeShare, decodeShare, readShareFromUrl, clearShareFromUrl } from './lib/share';
@@ -81,6 +85,13 @@ import {
   deleteOnboarding as deleteOnboardingRow,
   subscribeOnboardings,
 } from './lib/repo/onboardings';
+import {
+  listScenariosForDeal,
+  upsertScenario,
+  deleteScenario as deleteScenarioRow,
+  subscribeScenarios,
+} from './lib/repo/scenarios';
+import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 
 function App() {
   const [view, setView] = useState<View>('prospects');
@@ -100,6 +111,15 @@ function App() {
   const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
   const [needsReconnect, setNeedsReconnect] = useState(false);
   const [lastSeenModified, setLastSeenModified] = useState<number | null>(null);
+  // Underwrite tab state — separate from deals/rentRoll/etc. because
+  // scenarios are loaded per-deal on demand (not eagerly).
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [selectedUwDealId, setSelectedUwDealId] = useState<string | null>(null);
+  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
+  // Mirror in a ref so the realtime closure (created once on mount) sees
+  // the latest selection without re-subscribing on every change.
+  const selectedUwDealIdRef = useRef<string | null>(null);
+  useEffect(() => { selectedUwDealIdRef.current = selectedUwDealId; }, [selectedUwDealId]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fsAccessSupported = isFileSystemAccessSupported();
 
@@ -293,11 +313,27 @@ function App() {
         }),
       onDelete: (id) => setOnboardings((prev) => prev.filter((x) => x.id !== id)),
     });
+    // Scenarios: filter realtime events by the currently-selected deal in
+    // the handler since the channel isn't filtered server-side.
+    const unsubScenarios = subscribeScenarios({
+      onUpsert: (s) =>
+        setScenarios((prev) => {
+          // Only merge if this scenario belongs to the deal we're viewing.
+          if (s.dealId !== selectedUwDealIdRef.current) return prev;
+          const idx = prev.findIndex((x) => x.id === s.id);
+          if (idx === -1) return [...prev, s];
+          const next = prev.slice();
+          next[idx] = s;
+          return next;
+        }),
+      onDelete: (id) => setScenarios((prev) => prev.filter((x) => x.id !== id)),
+    });
     return () => {
       unsubDeals();
       unsubRr();
       unsubAct();
       unsubOb();
+      unsubScenarios();
     };
   }, []);
 
@@ -697,6 +733,80 @@ function App() {
     writeThrough('delete onboarding', deleteOnboardingRow(id));
   };
 
+  // ── Underwrite (scenarios) handlers
+  const handleSelectUwDeal = async (deal: Deal | null) => {
+    setSelectedUwDealId(deal?.id ?? null);
+    setActiveScenarioId(null);
+    if (!deal) {
+      setScenarios([]);
+      return;
+    }
+    if (!SUPABASE_CONFIGURED) {
+      setScenarios([]);
+      return;
+    }
+    try {
+      const rows = await listScenariosForDeal(deal.id);
+      setScenarios(rows);
+      if (rows.length > 0) setActiveScenarioId(rows[0].id);
+    } catch (err) {
+      console.error('Failed to load scenarios:', err);
+      showToast('Failed to load scenarios');
+    }
+  };
+
+  const handleNewScenario = (deal: Deal) => {
+    // Auto-fill from the deal where we can; fall back to Lease-Calculator
+    // defaults. Lease SF defaults to maxSF, then minSF, then 100k.
+    const today = new Date().toISOString().slice(0, 10);
+    const leaseSF = deal.maxSF ?? deal.minSF ?? 100_000;
+    const inputs: ScenarioInputs = {
+      ...DEFAULT_INPUTS_BASE,
+      name: scenarios.some((s) => s.name === 'UW') ? `Scenario ${scenarios.length + 1}` : 'UW',
+      dealCode: deal.dealId ?? '',
+      projectSF: leaseSF,
+      buildingSF: leaseSF,
+      proposedLeaseSF: leaseSF,
+      baseRatePSF: deal.targetRent ?? deal.lastRevalUWRent ?? DEFAULT_INPUTS_BASE.baseRatePSF,
+      tiAllowancePSF: deal.tiPerSF ?? DEFAULT_INPUTS_BASE.tiAllowancePSF,
+      freeRentMonths: deal.freeRentMonths ?? DEFAULT_INPUTS_BASE.freeRentMonths,
+      leaseTermMonths: deal.proposedTermMonths ?? DEFAULT_INPUTS_BASE.leaseTermMonths,
+      leaseCommencement: deal.expectedStart ?? today,
+      leaseExecutionDate: today,
+    };
+    const globals = { ...DEFAULT_GLOBALS };
+    const results = runScenario(inputs, globals);
+    const newScenario: Scenario = {
+      id: crypto.randomUUID(),
+      dealId: deal.id,
+      name: inputs.name,
+      inputs,
+      globals,
+      results,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setScenarios((prev) => [...prev, newScenario]);
+    setActiveScenarioId(newScenario.id);
+    writeThrough('create scenario', upsertScenario(newScenario));
+  };
+
+  const handleSaveScenario = (updated: Scenario) => {
+    setScenarios((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    writeThrough('save scenario', upsertScenario(updated));
+  };
+
+  const handleDeleteScenario = (id: string) => {
+    setScenarios((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      if (activeScenarioId === id) {
+        setActiveScenarioId(next[0]?.id ?? null);
+      }
+      return next;
+    });
+    writeThrough('delete scenario', deleteScenarioRow(id));
+  };
+
   // Lookup: which rent roll rows already have an onboarding (so the
   // RentRollTable can hide the "+ Onboarding" button for them).
   const onboardingsByRentRollId = useMemo(
@@ -723,9 +833,11 @@ function App() {
       ? 'Prospects'
       : view === 'rentroll'
         ? 'Rent Roll'
-        : view === 'onboarding'
-          ? 'Onboarding'
-          : 'Reports';
+        : view === 'underwrite'
+          ? 'Underwrite'
+          : view === 'onboarding'
+            ? 'Onboarding'
+            : 'Reports';
 
   return (
     <div className="flex min-h-screen bg-bg text-fg">
@@ -884,6 +996,18 @@ function App() {
         <main className="flex-1 px-6 sm:px-10 pb-12 max-w-7xl w-full mx-auto space-y-8">
           {view === 'reports' ? (
             <ReportsView deals={deals} rentRoll={rentRoll} />
+          ) : view === 'underwrite' ? (
+            <UnderwriteView
+              deals={deals}
+              scenarios={scenarios}
+              selectedDealId={selectedUwDealId}
+              activeScenarioId={activeScenarioId}
+              onSelectDeal={handleSelectUwDeal}
+              onSelectScenario={setActiveScenarioId}
+              onNewScenario={handleNewScenario}
+              onSaveScenario={handleSaveScenario}
+              onDeleteScenario={handleDeleteScenario}
+            />
           ) : view === 'onboarding' ? (
             <OnboardingView
               onboardings={onboardings}
