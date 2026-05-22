@@ -1052,7 +1052,24 @@ function App() {
               onToast={showToast}
             />
           ) : view === 'map' ? (
-            <MapView deals={deals} onSelectDeal={(d) => setEditingDeal(d)} />
+            <MapView
+              deals={deals}
+              onSelectDeal={(d) => setEditingDeal(d)}
+              onUpdateDealCoords={(dealId, lat, lng) => {
+                const target = deals.find((d) => d.id === dealId);
+                if (!target) return;
+                const updated: Deal = {
+                  ...target,
+                  lat,
+                  lng,
+                  lastUpdated: new Date().toISOString().slice(0, 10),
+                };
+                setDeals((prev) => prev.map((d) => (d.id === dealId ? updated : d)));
+                setFilteredDeals((prev) => prev.map((d) => (d.id === dealId ? updated : d)));
+                writeThrough('place pin', upsertDeal(updated));
+                showToast(`Pinned ${updated.dealName || 'deal'} · ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+              }}
+            />
           ) : view === 'onboarding' ? (
             <OnboardingView
               onboardings={onboardings}

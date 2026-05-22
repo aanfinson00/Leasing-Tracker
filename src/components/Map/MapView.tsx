@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { MapPin, Satellite, Map as MapIcon } from 'lucide-react';
+import { MapPin, Satellite, Map as MapIcon, X } from 'lucide-react';
 import type { Deal } from '../../types';
 
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN ?? '').trim();
@@ -26,9 +26,11 @@ const DEFAULT_ZOOM = 3.2;
 interface Props {
   deals: Deal[];
   onSelectDeal: (deal: Deal) => void;
+  /** Saves new lat/lng for a deal. Fires when the user clicks the map in pin-placement mode. */
+  onUpdateDealCoords: (dealId: string, lat: number, lng: number) => void;
 }
 
-export function MapView({ deals, onSelectDeal }: Props) {
+export function MapView({ deals, onSelectDeal, onUpdateDealCoords }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
@@ -36,6 +38,13 @@ export function MapView({ deals, onSelectDeal }: Props) {
   onSelectRef.current = onSelectDeal;
 
   const [style, setStyle] = useState<'satellite' | 'light'>('satellite');
+  // When set, the next map click writes coords to this deal instead
+  // of doing nothing. Cursor changes to crosshair, status banner shows.
+  const [placingDealId, setPlacingDealId] = useState<string | null>(null);
+  const placingDealIdRef = useRef<string | null>(null);
+  placingDealIdRef.current = placingDealId;
+  const onUpdateCoordsRef = useRef(onUpdateDealCoords);
+  onUpdateCoordsRef.current = onUpdateDealCoords;
 
   // Pinned deals — drop anything without lat/lng (the bulk of records
   // until users start setting coordinates from the DealDrawer).
@@ -67,6 +76,19 @@ export function MapView({ deals, onSelectDeal }: Props) {
     });
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
     map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
+
+    // Click-to-place handler. Reads the ref so a state change doesn't
+    // require re-binding the listener (map.on/off churn).
+    map.on('click', (e) => {
+      const id = placingDealIdRef.current;
+      if (!id) return;
+      const { lng, lat } = e.lngLat;
+      onUpdateCoordsRef.current(id, lat, lng);
+      // Exit placing mode after a successful drop so the user can
+      // pick a new deal without auto-overwriting other clicks.
+      setPlacingDealId(null);
+    });
+
     mapRef.current = map;
 
     return () => {
@@ -83,6 +105,14 @@ export function MapView({ deals, onSelectDeal }: Props) {
     if (!map) return;
     map.setStyle(style === 'satellite' ? STYLE_SATELLITE : STYLE_LIGHT);
   }, [style]);
+
+  // ── Cursor in placing mode ──────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const canvas = map.getCanvas();
+    canvas.style.cursor = placingDealId ? 'crosshair' : '';
+  }, [placingDealId]);
 
   // ── Sync markers ────────────────────────────────────────────────
   useEffect(() => {
@@ -139,6 +169,14 @@ export function MapView({ deals, onSelectDeal }: Props) {
     return <MissingTokenState />;
   }
 
+  const placingDeal = placingDealId ? deals.find((d) => d.id === placingDealId) ?? null : null;
+  // Surface unpinned deals first in the picker so adding a new pin is fast.
+  const orderedDealsForPicker = useMemo(() => {
+    const unpinned = deals.filter((d) => d.lat == null || d.lng == null);
+    const pinned = deals.filter((d) => d.lat != null && d.lng != null);
+    return [...unpinned, ...pinned];
+  }, [deals]);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -149,17 +187,28 @@ export function MapView({ deals, onSelectDeal }: Props) {
             <>
               <span className="text-fg-subtle">·</span>
               <span className="text-fg-subtle">
-                {deals.length - pinnedDeals.length} deals without coordinates (set lat/lng in the Deal drawer)
+                {deals.length - pinnedDeals.length} unpinned
               </span>
             </>
           )}
         </div>
-        <StyleToggle style={style} onChange={setStyle} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <PlacePinPicker
+            deals={orderedDealsForPicker}
+            placingDealId={placingDealId}
+            onPick={setPlacingDealId}
+          />
+          <StyleToggle style={style} onChange={setStyle} />
+        </div>
       </div>
+
+      {placingDeal && (
+        <PlacementBanner deal={placingDeal} onCancel={() => setPlacingDealId(null)} />
+      )}
 
       <div
         ref={containerRef}
-        className="w-full h-[calc(100vh-260px)] min-h-[480px] rounded-2xl shadow-soft overflow-hidden bg-bg-subtle"
+        className="w-full h-[calc(100vh-280px)] min-h-[460px] rounded-2xl shadow-soft overflow-hidden bg-bg-subtle"
       />
     </div>
   );
@@ -242,6 +291,61 @@ function ToggleButton({
     >
       {children}
     </button>
+  );
+}
+
+function PlacePinPicker({
+  deals,
+  placingDealId,
+  onPick,
+}: {
+  deals: Deal[];
+  placingDealId: string | null;
+  onPick: (id: string | null) => void;
+}) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-lg bg-bg-elevated border border-border shadow-soft pl-3 pr-1 py-1">
+      <MapPin size={13} strokeWidth={2} className="text-accent" />
+      <select
+        value={placingDealId ?? ''}
+        onChange={(e) => onPick(e.target.value || null)}
+        className="bg-transparent text-xs font-medium text-fg focus:outline-none cursor-pointer py-1 pr-2 max-w-[220px]"
+      >
+        <option value="">Place pin for…</option>
+        {deals.map((d) => {
+          const hasPin = d.lat != null && d.lng != null;
+          return (
+            <option key={d.id} value={d.id}>
+              {hasPin ? '📍 ' : '+ '}
+              {d.dealName || '(unnamed)'}
+              {d.prospectTenant ? ` · ${d.prospectTenant}` : ''}
+            </option>
+          );
+        })}
+      </select>
+    </div>
+  );
+}
+
+function PlacementBanner({ deal, onCancel }: { deal: Deal; onCancel: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-accent-tint border border-accent/30 rounded-xl text-sm">
+      <div className="flex items-center gap-2 text-fg">
+        <MapPin size={14} strokeWidth={2} className="text-accent shrink-0" />
+        <span>
+          Click the map to place a pin for{' '}
+          <strong className="font-semibold">{deal.dealName || '(unnamed deal)'}</strong>
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-fg-muted hover:text-fg hover:bg-bg-hover transition-colors"
+      >
+        <X size={12} strokeWidth={2} />
+        Cancel
+      </button>
+    </div>
   );
 }
 
