@@ -1,6 +1,5 @@
-// Phase 1 single-scenario NER waterfall. Recharts doesn't have a
-// native waterfall, so we stack an invisible "base" bar under a
-// visible "value" bar — same trick as Lease-Calculator's chart.
+// Single-scenario waterfall — the parent renders two side-by-side
+// in the A/B layout. Title goes in the header.
 
 import {
   Bar,
@@ -15,10 +14,11 @@ import type { WaterfallComponents } from '../../lib/lease-math/types';
 import { fmtCurrency } from '../../lib/lease-math/format';
 
 interface Props {
+  title: string;
   waterfall: WaterfallComponents;
 }
 
-export function WaterfallChart({ waterfall }: Props) {
+export function WaterfallChart({ title, waterfall }: Props) {
   const data = [
     {
       name: 'Base Rent',
@@ -52,14 +52,14 @@ export function WaterfallChart({ waterfall }: Props) {
     },
   ];
 
-  const max = Math.max(...data.map((d) => d.base + d.value));
+  const max = Math.max(...data.map((d) => d.base + d.value), 1);
 
   return (
-    <div className="bg-bg-elevated rounded-2xl shadow-soft p-5 sm:p-6">
+    <div className="bg-bg-elevated rounded-2xl shadow-soft p-5 sm:p-6 min-w-0">
       <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle mb-3">
-        Waterfall · $/SF over term
+        {title} · Waterfall ($/SF)
       </h3>
-      <div className="h-56 w-full">
+      <div className="h-52 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
             <XAxis
