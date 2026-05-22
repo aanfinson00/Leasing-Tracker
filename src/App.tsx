@@ -1055,19 +1055,28 @@ function App() {
             <MapView
               deals={deals}
               onSelectDeal={(d) => setEditingDeal(d)}
-              onUpdateDealCoords={(dealId, lat, lng) => {
-                const target = deals.find((d) => d.id === dealId);
-                if (!target) return;
-                const updated: Deal = {
-                  ...target,
+              onUpdateProjectCoords={(projectId, lat, lng) => {
+                // Project = group of deals sharing the same dealId.
+                // Write lat/lng to every deal in the group so the
+                // denormalized coordinate stays consistent and any
+                // deal-level read still returns the right pin.
+                const today = new Date().toISOString().slice(0, 10);
+                const targets = deals.filter((d) => d.dealId?.trim() === projectId);
+                if (targets.length === 0) return;
+                const updates = targets.map<Deal>((t) => ({
+                  ...t,
                   lat,
                   lng,
-                  lastUpdated: new Date().toISOString().slice(0, 10),
-                };
-                setDeals((prev) => prev.map((d) => (d.id === dealId ? updated : d)));
-                setFilteredDeals((prev) => prev.map((d) => (d.id === dealId ? updated : d)));
-                writeThrough('place pin', upsertDeal(updated));
-                showToast(`Pinned ${updated.dealName || 'deal'} · ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+                  lastUpdated: today,
+                }));
+                const byId = new Map(updates.map((u) => [u.id, u] as const));
+                setDeals((prev) => prev.map((d) => byId.get(d.id) ?? d));
+                setFilteredDeals((prev) => prev.map((d) => byId.get(d.id) ?? d));
+                updates.forEach((u) => writeThrough('place project pin', upsertDeal(u)));
+                showToast(
+                  `Pinned ${updates[0].dealName || 'project'} (${projectId}) · ${lat.toFixed(4)}, ${lng.toFixed(4)}` +
+                    (updates.length > 1 ? ` · ${updates.length} deals updated` : '')
+                );
               }}
             />
           ) : view === 'onboarding' ? (

@@ -108,3 +108,67 @@ button {
   outline-offset: 2px;
   border-radius: 6px;
 }
+
+/* ─────────────────────────────────────────────────────────────────
+ * Scrollbars
+ *
+ * Default macOS / Chromium scrollbars render as a bright translucent
+ * strip that's jarring against the dark theme. Style them to use the
+ * border-strong + bg-subtle palette so they fade into whichever theme
+ * is active. Firefox uses scrollbar-color; everything else uses the
+ * ::-webkit-scrollbar pseudo-elements. Apply to html so all scrollable
+ * containers inherit it.
+ * ───────────────────────────────────────────────────────────────── */
+
+html {
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-subtle);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * Native <select> dark-mode dropdown
+ *
+ * Browsers paint the popup using `background-color` and `color` of
+ * the <option> elements via the host UA. In dark mode our selects
+ * use bg-transparent (so they blend with the toolbar pill), but the
+ * popup itself still needs explicit colors or it renders white-on-
+ * white on macOS Safari + Chromium. Force the option list to use
+ * the elevated surface + text token so it matches the theme.
+ * ───────────────────────────────────────────────────────────────── */
+
+select option,
+select optgroup {
+  background-color: var(--bg-elevated);
+  color: var(--text);
+}
+
+/* Date input picker icon shows as a near-invisible black square in
+ * dark mode (Chromium ships it as pure black SVG). Invert it so it
+ * picks up the foreground color in dark themes. */
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="month"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="week"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.8);
+}
