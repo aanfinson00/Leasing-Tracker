@@ -17,6 +17,7 @@ import type {
   ActivityEntry,
   Deal,
   DealStatus,
+  LeaseComp,
   OnboardingChecklist,
   OnboardingItem,
   RentRollRow,
@@ -91,7 +92,14 @@ import {
   deleteScenario as deleteScenarioRow,
   subscribeScenarios,
 } from './lib/repo/scenarios';
+import {
+  listLeaseComps,
+  upsertLeaseComp,
+  deleteLeaseComp as deleteLeaseCompRow,
+  subscribeLeaseComps,
+} from './lib/repo/leaseComps';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
+import { CompsView } from './components/Comps/CompsView';
 import { MapView } from './components/Map/MapView';
 import { GridBackground } from './components/GridBackground';
 import { MobileNav } from './components/MobileNav';
@@ -117,6 +125,7 @@ function App() {
   // Underwrite tab state — separate from deals/rentRoll/etc. because
   // scenarios are loaded per-deal on demand (not eagerly).
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [leaseComps, setLeaseComps] = useState<LeaseComp[]>([]);
   const [selectedUwDealId, setSelectedUwDealId] = useState<string | null>(null);
   // A/B/editing are independent: A and B drive the comparison view,
   // editingId drives which scenario the InputsPanel writes to.
@@ -223,11 +232,12 @@ function App() {
     if (SUPABASE_CONFIGURED) {
       (async () => {
         try {
-          const [d, r, a, o] = await Promise.all([
+          const [d, r, a, o, comps] = await Promise.all([
             listDeals(),
             listRentRoll(),
             listActivities(),
             listOnboardings(),
+            listLeaseComps(),
           ]);
           setDeals(d);
           setFilteredDeals(d);
@@ -235,6 +245,7 @@ function App() {
           setFilteredRentRoll(r);
           setActivities(a);
           setOnboardings(o.map(reconcileWithTemplate));
+          setLeaseComps(comps);
           setFilename('leasing-tracker.xlsx');
         } catch (err) {
           console.error('Failed to load from Supabase:', err);
@@ -335,12 +346,24 @@ function App() {
         }),
       onDelete: (id) => setScenarios((prev) => prev.filter((x) => x.id !== id)),
     });
+    const unsubComps = subscribeLeaseComps({
+      onUpsert: (c) =>
+        setLeaseComps((prev) => {
+          const idx = prev.findIndex((x) => x.id === c.id);
+          if (idx === -1) return [...prev, c];
+          const next = prev.slice();
+          next[idx] = c;
+          return next;
+        }),
+      onDelete: (id) => setLeaseComps((prev) => prev.filter((x) => x.id !== id)),
+    });
     return () => {
       unsubDeals();
       unsubRr();
       unsubAct();
       unsubOb();
       unsubScenarios();
+      unsubComps();
     };
   }, []);
 
@@ -844,6 +867,22 @@ function App() {
     writeThrough('delete scenario', deleteScenarioRow(id));
   };
 
+  const handleSaveLeaseComp = (updated: LeaseComp) => {
+    setLeaseComps((prev) => {
+      const idx = prev.findIndex((c) => c.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save comp', upsertLeaseComp(updated));
+  };
+
+  const handleDeleteLeaseComp = (id: string) => {
+    setLeaseComps((prev) => prev.filter((c) => c.id !== id));
+    writeThrough('delete comp', deleteLeaseCompRow(id));
+  };
+
   // Lookup: which rent roll rows already have an onboarding (so the
   // RentRollTable can hide the "+ Onboarding" button for them).
   const onboardingsByRentRollId = useMemo(
@@ -872,7 +911,9 @@ function App() {
         ? 'Portfolio'
         : view === 'underwrite'
           ? 'Lease Calculator'
-          : view === 'map'
+          : view === 'comps'
+            ? 'Comps Library'
+            : view === 'map'
             ? 'Map'
             : view === 'onboarding'
               ? 'Onboarding'
@@ -1094,6 +1135,12 @@ function App() {
               onSaveScenario={handleSaveScenario}
               onDeleteScenario={handleDeleteScenario}
               onToast={showToast}
+            />
+          ) : view === 'comps' ? (
+            <CompsView
+              comps={leaseComps}
+              onSave={handleSaveLeaseComp}
+              onDelete={handleDeleteLeaseComp}
             />
           ) : view === 'map' ? (
             <MapView
