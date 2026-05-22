@@ -10,6 +10,8 @@ import type {
   Deal,
   LeaseComp,
   OnboardingChecklist,
+  PropertyTaxAppeal,
+  PropertyTaxAppealStatus,
   RentRollRow,
   Scenario,
 } from '../../types';
@@ -392,6 +394,91 @@ export const rowToBuilding = (r: BuildingRow): Building => ({
   updatedAt: r.updated_at,
 });
 
+// ── PropertyTaxAppeal ─────────────────────────────────────────────
+
+export interface PropertyTaxAppealRow {
+  id: string;
+  building_id: string | null;
+  building: string | null;
+  parcel_number: string | null;
+  jurisdiction: string | null;
+  tax_year: number;
+  assessed_value: number | string | null;
+  proposed_value: number | string | null;
+  market_value: number | string | null;
+  status: PropertyTaxAppealStatus;
+  filed_date: string | null;
+  hearing_date: string | null;
+  resolution_date: string | null;
+  initial_assessed_value: number | string | null;
+  final_assessed_value: number | string | null;
+  estimated_savings: number | string | null;
+  consultant_name: string | null;
+  consultant_fee_pct: number | string | null;
+  consultant_fee_dollar: number | string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const numOrNull = (v: number | string | null | undefined): number | null =>
+  v == null ? null : Number(v);
+
+export const propertyTaxAppealToRow = (
+  a: PropertyTaxAppeal
+): Omit<PropertyTaxAppealRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: a.id,
+  building_id: a.buildingId,
+  building: a.building,
+  parcel_number: a.parcelNumber,
+  jurisdiction: a.jurisdiction,
+  tax_year: a.taxYear,
+  assessed_value: a.assessedValue,
+  proposed_value: a.proposedValue,
+  market_value: a.marketValue,
+  status: a.status,
+  filed_date: a.filedDate,
+  hearing_date: a.hearingDate,
+  resolution_date: a.resolutionDate,
+  initial_assessed_value: a.initialAssessedValue,
+  final_assessed_value: a.finalAssessedValue,
+  estimated_savings: a.estimatedSavings,
+  consultant_name: a.consultantName,
+  consultant_fee_pct: a.consultantFeePct,
+  consultant_fee_dollar: a.consultantFeeDollar,
+  notes: a.notes,
+  created_at: a.createdAt,
+  updated_at: a.updatedAt,
+});
+
+export const rowToPropertyTaxAppeal = (r: PropertyTaxAppealRow): PropertyTaxAppeal => ({
+  id: r.id,
+  buildingId: r.building_id,
+  building: r.building,
+  parcelNumber: r.parcel_number,
+  jurisdiction: r.jurisdiction,
+  taxYear: r.tax_year,
+  assessedValue: numOrNull(r.assessed_value),
+  proposedValue: numOrNull(r.proposed_value),
+  marketValue: numOrNull(r.market_value),
+  status: r.status,
+  filedDate: r.filed_date,
+  hearingDate: r.hearing_date,
+  resolutionDate: r.resolution_date,
+  initialAssessedValue: numOrNull(r.initial_assessed_value),
+  finalAssessedValue: numOrNull(r.final_assessed_value),
+  estimatedSavings: numOrNull(r.estimated_savings),
+  consultantName: r.consultant_name,
+  consultantFeePct: numOrNull(r.consultant_fee_pct),
+  consultantFeeDollar: numOrNull(r.consultant_fee_dollar),
+  notes: r.notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
 // ── LeaseComp ─────────────────────────────────────────────────────
 
 export interface LeaseCompRow {
@@ -424,9 +511,6 @@ export interface LeaseCompRow {
   created_at: string;
   updated_at: string;
 }
-
-const nOrNull = (v: number | string | null | undefined): number | null =>
-  v == null ? null : Number(v);
 
 export const leaseCompToRow = (
   c: LeaseComp
@@ -476,15 +560,15 @@ export const rowToLeaseComp = (r: LeaseCompRow): LeaseComp => ({
   transactionType: r.transaction_type,
   signedDate: r.signed_date,
   deliveryDate: r.delivery_date,
-  leaseSF: nOrNull(r.lease_sf),
-  buildingSF: nOrNull(r.building_sf),
-  baseRentPSF: nOrNull(r.base_rent_psf),
-  effectiveRentPSF: nOrNull(r.effective_rent_psf),
+  leaseSF: numOrNull(r.lease_sf),
+  buildingSF: numOrNull(r.building_sf),
+  baseRentPSF: numOrNull(r.base_rent_psf),
+  effectiveRentPSF: numOrNull(r.effective_rent_psf),
   rentType: r.rent_type,
   termMonths: r.term_months,
-  freeRentMonths: nOrNull(r.free_rent_months),
-  tiPSF: nOrNull(r.ti_psf),
-  escalationPct: nOrNull(r.escalation_pct),
+  freeRentMonths: numOrNull(r.free_rent_months),
+  tiPSF: numOrNull(r.ti_psf),
+  escalationPct: numOrNull(r.escalation_pct),
   options: r.options,
   source: r.source,
   sourceUrl: r.source_url,

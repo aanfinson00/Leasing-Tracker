@@ -30,7 +30,8 @@ import {
   bumpOutPolygon,
   DEFAULT_BUILDING_PARAMS,
 } from '../../lib/map-utils/parametric';
-import { bayColor } from '../../lib/map-utils/demising';
+import { bayColor, detectFrontageSide } from '../../lib/map-utils/demising';
+import { buildingDockDoors } from '../../lib/map-utils/dockDoors';
 import { autoSpaceId } from '../../types';
 
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN ?? '').trim();
@@ -44,6 +45,11 @@ const DEFAULT_ZOOM = 3.2;
 const BUILDINGS_SOURCE = 'lt-buildings';
 const BUILDINGS_LAYER_FILL = 'lt-buildings-extrusion';
 const BUILDINGS_LAYER_OUTLINE = 'lt-buildings-outline';
+// Dock doors live on their own source/layer so the extrusion height
+// and color can differ from the parent building extrusion (short +
+// dark gray to read as a separate visual element).
+const DOCK_DOORS_SOURCE = 'lt-dock-doors';
+const DOCK_DOORS_LAYER = 'lt-dock-doors-extrusion';
 
 const FT_TO_METERS = 0.3048;
 
@@ -447,9 +453,13 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     if (!map.isStyleLoaded()) return;
     ensureBuildingsLayers(map);
     const src = map.getSource(BUILDINGS_SOURCE) as mapboxgl.GeoJSONSource | undefined;
+    const dockSrc = map.getSource(DOCK_DOORS_SOURCE) as
+      | mapboxgl.GeoJSONSource
+      | undefined;
     if (!src) return;
 
     const features: Feature[] = [];
+    const dockFeatures: Feature[] = [];
     for (const b of buildings) {
       const heightMeters = b.heightFt * FT_TO_METERS;
       const hasParams =
@@ -501,6 +511,32 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
         });
       }
 
+      // Dock doors — parametric only, requires a frontage side. We
+      // fall back to detectFrontageSide(footprint) when the user
+      // hasn't explicitly set one on the building.
+      if (rectParams) {
+        const side = b.frontageSide ?? detectFrontageSide(b.footprint as Polygon);
+        const doors = buildingDockDoors(rectParams, side);
+        // Cap doors at half the building height; minimum 10 ft so they
+        // remain visible on short flex buildings.
+        const dockHeightMeters = Math.max(
+          10 * FT_TO_METERS,
+          Math.min(heightMeters * 0.4, 14 * FT_TO_METERS)
+        );
+        doors.forEach((door, idx) => {
+          dockFeatures.push({
+            type: 'Feature',
+            geometry: door,
+            properties: {
+              id: `${b.id}:dock-${idx}`,
+              buildingId: b.id,
+              kind: 'dock-door',
+              heightMeters: dockHeightMeters,
+            },
+          });
+        });
+      }
+
       // Bump-outs (parametric only — need building rectParams to anchor).
       if (rectParams) {
         b.bumpOuts.forEach((bo, idx) => {
@@ -526,6 +562,7 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
       }
     }
     src.setData({ type: 'FeatureCollection', features });
+    dockSrc?.setData({ type: 'FeatureCollection', features: dockFeatures });
   }, [buildings]);
 
   const handleSaveBuilding = (b: Building) => {
@@ -678,6 +715,27 @@ function ensureBuildingsLayers(map: mapboxgl.Map) {
       paint: {
         'line-color': '#1f1e1b',
         'line-width': 1,
+      },
+    });
+  }
+  if (!map.getSource(DOCK_DOORS_SOURCE)) {
+    map.addSource(DOCK_DOORS_SOURCE, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+  }
+  if (!map.getLayer(DOCK_DOORS_LAYER)) {
+    map.addLayer({
+      id: DOCK_DOORS_LAYER,
+      type: 'fill-extrusion',
+      source: DOCK_DOORS_SOURCE,
+      paint: {
+        // Dark gray with slight warmth to read against both the
+        // satellite imagery and the copper building color.
+        'fill-extrusion-color': '#2a2724',
+        'fill-extrusion-height': ['coalesce', ['get', 'heightMeters'], 3.5],
+        'fill-extrusion-base': 0,
+        'fill-extrusion-opacity': 0.95,
       },
     });
   }
