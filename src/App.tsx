@@ -867,18 +867,22 @@ function App() {
     view === 'prospects' ? deals.length : view === 'rentroll' ? rentRoll.length : 0;
   const viewTitle =
     view === 'prospects'
-      ? 'Prospects'
+      ? 'Leasing Activity'
       : view === 'rentroll'
-        ? 'Rent Roll'
+        ? 'Portfolio'
         : view === 'underwrite'
-          ? 'Underwrite'
+          ? 'Lease Calculator'
           : view === 'map'
             ? 'Map'
             : view === 'onboarding'
               ? 'Onboarding'
-              : view === 'development'
-                ? 'Development Pipeline'
-                : 'Reports';
+              : view === 'acquisitions'
+                ? 'Acquisitions Pipeline'
+                : view === 'development'
+                  ? 'Development Pipeline'
+                  : view === 'disposition'
+                    ? 'Disposition Tracking'
+                    : 'Reports';
 
   return (
     <div className="relative flex min-h-screen bg-bg text-fg pb-16 sm:pb-0">
@@ -1125,8 +1129,12 @@ function App() {
               onUpdateItem={handleUpdateOnboardingItem}
               onDelete={handleDeleteOnboarding}
             />
+          ) : view === 'acquisitions' ? (
+            <AcquisitionsPlaceholder />
           ) : view === 'development' ? (
             <DevelopmentPipelinePlaceholder />
+          ) : view === 'disposition' ? (
+            <DispositionPlaceholder />
           ) : view === 'prospects' ? (
             deals.length === 0 ? (
               <EmptyHero onAction={handleNewDeal} ctaLabel="Create your first deal" />
@@ -1228,46 +1236,99 @@ function EmptyHero({ onAction, ctaLabel }: { onAction: () => void; ctaLabel: str
   );
 }
 
-function DevelopmentPipelinePlaceholder() {
+interface PipelinePlaceholderProps {
+  title: string;
+  subtitle: string;
+  sections: Array<[string, string]>;
+  /** Optional note about future content the user will provide (checklist,
+   *  playbook, etc.). Shown below the seed cards. */
+  awaitingNote?: string;
+}
+
+function PipelinePlaceholder({ title, subtitle, sections, awaitingNote }: PipelinePlaceholderProps) {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="flex flex-col items-center text-center py-20 px-6">
         <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-accent-tint text-accent mb-6">
           <Sparkles size={24} strokeWidth={1.5} />
         </div>
-        <h2 className="text-3xl text-fg font-extralight tracking-[-0.01em]">
-          Development Pipeline
-        </h2>
-        <p className="text-base text-fg-muted mt-3 max-w-lg leading-relaxed">
-          A future tool to manage projects from site sourcing through stabilization.
-          Coming soon — leave a note in conversation with how you want this to feel and
-          it'll get built around your real workflow.
-        </p>
+        <h2 className="text-3xl text-fg font-extralight tracking-[-0.01em]">{title}</h2>
+        <p className="text-base text-fg-muted mt-3 max-w-lg leading-relaxed">{subtitle}</p>
 
         <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl text-left">
-          {[
-            ['Site sourcing', 'Track land deals, options, LOIs from a target list.'],
-            ['Entitlement tracking', 'Zoning, permits, agency dates, milestone risks.'],
-            ['Pro-forma + capital stack', 'Sources/uses, equity multiples, IRR sensitivities.'],
-            ['Construction milestones', 'GMP, draws, schedule variance, change orders.'],
-            ['Lease-up → stabilization', 'Hand off to Prospects + Rent Roll once buildings deliver.'],
-            ['Investor reporting', 'Quarterly snapshots, fund-level rollups.'],
-          ].map(([title, desc]) => (
+          {sections.map(([sectionTitle, desc]) => (
             <div
-              key={title}
+              key={sectionTitle}
               className="px-4 py-3 rounded-xl border border-dashed border-border bg-bg-elevated/50"
             >
-              <p className="text-sm font-semibold text-fg">{title}</p>
+              <p className="text-sm font-semibold text-fg">{sectionTitle}</p>
               <p className="text-xs text-fg-muted mt-1 leading-relaxed">{desc}</p>
             </div>
           ))}
         </div>
+
+        {awaitingNote && (
+          <p className="mt-6 text-xs text-fg-muted max-w-lg italic">{awaitingNote}</p>
+        )}
 
         <p className="mt-8 text-[11px] uppercase tracking-[0.14em] text-fg-subtle">
           Placeholder — none of these are wired up yet
         </p>
       </div>
     </div>
+  );
+}
+
+function AcquisitionsPlaceholder() {
+  return (
+    <PipelinePlaceholder
+      title="Acquisitions Pipeline"
+      subtitle="Track deals from sourcing through LOI, diligence, and close."
+      sections={[
+        ['Sourcing list', 'Target submarkets, broker outreach log, off-market leads.'],
+        ['LOI / PSA tracking', 'Offers out, counters, executed contracts, retrade history.'],
+        ['Diligence', 'PCA, ESA, ALTA, zoning letter — task tracker per asset.'],
+        ['Capital raise status', 'Equity commitments, debt term sheets, lender selection.'],
+        ['Close calendar', 'Funding date, settlement statement, day-one ownership handoff.'],
+        ['Hand-off → Portfolio', 'Auto-promote closed acquisitions into Portfolio + Onboarding.'],
+      ]}
+      awaitingNote="More info on your acquisitions workflow coming — paste in any deal-tracker spreadsheet or notes and we'll port the structure."
+    />
+  );
+}
+
+function DevelopmentPipelinePlaceholder() {
+  return (
+    <PipelinePlaceholder
+      title="Development Pipeline"
+      subtitle="A future tool to manage projects from site sourcing through stabilization."
+      sections={[
+        ['Site sourcing', 'Track land deals, options, LOIs from a target list.'],
+        ['Entitlement tracking', 'Zoning, permits, agency dates, milestone risks.'],
+        ['Pro-forma + capital stack', 'Sources/uses, equity multiples, IRR sensitivities.'],
+        ['Construction milestones', 'GMP, draws, schedule variance, change orders.'],
+        ['Lease-up → stabilization', 'Hand off to Leasing Activity + Portfolio once buildings deliver.'],
+        ['Investor reporting', 'Quarterly snapshots, fund-level rollups.'],
+      ]}
+    />
+  );
+}
+
+function DispositionPlaceholder() {
+  return (
+    <PipelinePlaceholder
+      title="Disposition Tracking"
+      subtitle="Manage the sale-side flow: prep, BOV, marketing, LOIs, close-out."
+      sections={[
+        ['Sale prep checklist', 'Rent roll cleanup, lease abstracts, T-12 packaging, marketing OM.'],
+        ['Broker BOV / OPM', 'Broker pricing opinions, suggested guidance, pricing strategy.'],
+        ['Marketing tracker', 'CA log, tour list, dataroom access, call-for-offers timeline.'],
+        ['Offer pipeline', 'Bidders, indicative prices, financing conditions, IC approvals.'],
+        ['Closing items', 'PSA, escrow, prorations, audit holdbacks.'],
+        ['Post-close metrics', 'Realized IRR vs UW, hold-period actual vs reval assumption.'],
+      ]}
+      awaitingNote="Upload your disposition checklist when ready and the seeded sections become real."
+    />
   );
 }
 

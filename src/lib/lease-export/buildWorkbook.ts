@@ -99,15 +99,30 @@ const fmts = {
   signedPct: "+0.00%;-0.00%;0.00%",
 };
 
+// ── Parce Brand Playbook palette (Excel ARGB = FF + #RRGGBB) ──────
+const PARCE_COPPER = "FFD4895A";      // primary copper
+const PARCE_COPPER_DEEP = "FFB87040"; // section-header text + accents
+const PARCE_WARM_WHITE = "FFF5F0EB";  // surface
+const PARCE_CREAM = "FFFAF5F0";       // section bg (warm-white tint)
+const PARCE_COPPER_TINT = "FFFBE7D8"; // editable-input bg
+const PARCE_COPPER_GLOW = "FFF6D5BB"; // headline result accent
+const PARCE_STONE = "FF78716C";       // muted subtitle text
+const PARCE_NEAR_BLACK = "FF18181B";  // primary text
+
 const fillSection = {
   type: "pattern",
   pattern: "solid",
-  fgColor: { argb: "FFF1F5F9" }, // slate-100
+  fgColor: { argb: PARCE_CREAM },
 } as const;
 const fillInput = {
   type: "pattern",
   pattern: "solid",
-  fgColor: { argb: "FFDBEAFE" }, // blue-100
+  fgColor: { argb: PARCE_COPPER_TINT },
+} as const;
+const fillResult = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: PARCE_COPPER_GLOW },
 } as const;
 
 function writeInputs(
@@ -117,7 +132,7 @@ function writeInputs(
 ): void {
   // Section header
   ws.getCell("A1").value = "Inputs";
-  ws.getCell("A1").font = { bold: true };
+  ws.getCell("A1").font = { bold: true, color: { argb: PARCE_COPPER_DEEP } };
   ws.getCell("A1").fill = fillSection;
 
   const labelValue = (row: number, label: string, value: ExcelJS.CellValue, numFmt?: string) => {
@@ -156,7 +171,7 @@ function writeInputs(
 
   // Shared globals
   ws.getCell("A24").value = "Shared (globals)";
-  ws.getCell("A24").font = { bold: true };
+  ws.getCell("A24").font = { bold: true, color: { argb: PARCE_COPPER_DEEP } };
   ws.getCell("A24").fill = fillSection;
   labelValue(R.discountRate, "Discount rate", globals.discountRate, fmts.pct);
   labelValue(R.basisPSF, "Current basis ($/SF)", globals.projectBasisPSF, fmts.money);
@@ -180,7 +195,8 @@ function writeInputs(
 
 function writeAnnualSchedule(ws: ExcelJS.Worksheet): void {
   ws.getCell(`A${R.annualStart - 1}`).value = "Annual schedule";
-  ws.getCell(`A${R.annualStart - 1}`).font = { bold: true };
+  ws.getCell(`A${R.annualStart - 1}`).font = { bold: true, color: { argb: PARCE_COPPER_DEEP } };
+  ws.getCell(`A${R.annualStart - 1}`).fill = fillSection;
   // Header row sits on the same row as annualStart - 1 already used; bump
   // headers onto annualStart row's left-adjacent cells, but for simplicity
   // we just label the columns above the first year row:
@@ -208,7 +224,7 @@ function writeMonthlyGrid(ws: ExcelJS.Worksheet): void {
   // Header row (row gridStart - 1)
   const headerRow = R.gridStart - 1;
   ws.getCell(`A${headerRow}`).value = "Monthly grid";
-  ws.getCell(`A${headerRow}`).font = { bold: true };
+  ws.getCell(`A${headerRow}`).font = { bold: true, color: { argb: PARCE_COPPER_DEEP } };
   ws.getCell(`A${headerRow}`).fill = fillSection;
   ws.getCell(`${C.m}${headerRow + 0}`).value = "m"; // unused; m starts at gridStart
 
@@ -315,7 +331,7 @@ function writeMonthlyGrid(ws: ExcelJS.Worksheet): void {
 function writeResults(ws: ExcelJS.Worksheet): void {
   const headerRow = R.span - 1;
   ws.getCell(`A${headerRow}`).value = "Results";
-  ws.getCell(`A${headerRow}`).font = { bold: true };
+  ws.getCell(`A${headerRow}`).font = { bold: true, color: { argb: PARCE_COPPER_DEEP } };
   ws.getCell(`A${headerRow}`).fill = fillSection;
 
   const netRange = `${C.netCF}${R.gridStart}:${C.netCF}${R.gridEnd}`;
@@ -332,7 +348,9 @@ function writeResults(ws: ExcelJS.Worksheet): void {
     formula: `IF(B${R.term}=0,0,SUM(${netRange})/B${R.term}*12)`,
   };
   ws.getCell(`B${R.undiscNER}`).numFmt = fmts.money;
-  ws.getCell(`B${R.undiscNER}`).font = { bold: true };
+  ws.getCell(`B${R.undiscNER}`).font = { bold: true, color: { argb: PARCE_NEAR_BLACK } };
+  ws.getCell(`B${R.undiscNER}`).fill = fillResult;
+  ws.getCell(`A${R.undiscNER}`).font = { bold: true, color: { argb: PARCE_COPPER_DEEP } };
 
   // Discounted NER = SUM(netCF × discountFactor) / term × 12. The per-month
   // product lives in the grid's discountedCF column.
@@ -342,7 +360,9 @@ function writeResults(ws: ExcelJS.Worksheet): void {
     formula: `IF(B${R.term}=0,0,SUM(${discountedRange})/B${R.term}*12)`,
   };
   ws.getCell(`B${R.discNER}`).numFmt = fmts.money;
-  ws.getCell(`B${R.discNER}`).font = { bold: true };
+  ws.getCell(`B${R.discNER}`).font = { bold: true, color: { argb: PARCE_NEAR_BLACK } };
+  ws.getCell(`B${R.discNER}`).fill = fillResult;
+  ws.getCell(`A${R.discNER}`).font = { bold: true, color: { argb: PARCE_COPPER_DEEP } };
 
   // Avg rate PSF = SUMPRODUCT(annualRate/12) × 12 / term (only counts in-lease)
   ws.getCell(`A${R.avgRate}`).value = "Avg rate ($/SF, term)";
@@ -428,15 +448,15 @@ function buildSummarySheet(
   ws.getColumn(1).width = 28;
   for (let i = 2; i <= 5; i++) ws.getColumn(i).width = 16;
 
-  ws.getCell("A1").value = propertyName || "RFP Comparison";
-  ws.getCell("A1").font = { bold: true, size: 16 };
+  ws.getCell("A1").value = propertyName || "Lease comparison";
+  ws.getCell("A1").font = { bold: true, size: 16, color: { argb: PARCE_NEAR_BLACK } };
   ws.getCell("A2").value = "Net Effective Rent comparison · industrial lease";
-  ws.getCell("A2").font = { color: { argb: "FF64748B" } };
+  ws.getCell("A2").font = { color: { argb: PARCE_STONE } };
   ws.getCell("A3").value = `${aName}  vs  ${bName}`;
-  ws.getCell("A3").font = { color: { argb: "FF64748B" } };
+  ws.getCell("A3").font = { color: { argb: PARCE_COPPER_DEEP }, bold: true };
 
   const headerRow = 5;
-  ws.getRow(headerRow).font = { bold: true };
+  ws.getRow(headerRow).font = { bold: true, color: { argb: PARCE_COPPER_DEEP } };
   ws.getRow(headerRow).fill = fillSection;
   ws.getCell(`A${headerRow}`).value = "Metric";
   ws.getCell(`B${headerRow}`).value = aName;
@@ -477,7 +497,7 @@ function buildSummarySheet(
   // Waterfall section (component sums per scenario)
   const wfHeader = 12;
   ws.getCell(`A${wfHeader}`).value = "Waterfall components ($/SF over term)";
-  ws.getCell(`A${wfHeader}`).font = { bold: true };
+  ws.getCell(`A${wfHeader}`).font = { bold: true, color: { argb: PARCE_COPPER_DEEP } };
   ws.getCell(`A${wfHeader}`).fill = fillSection;
 
   const wfRow = (row: number, label: string, scenarioRow: number) => {
@@ -506,12 +526,21 @@ export interface BuildArgs {
 
 export async function buildWorkbook(args: BuildArgs): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "RFP Analyzer";
+  wb.creator = "parce";
+  wb.company = "parce";
   wb.created = new Date();
 
-  const summary = wb.addWorksheet("Summary");
-  const a = wb.addWorksheet("Scenario A");
-  const b = wb.addWorksheet("Scenario B");
+  // Tab colors: copper for Summary (lead sheet), warm-white for the
+  // detail scenario sheets. Shows up as a thin strip under each tab.
+  const summary = wb.addWorksheet("Summary", {
+    properties: { tabColor: { argb: PARCE_COPPER } },
+  });
+  const a = wb.addWorksheet("Scenario A", {
+    properties: { tabColor: { argb: PARCE_WARM_WHITE } },
+  });
+  const b = wb.addWorksheet("Scenario B", {
+    properties: { tabColor: { argb: PARCE_WARM_WHITE } },
+  });
 
   buildScenarioSheet(a, args.aInputs, args.globals);
   buildScenarioSheet(b, args.bInputs, args.globals);

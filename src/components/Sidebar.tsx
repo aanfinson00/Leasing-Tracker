@@ -1,4 +1,4 @@
-import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Lock } from 'lucide-react';
+import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, Lock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { ParceIcon } from './ParceIcon';
@@ -12,7 +12,9 @@ export type View =
   | 'map'
   | 'onboarding'
   | 'reports'
-  | 'development';
+  | 'acquisitions'
+  | 'development'
+  | 'disposition';
 
 interface NavItem {
   id: View | 'placeholder';
@@ -31,7 +33,10 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'map', icon: MapPin, label: 'Map' },
   { id: 'onboarding', icon: ClipboardCheck, label: 'Onboarding' },
   { id: 'reports', icon: BarChart3, label: 'Reports' },
+  // Lifecycle pipeline tabs — placeholders for now.
+  { id: 'acquisitions', icon: Crosshair, label: 'Acquisitions Pipeline' },
   { id: 'development', icon: HardHat, label: 'Development Pipeline' },
+  { id: 'disposition', icon: HandCoins, label: 'Disposition Tracking' },
 ];
 
 interface SidebarProps {
