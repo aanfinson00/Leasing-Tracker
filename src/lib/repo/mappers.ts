@@ -8,8 +8,12 @@ import type {
   ActivityEntry,
   AMPendingItem,
   Building,
+  Contact,
+  ContactChannel,
   Deal,
   DevelopmentProject,
+  DevProjectContact,
+  DevProjectNote,
   LeaseComp,
   OnboardingChecklist,
   PropertyTaxAppeal,
@@ -733,6 +737,136 @@ export const rowToAMPendingItem = (r: AMPendingItemRow): AMPendingItem => ({
   source: r.source,
   link: r.link,
   notes: r.notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── Contact (CRM v1) ──────────────────────────────────────────────
+
+export interface ContactRow {
+  id: string;
+  contact_type: Contact['contactType'];
+  first_name: string | null;
+  last_name: string | null;
+  company_name: string | null;
+  title: string | null;
+  phones: ContactChannel[];
+  emails: ContactChannel[];
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const contactToRow = (c: Contact): Omit<ContactRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: c.id,
+  contact_type: c.contactType,
+  first_name: c.firstName,
+  last_name: c.lastName,
+  company_name: c.companyName,
+  title: c.title,
+  phones: c.phones,
+  emails: c.emails,
+  notes: c.notes,
+  created_at: c.createdAt,
+  updated_at: c.updatedAt,
+});
+
+export const rowToContact = (r: ContactRow): Contact => ({
+  id: r.id,
+  contactType: r.contact_type,
+  firstName: r.first_name,
+  lastName: r.last_name,
+  companyName: r.company_name,
+  title: r.title,
+  phones: Array.isArray(r.phones) ? r.phones : [],
+  emails: Array.isArray(r.emails) ? r.emails : [],
+  notes: r.notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── DevProjectContact ─────────────────────────────────────────────
+
+export interface DevProjectContactRow {
+  id: string;
+  dev_project_id: string;
+  contact_id: string;
+  role_override: DevProjectContact['roleOverride'];
+  is_primary: boolean;
+  link_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const devProjectContactToRow = (
+  r: DevProjectContact
+): Omit<DevProjectContactRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: r.id,
+  dev_project_id: r.devProjectId,
+  contact_id: r.contactId,
+  role_override: r.roleOverride,
+  is_primary: r.isPrimary,
+  link_notes: r.linkNotes,
+  created_at: r.createdAt,
+  updated_at: r.updatedAt,
+});
+
+export const rowToDevProjectContact = (r: DevProjectContactRow): DevProjectContact => ({
+  id: r.id,
+  devProjectId: r.dev_project_id,
+  contactId: r.contact_id,
+  roleOverride: r.role_override,
+  isPrimary: r.is_primary,
+  linkNotes: r.link_notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── DevProjectNote ────────────────────────────────────────────────
+
+export interface DevProjectNoteRow {
+  id: string;
+  dev_project_id: string;
+  note_type: DevProjectNote['noteType'];
+  event_date: string | null;
+  content: string;
+  author: string | null;
+  link: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const devProjectNoteToRow = (
+  n: DevProjectNote
+): Omit<DevProjectNoteRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: n.id,
+  dev_project_id: n.devProjectId,
+  note_type: n.noteType,
+  event_date: n.eventDate,
+  content: n.content,
+  author: n.author,
+  link: n.link,
+  created_at: n.createdAt,
+  updated_at: n.updatedAt,
+});
+
+export const rowToDevProjectNote = (r: DevProjectNoteRow): DevProjectNote => ({
+  id: r.id,
+  devProjectId: r.dev_project_id,
+  noteType: r.note_type,
+  eventDate: r.event_date,
+  content: r.content,
+  author: r.author,
+  link: r.link,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });

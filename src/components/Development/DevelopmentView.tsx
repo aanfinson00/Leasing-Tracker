@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Plus, HardHat, CalendarClock, AlertTriangle } from 'lucide-react';
 import type {
+  Contact,
   DevelopmentProject,
   DevPhase,
+  DevProjectContact,
+  DevProjectNote,
   RiskLevel,
 } from '../../types';
 import { DEV_PHASE_ORDER, DevPhaseEnum } from '../../types';
@@ -12,6 +15,15 @@ interface DevelopmentViewProps {
   projects: DevelopmentProject[];
   onSave: (p: DevelopmentProject) => void;
   onDelete: (id: string) => void;
+  // CRM v1
+  contacts: Contact[];
+  contactLinks: DevProjectContact[];
+  notes: DevProjectNote[];
+  onSaveContact: (c: Contact) => void;
+  onLinkContact: (link: DevProjectContact) => void;
+  onUnlinkContact: (linkId: string) => void;
+  onSaveNote: (n: DevProjectNote) => void;
+  onDeleteNote: (id: string) => void;
 }
 
 const SIDE_PHASES: DevPhase[] = ['On Hold', 'Cancelled'];
@@ -98,6 +110,14 @@ export function DevelopmentView({
   projects,
   onSave,
   onDelete,
+  contacts,
+  contactLinks,
+  notes,
+  onSaveContact,
+  onLinkContact,
+  onUnlinkContact,
+  onSaveNote,
+  onDeleteNote,
 }: DevelopmentViewProps) {
   const [editing, setEditing] = useState<DevelopmentProject | null>(null);
   const [phaseFilter, setPhaseFilter] = useState<DevPhase | 'all' | 'active'>('active');
@@ -347,6 +367,14 @@ export function DevelopmentView({
           onClose={() => setEditing(null)}
           onSave={onSave}
           onDelete={onDelete}
+          allContacts={contacts}
+          contactLinks={contactLinks}
+          notes={notes}
+          onSaveContact={onSaveContact}
+          onLinkContact={onLinkContact}
+          onUnlinkContact={onUnlinkContact}
+          onSaveNote={onSaveNote}
+          onDeleteNote={onDeleteNote}
         />
       )}
     </div>

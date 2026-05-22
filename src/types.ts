@@ -770,3 +770,132 @@ export const AMPendingItemSchema = z.object({
 }));
 
 export type AMPendingItem = z.infer<typeof AMPendingItemSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Contacts — CRM v1 (first slice of ParceCRM integration).
+// People involved with dev projects, deals, properties. Multi-phone
+// + multi-email stored as JSONB arrays for single-row reads. The
+// many-to-many link to development_projects lives in its own table
+// (DevProjectContactSchema below).
+// ──────────────────────────────────────────────────────────────────
+
+export const ContactTypeEnum = z.enum([
+  'Owner',
+  'Broker',
+  'Attorney',
+  'Title Agent',
+  'Consultant',
+  'GC',
+  'Architect',
+  'Other',
+]);
+export type ContactType = z.infer<typeof ContactTypeEnum>;
+
+export const ContactChannelLabelEnum = z.enum(['mobile', 'work', 'home', 'other']);
+export type ContactChannelLabel = z.infer<typeof ContactChannelLabelEnum>;
+
+export const ContactChannelSchema = z.object({
+  label: ContactChannelLabelEnum,
+  value: z.string().min(1),
+  isPrimary: z.boolean().default(false),
+});
+export type ContactChannel = z.infer<typeof ContactChannelSchema>;
+
+export const ContactSchema = z.object({
+  id: z.string().uuid(),
+
+  contactType: ContactTypeEnum,
+  firstName: z.string().nullable().optional(),
+  lastName: z.string().nullable().optional(),
+  companyName: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+
+  phones: z.array(ContactChannelSchema).default([]),
+  emails: z.array(ContactChannelSchema).default([]),
+
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((c) => ({
+  ...c,
+  firstName: c.firstName ?? null,
+  lastName: c.lastName ?? null,
+  companyName: c.companyName ?? null,
+  title: c.title ?? null,
+  notes: c.notes ?? null,
+}));
+
+export type Contact = z.infer<typeof ContactSchema>;
+
+// Display label: "Lastname, Firstname" or company if no person, with
+// company suffix when both present. Centralized so the picker, badge,
+// and drawer all agree.
+export function contactDisplayName(c: Pick<Contact, 'firstName' | 'lastName' | 'companyName'>): string {
+  const personParts = [c.lastName, c.firstName].filter(Boolean) as string[];
+  const person = personParts.length === 2 ? `${personParts[0]}, ${personParts[1]}` : personParts[0] ?? '';
+  if (person && c.companyName) return `${person} (${c.companyName})`;
+  return person || c.companyName || '(unnamed)';
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Dev Project ↔ Contact link.
+// ──────────────────────────────────────────────────────────────────
+export const DevProjectContactSchema = z.object({
+  id: z.string().uuid(),
+  devProjectId: z.string(),
+  contactId: z.string(),
+
+  // Optional override — if a Broker contact is acting in a different
+  // role on this specific project, set roleOverride. Display falls
+  // back to the contact's own contactType.
+  roleOverride: ContactTypeEnum.nullable().optional(),
+  isPrimary: z.boolean().default(false),
+  linkNotes: z.string().nullable().optional(),
+
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((r) => ({
+  ...r,
+  roleOverride: r.roleOverride ?? null,
+  linkNotes: r.linkNotes ?? null,
+}));
+
+export type DevProjectContact = z.infer<typeof DevProjectContactSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Dev Project Notes — activity log scoped to development_projects.
+// Mirrors the activities table for deals/rent_roll but with the
+// ParceCRM note_type taxonomy (call/meeting/site visit/research/
+// feasibility).
+// ──────────────────────────────────────────────────────────────────
+
+export const DevNoteTypeEnum = z.enum([
+  'General',
+  'Call Log',
+  'Meeting',
+  'Site Visit',
+  'Research',
+  'Feasibility',
+]);
+export type DevNoteType = z.infer<typeof DevNoteTypeEnum>;
+
+export const DevProjectNoteSchema = z.object({
+  id: z.string().uuid(),
+  devProjectId: z.string(),
+
+  noteType: DevNoteTypeEnum,
+  eventDate: z.string().nullable().optional(),
+  content: z.string().min(1, 'Note content is required'),
+  author: z.string().nullable().optional(),
+  link: z.string().nullable().optional(),
+
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((n) => ({
+  ...n,
+  eventDate: n.eventDate ?? null,
+  author: n.author ?? null,
+  link: n.link ?? null,
+}));
+
+export type DevProjectNote = z.infer<typeof DevProjectNoteSchema>;
