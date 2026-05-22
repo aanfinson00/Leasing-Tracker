@@ -1,24 +1,19 @@
-// Project-level map with PortViz-style drill-down. Deals are grouped
-// by `dealId` (the project code) — one marker per project. Click a
-// pin → camera flies in (pitch 55°, bearing -45°, view from SE) and
-// the side ProjectDrawer opens. While zoomed in, buildings drawn
-// for that project render as 3D fill-extrusions, and the drawer
-// surfaces the building editor (add via mapbox-gl-draw with right-
-// angle snap, edit height, delete).
+// Project-level map with PortViz-style drill-down + SiteSetter-style
+// parametric building placement. Deals are grouped by `dealId` — one
+// marker per project. Click a pin → camera flies in (pitch 55°,
+// bearing -45°), ProjectDrawer opens. Building creation is
+// PARAMETRIC: the user enters W × D × rotation × bay_count in the
+// drawer, then clicks anywhere on the satellite to drop a rectangle
+// at that point. Each bay extrudes as its own colored block so
+// demising walls fall out as real edges between them.
 //
-// Pins are draggable — releasing a pin saves new lat/lng to every
-// deal in the project group via onUpdateProjectCoords. Drag is
-// disabled while the user is in draw mode to avoid accidental moves.
-//
-// Pattern lifted from PortViz/components/map/{PortfolioMap,
-// BuildingExtrusionMap,FootprintEditor}.tsx — direct mapbox-gl
-// bindings, no react-map-gl, HTML markers, satellite default.
+// Pins are draggable — releasing saves new lat/lng to every deal in
+// the project group. Drag is suppressed during placement mode to
+// avoid accidental moves.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import MapboxDraw from '@mapbox/mapbox-gl-draw';
-import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import type { Feature, Polygon } from 'geojson';
 import { MapPin, Satellite, Map as MapIcon, X } from 'lucide-react';
 import type { Building, Deal } from '../../types';
@@ -29,7 +24,12 @@ import {
   deleteBuilding,
   subscribeBuildings,
 } from '../../lib/repo/buildings';
-import { squareOffPolygonLngLat } from '../../lib/map-utils/squareOffLngLat';
+import {
+  parametricBays,
+  rectangleFromCenter,
+  DEFAULT_BUILDING_PARAMS,
+} from '../../lib/map-utils/parametric';
+import { bayColor } from '../../lib/map-utils/demising';
 
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN ?? '').trim();
 
@@ -48,9 +48,7 @@ const FT_TO_METERS = 0.3048;
 // ── Project model (derived from deals) ────────────────────────────
 
 export interface Project {
-  /** dealId — required grouping key */
   id: string;
-  /** Most-common dealName among the project's deals (fallback: id) */
   name: string;
   deals: Deal[];
   lat: number | null;
@@ -92,6 +90,15 @@ function buildProjects(deals: Deal[]): Project[] {
   return out;
 }
 
+// ── Parametric placement mode ─────────────────────────────────────
+
+export interface PlacementParams {
+  widthFt: number;
+  depthFt: number;
+  rotationDeg: number;
+  bayCount: number;
+}
+
 interface Props {
   deals: Deal[];
   onSelectDeal: (deal: Deal) => void;
@@ -103,13 +110,14 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
-  const drawRef = useRef<MapboxDraw | null>(null);
 
   const [mapStyle, setMapStyle] = useState<'satellite' | 'light'>('satellite');
   const [placingProjectId, setPlacingProjectId] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [buildings, setBuildings] = useState<Building[]>([]);
-  const [drawMode, setDrawMode] = useState(false);
+  // Parametric building placement mode. When `params` is set, the
+  // next map click drops a rectangle at that point with these dims.
+  const [placement, setPlacement] = useState<PlacementParams | null>(null);
 
   const projects = useMemo(() => buildProjects(deals), [deals]);
   const projectsById = useMemo(() => {
@@ -128,7 +136,7 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
   const activeProject = activeProjectId ? projectsById.get(activeProjectId) ?? null : null;
   const placingProject = placingProjectId ? projectsById.get(placingProjectId) ?? null : null;
 
-  // Refs for the once-bound listeners.
+  // Refs for once-bound handlers.
   const placingRef = useRef<string | null>(null);
   placingRef.current = placingProjectId;
   const onUpdateRef = useRef(onUpdateProjectCoords);
@@ -137,11 +145,14 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
   activeProjectIdRef.current = activeProjectId;
   const onToastRef = useRef(onToast);
   onToastRef.current = onToast;
-  const drawModeRef = useRef(false);
-  drawModeRef.current = drawMode;
+  const placementRef = useRef<PlacementParams | null>(null);
+  placementRef.current = placement;
+  const buildingsRef = useRef<Building[]>([]);
+  buildingsRef.current = buildings;
 
   const handleSelectProject = (id: string) => {
     setActiveProjectId(id);
+    setPlacement(null);
     const proj = projectsById.get(id);
     const map = mapRef.current;
     if (proj?.lat != null && proj.lng != null && map) {
@@ -159,8 +170,16 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
 
   const handleCloseProject = () => {
     setActiveProjectId(null);
-    setDrawMode(false);
+    setPlacement(null);
     setBuildings([]);
+  };
+
+  const handleStartPlacement = (params: PlacementParams) => {
+    setPlacement(params);
+  };
+
+  const handleCancelPlacement = () => {
+    setPlacement(null);
   };
 
   // ── Init map ────────────────────────────────────────────────────
@@ -181,17 +200,22 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
 
     map.on('click', (e) => {
-      // Skip if the click is being consumed by the draw tool.
-      if (drawModeRef.current) return;
-      const projectId = placingRef.current;
-      if (!projectId) return;
+      // Building placement takes priority — drops a rectangle here.
+      const params = placementRef.current;
+      const projectId = activeProjectIdRef.current;
+      if (params && projectId) {
+        const { lng, lat } = e.lngLat;
+        createBuildingAt({ lng, lat }, params, projectId);
+        return;
+      }
+      // Otherwise, project pin placement.
+      const placingId = placingRef.current;
+      if (!placingId) return;
       const { lng, lat } = e.lngLat;
-      onUpdateRef.current(projectId, lat, lng);
+      onUpdateRef.current(placingId, lat, lng);
       setPlacingProjectId(null);
     });
 
-    // (Re-)install the buildings source + layer on every style load
-    // so satellite ↔ light swaps don't lose them.
     map.on('style.load', () => {
       ensureBuildingsLayers(map);
     });
@@ -201,14 +225,53 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     return () => {
       markersRef.current.forEach((m) => m.remove());
       markersRef.current.clear();
-      if (drawRef.current) {
-        try { map.removeControl(drawRef.current); } catch { /* style may have unloaded */ }
-        drawRef.current = null;
-      }
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function createBuildingAt(
+    center: { lng: number; lat: number },
+    params: PlacementParams,
+    projectId: string
+  ) {
+    const rectangleParams = {
+      centerLat: center.lat,
+      centerLng: center.lng,
+      widthFt: params.widthFt,
+      depthFt: params.depthFt,
+      rotationDeg: params.rotationDeg,
+    };
+    const footprint = rectangleFromCenter(rectangleParams);
+    const now = new Date().toISOString();
+    const next: Building = {
+      id: crypto.randomUUID(),
+      projectId,
+      name: `Building ${buildingsRef.current.length + 1}`,
+      footprint,
+      heightFt: 30,
+      color: null,
+      bayCount: params.bayCount,
+      frontageSide: null,
+      widthFt: params.widthFt,
+      depthFt: params.depthFt,
+      rotationDeg: params.rotationDeg,
+      centerLat: center.lat,
+      centerLng: center.lng,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setBuildings((prev) => [...prev, next]);
+    upsertBuilding(next).catch((err) => {
+      console.error('Save building failed:', err);
+      onToastRef.current?.('Save building failed');
+    });
+    setPlacement(null);
+    onToastRef.current?.(
+      `Added ${params.widthFt}×${params.depthFt} ft building` +
+        (params.bayCount > 1 ? ` · ${params.bayCount} bays` : '')
+    );
+  }
 
   useEffect(() => {
     const map = mapRef.current;
@@ -216,37 +279,30 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     map.setStyle(mapStyle === 'satellite' ? STYLE_SATELLITE : STYLE_LIGHT);
   }, [mapStyle]);
 
+  // Cursor: crosshair when placing a project pin OR a building.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    map.getCanvas().style.cursor = placingProjectId ? 'crosshair' : '';
-  }, [placingProjectId]);
+    map.getCanvas().style.cursor = placingProjectId || placement ? 'crosshair' : '';
+  }, [placingProjectId, placement]);
 
-  // ── Flatten camera in draw mode ─────────────────────────────────
-  // 55° pitch is great for cinematic project arrival, awful for
-  // polygon tracing — perspective makes click-to-place feel imprecise
-  // near the bottom of the screen. Flatten to top-down satellite for
-  // draw mode AND bump the zoom so the parcel doesn't visually shrink
-  // (without the foreground emphasis of pitch 55, the building looks
-  // smaller at the same nominal zoom). Restore the tilt when the
-  // user finishes or cancels.
+  // Flatten + bump zoom while placing a building.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (drawMode) {
+    if (placement) {
       map.easeTo({
         pitch: 0,
         bearing: 0,
-        // max() so a user who manually zoomed in further isn't yanked back.
         zoom: Math.max(map.getZoom(), 18.5),
         duration: 600,
       });
     } else if (activeProjectId) {
       map.easeTo({ pitch: 55, bearing: -45, duration: 600 });
     }
-  }, [drawMode, activeProjectId]);
+  }, [placement, activeProjectId]);
 
-  // ── Sync project markers (draggable, opens drawer on click) ─────
+  // ── Sync project markers (draggable + click to drill in) ────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -258,22 +314,18 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
       const m = existing.get(p.id);
       if (m) {
         m.setLngLat([p.lng, p.lat]);
-        // Update label + deal-count chip in case the project changed.
         const el = m.getElement();
         const labelEl = el.querySelector('[data-pin-label]');
         if (labelEl) labelEl.textContent = projectPinLabel(p);
         const sub = el.querySelector('[data-pin-sublabel]');
         if (sub) sub.textContent = `${p.deals.length} ${p.deals.length === 1 ? 'deal' : 'deals'}`;
-        m.setDraggable(!drawModeRef.current);
+        m.setDraggable(!placementRef.current);
         continue;
       }
       const el = createProjectMarkerEl(p);
       const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom', draggable: true })
         .setLngLat([p.lng, p.lat])
         .addTo(map);
-      // Click on the pin element opens the project drawer; drag does not.
-      // mapbox-gl-marker fires a synthetic click after dragend, which we
-      // suppress via the `wasDragged` flag.
       let wasDragged = false;
       marker.on('dragstart', () => { wasDragged = false; });
       marker.on('drag', () => { wasDragged = true; });
@@ -313,7 +365,7 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
       });
       hasFitted.current = true;
     }
-  }, [pinnedProjects, drawMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pinnedProjects, placement]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasFitted = useRef(false);
 
@@ -350,99 +402,88 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     };
   }, [activeProjectId]);
 
-  // ── Render buildings as fill-extrusion ──────────────────────────
+  // ── Render building bays as fill-extrusion ──────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (!map.isStyleLoaded()) {
-      // style.load handler will re-add layers + a subsequent effect
-      // run will sync the source.
-      return;
-    }
+    if (!map.isStyleLoaded()) return;
     ensureBuildingsLayers(map);
     const src = map.getSource(BUILDINGS_SOURCE) as mapboxgl.GeoJSONSource | undefined;
     if (!src) return;
-    src.setData({
-      type: 'FeatureCollection',
-      features: buildings.map<Feature>((b) => ({
-        type: 'Feature',
-        geometry: b.footprint as Polygon,
-        properties: {
-          id: b.id,
-          name: b.name,
-          heightMeters: b.heightFt * FT_TO_METERS,
-          color: b.color ?? null,
-        },
-      })),
-    });
+
+    const features: Feature[] = [];
+    for (const b of buildings) {
+      const heightMeters = b.heightFt * FT_TO_METERS;
+      // Prefer parametric geometry for the bay slicing — it's
+      // rotation-aware and exact. Fall back to bay_count == 1 (whole
+      // footprint) when params are missing (legacy traced buildings).
+      const hasParams =
+        b.widthFt != null && b.depthFt != null && b.centerLat != null && b.centerLng != null;
+      if (hasParams && b.bayCount > 1) {
+        const bays = parametricBays(
+          {
+            centerLat: b.centerLat!,
+            centerLng: b.centerLng!,
+            widthFt: b.widthFt!,
+            depthFt: b.depthFt!,
+            rotationDeg: b.rotationDeg,
+          },
+          b.bayCount
+        );
+        bays.forEach((bay, idx) => {
+          features.push({
+            type: 'Feature',
+            geometry: bay,
+            properties: {
+              id: `${b.id}:bay-${idx}`,
+              buildingId: b.id,
+              name: `${b.name} · Bay ${idx + 1}`,
+              heightMeters,
+              color: b.color ?? bayColor(idx),
+            },
+          });
+        });
+      } else {
+        features.push({
+          type: 'Feature',
+          geometry: b.footprint as Polygon,
+          properties: {
+            id: b.id,
+            buildingId: b.id,
+            name: b.name,
+            heightMeters,
+            color: b.color ?? bayColor(0),
+          },
+        });
+      }
+    }
+    src.setData({ type: 'FeatureCollection', features });
   }, [buildings]);
 
-  // ── Draw mode lifecycle ─────────────────────────────────────────
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    if (drawMode && !drawRef.current) {
-      const draw = new MapboxDraw({
-        displayControlsDefault: false,
-        controls: { polygon: true, trash: true },
-        defaultMode: 'draw_polygon',
-      });
-      map.addControl(draw, 'top-left');
-      drawRef.current = draw;
-
-      map.on('draw.create', onDrawCreate);
-    }
-    if (!drawMode && drawRef.current) {
-      try { map.removeControl(drawRef.current); } catch { /* noop */ }
-      drawRef.current = null;
-      map.off('draw.create', onDrawCreate);
-    }
-
-    function onDrawCreate(e: { features: Feature[] }) {
-      const projectId = activeProjectIdRef.current;
-      if (!projectId) return;
-      const feat = e.features[0];
-      if (!feat || feat.geometry.type !== 'Polygon') return;
-
-      // Snap freehand right-angles to true 90° to clean up the trace.
-      const snapped = squareOffPolygonLngLat(feat.geometry as Polygon, 10);
-      const now = new Date().toISOString();
-      const next: Building = {
-        id: crypto.randomUUID(),
-        projectId,
-        name: `Building ${(buildings.length + 1).toString()}`,
-        footprint: snapped,
-        heightFt: 30,
-        color: null,
-        // bay_count defaults to 1 (no demising). Frontage side null =
-        // auto-detect from AABB aspect ratio at render time.
-        bayCount: 1,
-        frontageSide: null,
-        createdAt: now,
-        updatedAt: now,
-      };
-      // Optimistic local update.
-      setBuildings((prev) => [...prev, next]);
-      upsertBuilding(next).catch((err) => {
-        console.error('Save building failed:', err);
-        onToastRef.current?.('Save building failed');
-      });
-
-      // Exit draw mode after a successful trace; the user can re-enter
-      // from the drawer to add another.
-      const drawInstance = drawRef.current;
-      if (drawInstance) {
-        try { drawInstance.deleteAll(); } catch { /* noop */ }
-      }
-      setDrawMode(false);
-      onToastRef.current?.(`Added building (${snapped.coordinates[0]?.length ?? 0} corners)`);
-    }
-  }, [drawMode]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const handleSaveBuilding = (b: Building) => {
-    setBuildings((prev) => prev.map((x) => (x.id === b.id ? b : x)));
-    upsertBuilding(b).catch((err) => {
+    // When parametric dims changed, regenerate the footprint so the
+    // rendered polygon stays in sync.
+    let next = b;
+    if (
+      b.widthFt != null &&
+      b.depthFt != null &&
+      b.centerLat != null &&
+      b.centerLng != null
+    ) {
+      next = {
+        ...b,
+        footprint: rectangleFromCenter({
+          centerLat: b.centerLat,
+          centerLng: b.centerLng,
+          widthFt: b.widthFt,
+          depthFt: b.depthFt,
+          rotationDeg: b.rotationDeg,
+        }),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    setBuildings((prev) => prev.map((x) => (x.id === next.id ? next : x)));
+    upsertBuilding(next).catch((err) => {
       console.error('Save building failed:', err);
       onToastRef.current?.('Save building failed');
     });
@@ -506,8 +547,8 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
         />
       )}
 
-      {drawMode && (
-        <DrawModeBanner onCancel={() => setDrawMode(false)} />
+      {placement && (
+        <BuildingPlacementBanner params={placement} onCancel={handleCancelPlacement} />
       )}
 
       <div
@@ -519,15 +560,11 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
         <ProjectDrawer
           project={activeProject}
           buildings={buildings}
-          drawMode={drawMode}
+          placement={placement}
           onClose={handleCloseProject}
-          onSelectDeal={(d) => {
-            // Don't fully unmount the drawer — App.tsx opens the deal
-            // drawer on top, and we want to return to the project view
-            // when it closes. So just hand off the deal.
-            onSelectDeal(d);
-          }}
-          onStartDraw={() => setDrawMode(true)}
+          onSelectDeal={(d) => onSelectDeal(d)}
+          onStartPlacement={handleStartPlacement}
+          onCancelPlacement={handleCancelPlacement}
           onSaveBuilding={handleSaveBuilding}
           onDeleteBuilding={handleDeleteBuilding}
         />
@@ -714,14 +751,29 @@ function PlacementBanner({ project, onCancel }: { project: Project; onCancel: ()
   );
 }
 
-function DrawModeBanner({ onCancel }: { onCancel: () => void }) {
+function BuildingPlacementBanner({
+  params,
+  onCancel,
+}: {
+  params: PlacementParams;
+  onCancel: () => void;
+}) {
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-warning/10 border border-warning/40 rounded-xl text-sm">
       <div className="flex items-center gap-2 text-fg">
         <MapPin size={14} strokeWidth={2} className="text-warning shrink-0" />
         <span>
-          Click corners to trace a building footprint. Double-click to finish — right
-          angles will snap automatically.
+          Click the map to drop a{' '}
+          <strong className="font-semibold tabular-nums">
+            {params.widthFt}×{params.depthFt} ft
+          </strong>{' '}
+          building
+          {params.rotationDeg !== 0 && (
+            <span className="text-fg-muted"> · rotated {params.rotationDeg}°</span>
+          )}
+          {params.bayCount > 1 && (
+            <span className="text-fg-muted"> · {params.bayCount} bays</span>
+          )}
         </span>
       </div>
       <button
@@ -751,3 +803,5 @@ function MissingTokenState() {
     </div>
   );
 }
+
+export { DEFAULT_BUILDING_PARAMS };

@@ -1,20 +1,23 @@
-// Side drawer shown when the user clicks a project marker. Now also
-// hosts the building editor: list of drawn buildings (name + height
-// editable, delete), plus an "Add building" button that puts the
-// map into draw mode.
+// Side drawer shown when a project marker is clicked. Hosts the
+// parametric building editor: input W × D × rotation × bay count,
+// then click the satellite to drop the rectangle. Each existing
+// building has an inline editor — same fields plus name + height.
 
+import { useState } from 'react';
 import { Building2, X, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import type { Building, Deal } from '../../types';
-import type { Project } from './MapView';
+import type { Project, PlacementParams } from './MapView';
+import { DEFAULT_BUILDING_PARAMS } from '../../lib/map-utils/parametric';
 import { StatusBadge } from '../StatusBadge';
 
 interface Props {
   project: Project;
   buildings: Building[];
-  drawMode: boolean;
+  placement: PlacementParams | null;
   onClose: () => void;
   onSelectDeal: (deal: Deal) => void;
-  onStartDraw: () => void;
+  onStartPlacement: (params: PlacementParams) => void;
+  onCancelPlacement: () => void;
   onSaveBuilding: (b: Building) => void;
   onDeleteBuilding: (id: string) => void;
 }
@@ -22,10 +25,11 @@ interface Props {
 export function ProjectDrawer({
   project,
   buildings,
-  drawMode,
+  placement,
   onClose,
   onSelectDeal,
-  onStartDraw,
+  onStartPlacement,
+  onCancelPlacement,
   onSaveBuilding,
   onDeleteBuilding,
 }: Props) {
@@ -43,10 +47,6 @@ export function ProjectDrawer({
 
   return (
     <div className="fixed inset-0 z-40 flex pointer-events-none">
-      {/* Left side is pointer-events-none — the map underneath stays
-          fully navigable (pan, zoom, drag pins, place new pins, draw
-          polygons). Drawer dismissal is the X in the header or
-          switching to another project by clicking its pin. */}
       <div className="flex-1 pointer-events-none" aria-hidden />
       <div className="w-full max-w-md bg-bg/95 backdrop-blur-md shadow-lift overflow-y-auto pointer-events-auto border-l border-border">
         <div className="sticky top-0 bg-bg/95 backdrop-blur-md border-b border-border px-7 py-5 z-10">
@@ -105,8 +105,9 @@ export function ProjectDrawer({
 
           <BuildingsSection
             buildings={buildings}
-            drawMode={drawMode}
-            onStartDraw={onStartDraw}
+            placement={placement}
+            onStartPlacement={onStartPlacement}
+            onCancelPlacement={onCancelPlacement}
             onSaveBuilding={onSaveBuilding}
             onDeleteBuilding={onDeleteBuilding}
           />
@@ -163,40 +164,65 @@ export function ProjectDrawer({
 
 function BuildingsSection({
   buildings,
-  drawMode,
-  onStartDraw,
+  placement,
+  onStartPlacement,
+  onCancelPlacement,
   onSaveBuilding,
   onDeleteBuilding,
 }: {
   buildings: Building[];
-  drawMode: boolean;
-  onStartDraw: () => void;
+  placement: PlacementParams | null;
+  onStartPlacement: (p: PlacementParams) => void;
+  onCancelPlacement: () => void;
   onSaveBuilding: (b: Building) => void;
   onDeleteBuilding: (id: string) => void;
 }) {
+  // The "Add building" panel — collapsed by default. When opened,
+  // shows the parametric inputs and the "Click on map to place"
+  // hint. While `placement` is active (after user clicked Place),
+  // the panel shows the current params + Cancel.
+  const [adding, setAdding] = useState(false);
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">
           Buildings
         </h3>
-        <button
-          type="button"
-          onClick={onStartDraw}
-          disabled={drawMode}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-accent-fg bg-accent rounded-lg hover:bg-accent-hover transition-colors shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Plus size={12} strokeWidth={2.5} />
-          {drawMode ? 'Drawing…' : 'Add building'}
-        </button>
+        {!adding && !placement && (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-accent-fg bg-accent rounded-lg hover:bg-accent-hover transition-colors shadow-soft"
+          >
+            <Plus size={12} strokeWidth={2.5} />
+            Add building
+          </button>
+        )}
       </div>
+
+      {(adding || placement) && (
+        <NewBuildingForm
+          placement={placement}
+          onStartPlacement={(params) => {
+            onStartPlacement(params);
+          }}
+          onCancel={() => {
+            setAdding(false);
+            onCancelPlacement();
+          }}
+          onDone={() => setAdding(false)}
+        />
+      )}
+
       {buildings.length === 0 ? (
-        <p className="text-xs text-fg-muted bg-bg-elevated/50 border border-dashed border-border rounded-xl px-4 py-3.5">
-          No buildings yet. Click <strong className="text-fg">Add building</strong> and trace a
-          rectangle on the map — right angles snap automatically.
-        </p>
+        !adding && !placement && (
+          <p className="text-xs text-fg-muted bg-bg-elevated/50 border border-dashed border-border rounded-xl px-4 py-3.5">
+            No buildings yet. Click <strong className="text-fg">Add building</strong>, set
+            dimensions, then click the satellite to drop the rectangle.
+          </p>
+        )
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 mt-3">
           {buildings.map((b) => (
             <BuildingRow
               key={b.id}
@@ -211,6 +237,123 @@ function BuildingsSection({
   );
 }
 
+function NewBuildingForm({
+  placement,
+  onStartPlacement,
+  onCancel,
+  onDone,
+}: {
+  placement: PlacementParams | null;
+  onStartPlacement: (p: PlacementParams) => void;
+  onCancel: () => void;
+  onDone: () => void;
+}) {
+  const [params, setParams] = useState<PlacementParams>(
+    placement ?? {
+      widthFt: DEFAULT_BUILDING_PARAMS.widthFt,
+      depthFt: DEFAULT_BUILDING_PARAMS.depthFt,
+      rotationDeg: DEFAULT_BUILDING_PARAMS.rotationDeg,
+      bayCount: DEFAULT_BUILDING_PARAMS.bayCount,
+    }
+  );
+
+  // When the parent flips placement off (after a successful drop or
+  // cancel from the map banner), collapse the form.
+  // Note: useEffect not needed; React re-renders propagate placement.
+
+  const sf = params.widthFt * params.depthFt;
+  const sfPerBay = params.bayCount > 0 ? sf / params.bayCount : sf;
+
+  const setField = <K extends keyof PlacementParams>(k: K, v: PlacementParams[K]) =>
+    setParams((p) => ({ ...p, [k]: v }));
+
+  return (
+    <div className="bg-bg-elevated rounded-xl border border-border shadow-soft p-4 flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-3">
+        <NumField
+          label="Width (ft)"
+          value={params.widthFt}
+          onChange={(v) => setField('widthFt', Math.max(10, v))}
+          step={10}
+        />
+        <NumField
+          label="Depth (ft)"
+          value={params.depthFt}
+          onChange={(v) => setField('depthFt', Math.max(10, v))}
+          step={10}
+        />
+        <NumField
+          label="Rotation (deg)"
+          value={params.rotationDeg}
+          onChange={(v) => setField('rotationDeg', ((v % 360) + 360) % 360)}
+          step={15}
+        />
+        <NumField
+          label="Bays"
+          value={params.bayCount}
+          onChange={(v) => setField('bayCount', Math.max(1, Math.min(50, Math.round(v))))}
+          step={1}
+        />
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-fg-muted tabular-nums">
+        <span>
+          <strong className="text-fg">{Math.round(sf).toLocaleString('en-US')}</strong> SF total
+          {params.bayCount > 1 && (
+            <>
+              {' '}
+              · <strong className="text-fg">{Math.round(sfPerBay).toLocaleString('en-US')}</strong>{' '}
+              SF/bay
+            </>
+          )}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {placement ? (
+          <button
+            type="button"
+            onClick={() => {
+              onCancel();
+            }}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-fg-muted bg-bg-hover rounded-lg hover:text-fg transition-colors"
+          >
+            <X size={12} strokeWidth={2} />
+            Cancel placement
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                onStartPlacement(params);
+                onDone();
+              }}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-accent-fg bg-accent rounded-lg hover:bg-accent-hover transition-colors shadow-soft"
+            >
+              <Plus size={12} strokeWidth={2.5} />
+              Click map to place
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="inline-flex items-center gap-1 px-2.5 py-2 text-xs text-fg-muted hover:text-fg hover:bg-bg-hover rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </>
+        )}
+      </div>
+
+      {placement && (
+        <p className="text-[11px] text-warning leading-snug">
+          Click anywhere on the satellite to drop this rectangle at that point.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function BuildingRow({
   building,
   onSave,
@@ -220,7 +363,9 @@ function BuildingRow({
   onSave: (b: Building) => void;
   onDelete: (id: string) => void;
 }) {
-  const updateField = <K extends 'name' | 'heightFt'>(field: K, value: Building[K]) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const update = <K extends keyof Building>(field: K, value: Building[K]) => {
     onSave({
       ...building,
       [field]: value,
@@ -229,39 +374,122 @@ function BuildingRow({
   };
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-bg-elevated border border-border shadow-soft">
-      <input
-        type="text"
-        value={building.name}
-        onChange={(e) => updateField('name', e.target.value)}
-        className="flex-1 min-w-0 bg-transparent text-sm font-medium text-fg focus:outline-none focus:ring-2 focus:ring-accent/40 rounded px-1.5 py-0.5"
-        aria-label="Building name"
-      />
-      <div className="flex items-center gap-1 text-fg-muted text-xs">
+    <div className="rounded-xl bg-bg-elevated border border-border shadow-soft">
+      <div className="flex items-center gap-2 px-3 py-2">
         <input
-          type="number"
-          step={1}
-          value={Number.isFinite(building.heightFt) ? building.heightFt : ''}
-          onChange={(e) => {
-            const v = Number(e.target.value);
-            if (Number.isFinite(v) && v > 0) updateField('heightFt', v);
-          }}
-          className="w-16 bg-bg rounded-md text-sm text-fg tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-accent/40 px-2 py-1 border border-border"
-          aria-label="Height in feet"
+          type="text"
+          value={building.name}
+          onChange={(e) => update('name', e.target.value)}
+          className="flex-1 min-w-0 bg-transparent text-sm font-medium text-fg focus:outline-none focus:ring-2 focus:ring-accent/40 rounded px-1.5 py-0.5"
+          aria-label="Building name"
         />
-        <span className="font-medium">ft</span>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-[11px] font-medium text-fg-muted hover:text-fg px-2 py-1 rounded-md hover:bg-bg-hover transition-colors"
+        >
+          {expanded ? 'Hide' : 'Edit'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm(`Delete ${building.name}?`)) onDelete(building.id);
+          }}
+          className="p-1.5 rounded-md text-fg-subtle hover:text-danger hover:bg-danger/10 transition-colors"
+          aria-label={`Delete ${building.name}`}
+        >
+          <Trash2 size={13} strokeWidth={2} />
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={() => {
-          if (window.confirm(`Delete ${building.name}?`)) onDelete(building.id);
-        }}
-        className="p-1.5 rounded-md text-fg-subtle hover:text-danger hover:bg-danger/10 transition-colors"
-        aria-label={`Delete ${building.name}`}
-      >
-        <Trash2 size={13} strokeWidth={2} />
-      </button>
+      {expanded && (
+        <div className="border-t border-border/60 px-3 py-3 grid grid-cols-2 gap-3">
+          {building.widthFt != null && (
+            <NumField
+              label="Width (ft)"
+              value={building.widthFt}
+              onChange={(v) => update('widthFt', Math.max(10, v))}
+              step={10}
+            />
+          )}
+          {building.depthFt != null && (
+            <NumField
+              label="Depth (ft)"
+              value={building.depthFt}
+              onChange={(v) => update('depthFt', Math.max(10, v))}
+              step={10}
+            />
+          )}
+          <NumField
+            label="Rotation (deg)"
+            value={building.rotationDeg}
+            onChange={(v) => update('rotationDeg', ((v % 360) + 360) % 360)}
+            step={15}
+          />
+          <NumField
+            label="Bays"
+            value={building.bayCount}
+            onChange={(v) => update('bayCount', Math.max(1, Math.min(50, Math.round(v))))}
+            step={1}
+          />
+          <NumField
+            label="Height (ft)"
+            value={building.heightFt}
+            onChange={(v) => update('heightFt', Math.max(1, v))}
+            step={1}
+          />
+          {building.widthFt != null && building.depthFt != null && (
+            <div className="col-span-2 text-[11px] text-fg-muted tabular-nums pt-1">
+              <strong className="text-fg">
+                {Math.round(building.widthFt * building.depthFt).toLocaleString('en-US')}
+              </strong>{' '}
+              SF total
+              {building.bayCount > 1 && (
+                <>
+                  {' '}
+                  ·{' '}
+                  <strong className="text-fg">
+                    {Math.round(
+                      (building.widthFt * building.depthFt) / building.bayCount
+                    ).toLocaleString('en-US')}
+                  </strong>{' '}
+                  SF/bay
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+function NumField({
+  label,
+  value,
+  onChange,
+  step = 1,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  step?: number;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-fg-subtle">
+        {label}
+      </span>
+      <input
+        type="number"
+        value={Number.isFinite(value) ? value : ''}
+        step={step}
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          if (Number.isFinite(v)) onChange(v);
+        }}
+        className="w-full px-3 py-2 bg-bg rounded-lg text-sm text-fg tabular-nums focus:outline-none focus:ring-2 focus:ring-accent/40 border border-border"
+      />
+    </label>
   );
 }
 

@@ -385,12 +385,24 @@ export const BuildingSchema = z.object({
   color: z.string().nullable().optional(),
   bayCount: z.number().int().min(1).max(50).default(1),
   frontageSide: FrontageSideEnum.nullable().optional(),
+  // Parametric dimensions — when set, the footprint is derived from
+  // (centerLat, centerLng, widthFt, depthFt, rotationDeg). Nullable
+  // so any legacy traced polygons keep working until migrated.
+  widthFt: z.number().positive().nullable().optional(),
+  depthFt: z.number().positive().nullable().optional(),
+  rotationDeg: z.number().min(-360).max(360).default(0),
+  centerLat: z.number().min(-90).max(90).nullable().optional(),
+  centerLng: z.number().min(-180).max(180).nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 }).transform((b) => ({
   ...b,
   color: b.color ?? null,
   frontageSide: b.frontageSide ?? null,
+  widthFt: b.widthFt ?? null,
+  depthFt: b.depthFt ?? null,
+  centerLat: b.centerLat ?? null,
+  centerLng: b.centerLng ?? null,
 }));
 
 export type Building = z.infer<typeof BuildingSchema>;

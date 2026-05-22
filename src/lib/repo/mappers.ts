@@ -332,6 +332,11 @@ export interface BuildingRow {
   color: string | null;
   bay_count: number;
   frontage_side: 'N' | 'S' | 'E' | 'W' | null;
+  width_ft: number | null;
+  depth_ft: number | null;
+  rotation_deg: number;
+  center_lat: number | null;
+  center_lng: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -350,6 +355,11 @@ export const buildingToRow = (
   color: b.color ?? null,
   bay_count: b.bayCount ?? 1,
   frontage_side: b.frontageSide ?? null,
+  width_ft: b.widthFt ?? null,
+  depth_ft: b.depthFt ?? null,
+  rotation_deg: b.rotationDeg ?? 0,
+  center_lat: b.centerLat ?? null,
+  center_lng: b.centerLng ?? null,
   created_at: b.createdAt,
   updated_at: b.updatedAt,
 });
@@ -363,6 +373,11 @@ export const rowToBuilding = (r: BuildingRow): Building => ({
   color: r.color,
   bayCount: r.bay_count ?? 1,
   frontageSide: r.frontage_side,
+  widthFt: r.width_ft != null ? Number(r.width_ft) : null,
+  depthFt: r.depth_ft != null ? Number(r.depth_ft) : null,
+  rotationDeg: r.rotation_deg != null ? Number(r.rotation_deg) : 0,
+  centerLat: r.center_lat != null ? Number(r.center_lat) : null,
+  centerLng: r.center_lng != null ? Number(r.center_lng) : null,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
