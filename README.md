@@ -1,73 +1,119 @@
-# React + TypeScript + Vite
+# Leasing-Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A leasing pipeline + rent roll tracker for industrial CRE. Live-editable
+Excel-style data, backed by Supabase, with realtime sync across tabs and
+users.
 
-Currently, two official plugins are available:
+**Stack:** React 19 + TypeScript + Vite + Tailwind v4. Supabase (Postgres
++ Realtime + anon key). Recharts, react-hook-form + zod, @tanstack/react-table,
+xlsx. Deployed on Vercel.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## What it does
 
-## React Compiler
+- **Prospects** — pipeline of in-flight deals (status, target rent, term,
+  free rent, TI, probability, expected start) with per-deal activity log.
+- **Rent Roll** — current tenants & spaces, occupancy, lease terms, TI,
+  commissions, in-place vs UW rent.
+- **Reports** — 6 cross-filtered charts: pipeline forecast, UW vs actual
+  rent / TI, lease rollover, market breakdown, occupancy by deal.
+- **Onboarding checklists** — auto-spawn on lease execution; per-tenant
+  task list grouped by department.
+- **Excel import / export** — load an existing workbook to bulk-seed
+  Supabase, or export the current state to a fresh `.xlsx`.
+- **Shareable URL snapshots** — `#data=…` fragment for showing a frozen
+  view to someone without DB access.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Architecture
 
-## Expanding the ESLint configuration
+- **Source of truth:** Supabase Postgres. Four tables — `deals`,
+  `rent_roll`, `activities`, `onboarding_checklists`. RLS is enabled
+  with permissive `anon` policies; the passcode gate at the app layer
+  is the only access control.
+- **Live sync:** every CRUD handler does an optimistic local update +
+  fire-and-forget `upsert`/`delete` to Supabase. Realtime subscriptions
+  merge other clients' changes into local state within ~1s.
+- **Fallback:** if Supabase env vars are absent (e.g. local dev without
+  config) the app falls back to a Dexie + File System Access flow,
+  saving to a local `.xlsx` in place.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+├── App.tsx                # state owner, top-level routing
+├── types.ts               # zod schemas + types for all 4 entities
+├── lib/
+│   ├── supabase.ts        # client singleton, SUPABASE_CONFIGURED flag
+│   ├── repo/              # per-entity CRUD + realtime subscriptions
+│   │   ├── mappers.ts     # camelCase ↔ snake_case + DB row shapes
+│   │   ├── deals.ts
+│   │   ├── rentRoll.ts
+│   │   ├── activities.ts
+│   │   └── onboardings.ts
+│   ├── excel.ts           # workbook → entities + entities → workbook
+│   ├── autosave.ts        # legacy Dexie snapshot (offline fallback)
+│   ├── fileHandle.ts      # legacy File System Access reconnect
+│   ├── share.ts           # URL-fragment snapshot encode/decode
+│   ├── activity.ts        # activity entry constructors
+│   └── onboarding.ts      # checklist template + reconcile
+└── components/            # tables, drawers, filters, charts
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Setup
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+git clone https://github.com/aanfinson00/Leasing-Tracker.git
+cd Leasing-Tracker
+npm install
+cp .env.example .env.local
+# fill in VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+npm run dev
 ```
+
+## Environment variables
+
+| Variable                    | Required | Notes                                        |
+| --------------------------- | -------- | -------------------------------------------- |
+| `VITE_SUPABASE_URL`         | yes\*    | Project URL, `https://*.supabase.co`         |
+| `VITE_SUPABASE_ANON_KEY`    | yes\*    | Publishable / anon key (safe in bundle)      |
+| `VITE_PASSWORD_HASH`        | no       | SHA-256 hex of the passcode. Blank = dev mode |
+
+\* Both must be set for Supabase mode. Without them the app runs against
+the legacy local-first flow.
+
+Generate `VITE_PASSWORD_HASH`:
+
+```bash
+echo -n 'YourPassword' | shasum -a 256
+```
+
+## Seeding the database
+
+After applying the migration (already done — see
+`supabase/migrations/`), seed from an `.xlsx` workbook matching the
+current schema (Prospects + Rent Roll + Activity + Onboarding sheets):
+
+```bash
+VITE_SUPABASE_URL=... VITE_SUPABASE_ANON_KEY=... \
+  npx tsx scripts/seed-supabase.ts --file=path/to/workbook.xlsx --reset
+```
+
+Flags:
+- `--reset` — wipe existing rows before inserting (otherwise upserts in
+  place by id; idempotent on re-run).
+- `--file=X` — path to the workbook. Defaults to `./sample-leases.xlsx`.
+
+## Security
+
+The passcode gate (`VITE_PASSWORD_HASH`) is **app-layer only**. The
+anon Supabase key is in the client bundle, so a determined user with
+the bundle can call the API directly and bypass the gate. This is an
+explicit trade-off for single-team use; if multi-tenant or external
+sharing becomes a concern, swap to Supabase Auth + per-user RLS.
+
+## Scripts
+
+| Command            | What it does                            |
+| ------------------ | --------------------------------------- |
+| `npm run dev`      | Vite dev server                         |
+| `npm run build`    | TypeScript build + Vite production build |
+| `npm run preview`  | Preview the production build locally    |
+| `npm run lint`     | ESLint                                  |
