@@ -23,6 +23,7 @@ import { WaterfallChart } from './WaterfallChart';
 import { AnnualSchedule } from './AnnualSchedule';
 import { CashFlowSchedule } from './CashFlowSchedule';
 import { ExportExcelButton, ExportPdfButton } from './ExportButtons';
+import { SensitivityPanel } from './SensitivityPanel';
 
 interface Props {
   deals: Deal[];
@@ -233,6 +234,20 @@ export function UnderwriteView({
             />
           ) : (
             <SelectABHint />
+          )}
+
+          {/* Sensitivity sliders — drag any knob to see live NER move.
+              Hold-NER mode pins a target NER and solves for the chosen
+              free variable. Operates on whichever scenario is selected
+              in the panel's own picker (defaults to B). */}
+          {scenarios.length > 0 && (
+            <SensitivityPanel
+              scenarios={scenarios}
+              aId={aId}
+              bId={bId}
+              onUpdateInput={handleUpdateInput}
+              onUpdateGlobals={handleUpdateGlobals}
+            />
           )}
 
           {/* Results — headline + side-by-side waterfalls. */}
