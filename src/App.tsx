@@ -887,11 +887,10 @@ function App() {
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Header is OPAQUE (so scrolled content doesn't bleed through
             the title) but renders the SAME copper graph-paper grid as
-            the page bg. Both grids share the viewport origin, so the
-            lines align perfectly — no visible seam at the header's
-            bottom edge, and no backdrop-blur artifacts on the grid
-            lines (the prior approach smeared 1px lines into vertical
-            bands on bright displays). */}
+            the page bg. background-attachment: fixed anchors the
+            pattern to the VIEWPORT (not the header element), so the
+            sidebar's 68px offset doesn't shift the grid out of phase
+            with the page bg behind the main content. */}
         <header
           className="sticky top-0 z-10"
           style={{
@@ -901,6 +900,7 @@ function App() {
               linear-gradient(90deg, rgba(184, 112, 64, 0.06) 1px, transparent 1px)
             `,
             backgroundSize: '24px 24px',
+            backgroundAttachment: 'fixed',
           }}
         >
           <div className="px-6 sm:px-10 pt-8 pb-6 max-w-7xl mx-auto">
