@@ -222,6 +222,21 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     map.getCanvas().style.cursor = placingProjectId ? 'crosshair' : '';
   }, [placingProjectId]);
 
+  // ── Flatten camera in draw mode ─────────────────────────────────
+  // 55° pitch is great for the cinematic project arrival, awful for
+  // polygon tracing — perspective makes click-to-place feel imprecise
+  // near the bottom of the screen. Flatten to top-down satellite for
+  // draw mode, restore the tilt when the user finishes or cancels.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (drawMode) {
+      map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+    } else if (activeProjectId) {
+      map.easeTo({ pitch: 55, bearing: -45, duration: 600 });
+    }
+  }, [drawMode, activeProjectId]);
+
   // ── Sync project markers (draggable, opens drawer on click) ─────
   useEffect(() => {
     const map = mapRef.current;

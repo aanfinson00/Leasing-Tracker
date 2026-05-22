@@ -43,8 +43,12 @@ export function ProjectDrawer({
 
   return (
     <div className="fixed inset-0 z-40 flex pointer-events-none">
+      {/* In draw mode the click-catcher must NOT intercept clicks — they
+          need to fall through to the map so the user can place polygon
+          vertices. When idle it stays clickable so an outside-click
+          dismisses the drawer. */}
       <div
-        className="flex-1 pointer-events-auto"
+        className={`flex-1 ${drawMode ? 'pointer-events-none' : 'pointer-events-auto'}`}
         onClick={onClose}
         aria-label="Close project drawer"
       />
