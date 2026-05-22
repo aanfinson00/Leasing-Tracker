@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   X,
@@ -12,10 +12,14 @@ import {
   Activity as ActivityIcon,
   ListChecks,
   Workflow,
+  Mail,
+  Check,
+  Copy,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ActivityEntry, Deal, DealStatus, Priority } from '../types';
+import type { ActivityEntry, Building, Deal, DealStatus, Priority } from '../types';
 import { PriorityEnum } from '../types';
+import { listSpaceOptions, findSpaceOption } from '../lib/spaces';
 import { StatusBadge } from './StatusBadge';
 import { PipelineStepper } from './PipelineStepper';
 import { ActivityLog } from './ActivityLog';
@@ -23,6 +27,7 @@ import { ActivityLog } from './ActivityLog';
 interface DealDrawerProps {
   deal: Deal | null;
   activities: ActivityEntry[];
+  buildings: Building[];
   onClose: () => void;
   onSave: (deal: Deal) => void;
   onDelete: (id: string) => void;
@@ -30,6 +35,7 @@ interface DealDrawerProps {
   onAddActivity: (entry: Omit<ActivityEntry, 'id' | 'createdAt'>) => void;
   onDeleteActivity: (id: string) => void;
   onStatusChange?: (deal: Deal, from: DealStatus, to: DealStatus) => void;
+  onToast?: (msg: string) => void;
 }
 
 type FormValues = {
@@ -108,6 +114,7 @@ function Section({ icon: Icon, title, children }: SectionProps) {
 export function DealDrawer({
   deal,
   activities,
+  buildings,
   onClose,
   onSave,
   onDelete,
@@ -115,6 +122,7 @@ export function DealDrawer({
   onAddActivity,
   onDeleteActivity,
   onStatusChange,
+  onToast,
 }: DealDrawerProps) {
   const {
     register,
@@ -124,6 +132,50 @@ export function DealDrawer({
     setValue,
     formState: { errors },
   } = useForm<FormValues>();
+
+  // Mirrors RentRollDrawer's picker — same listSpaceOptions, same UX.
+  const spaceOptions = useMemo(() => listSpaceOptions(buildings), [buildings]);
+  const currentBuildingNameLive = watch('building') ?? deal?.building ?? '';
+  const currentSpaceIdLive = watch('spaceId') ?? deal?.spaceId ?? '';
+  const matchedSpaceOption = useMemo(
+    () =>
+      findSpaceOption(
+        spaceOptions,
+        null,
+        currentSpaceIdLive || null
+      ),
+    [spaceOptions, currentSpaceIdLive]
+  );
+
+  const handleSpacePick = (key: string) => {
+    if (key === '') {
+      setValue('spaceId', '', { shouldDirty: true });
+      setValue('building', '', { shouldDirty: true });
+      return;
+    }
+    const opt = spaceOptions.find((o) => o.key === key);
+    if (!opt) return;
+    setValue('spaceId', opt.spaceId, { shouldDirty: true });
+    setValue('building', opt.buildingName, { shouldDirty: true });
+  };
+
+  // "Get status update" — copies the slash command + deal context to the
+  // clipboard so the user can paste into Claude (terminal or iMessage).
+  // The skill itself lives in .claude/skills/get-status-update.
+  const [statusCopied, setStatusCopied] = useState(false);
+  const handleGetStatusUpdate = async () => {
+    if (!deal) return;
+    const handle = deal.dealName || deal.prospectTenant || deal.id;
+    const prompt = `/get-status-update ${handle}`;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setStatusCopied(true);
+      setTimeout(() => setStatusCopied(false), 2500);
+      onToast?.(`Copied: ${prompt} — paste into Claude`);
+    } catch {
+      onToast?.(`Run in Claude: ${prompt}`);
+    }
+  };
 
   useEffect(() => {
     if (deal) {
@@ -226,14 +278,38 @@ export function DealDrawer({
                 </h2>
                 <StatusBadge status={currentStatus} />
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-2 rounded-lg text-fg-muted hover:text-fg hover:bg-bg-hover transition-colors shrink-0"
-                aria-label="Close"
-              >
-                <X size={18} strokeWidth={1.75} />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                {/* Get Status Update — copies the /get-status-update skill
+                    invocation to the clipboard. Skill itself reads Gmail
+                    via MCP and drafts an activity entry. */}
+                <button
+                  type="button"
+                  onClick={handleGetStatusUpdate}
+                  title="Copy /get-status-update command to clipboard"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-fg-muted hover:text-fg hover:bg-bg-hover rounded-lg transition-colors"
+                >
+                  {statusCopied ? (
+                    <>
+                      <Check size={13} strokeWidth={2} className="text-success" />
+                      <span className="text-success">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail size={13} strokeWidth={1.75} />
+                      <span>Get update</span>
+                      <Copy size={11} strokeWidth={1.75} className="opacity-60" />
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-2 rounded-lg text-fg-muted hover:text-fg hover:bg-bg-hover transition-colors"
+                  aria-label="Close"
+                >
+                  <X size={18} strokeWidth={1.75} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -263,6 +339,39 @@ export function DealDrawer({
                   {errors.dealName && (
                     <p className="text-danger text-xs mt-1.5">{errors.dealName.message}</p>
                   )}
+                </div>
+                <div className="col-span-2">
+                  <label className={labelClass}>
+                    Building / Space
+                    {spaceOptions.length === 0 && (
+                      <span className="ml-2 text-fg-subtle font-normal">
+                        — no buildings drawn yet; use the free-text fields below
+                      </span>
+                    )}
+                  </label>
+                  <select
+                    value={matchedSpaceOption?.key ?? ''}
+                    onChange={(e) => handleSpacePick(e.target.value)}
+                    className={inputClass}
+                    disabled={spaceOptions.length === 0}
+                  >
+                    <option value="">
+                      {spaceOptions.length === 0
+                        ? 'No buildings — type IDs manually below'
+                        : 'Pick a space from your buildings…'}
+                    </option>
+                    {spaceOptions.map((o) => (
+                      <option key={o.key} value={o.key}>
+                        {o.buildingName} — {o.spaceId}
+                      </option>
+                    ))}
+                  </select>
+                  {matchedSpaceOption == null &&
+                    (currentBuildingNameLive || currentSpaceIdLive) && (
+                      <p className="text-xs text-fg-subtle mt-1.5">
+                        Custom IDs — doesn't match any drawn space.
+                      </p>
+                    )}
                 </div>
                 <div>
                   <label className={labelClass}>Deal ID</label>
