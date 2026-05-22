@@ -1346,6 +1346,7 @@ function App() {
       <DealDrawer
         deal={editingDeal}
         activities={activities}
+        buildings={buildings}
         onClose={() => setEditingDeal(null)}
         onSave={handleSaveDeal}
         onDelete={handleDeleteDeal}
@@ -1353,6 +1354,7 @@ function App() {
         onAddActivity={handleAddActivity}
         onDeleteActivity={handleDeleteActivity}
         onStatusChange={handleDealStatusChange}
+        onToast={showToast}
       />
       <RentRollDrawer
         row={editingRow}
