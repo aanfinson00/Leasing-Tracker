@@ -6,6 +6,7 @@
 
 import type {
   ActivityEntry,
+  AMPendingItem,
   Building,
   Deal,
   DevelopmentProject,
@@ -661,6 +662,76 @@ export const rowToLeaseComp = (r: LeaseCompRow): LeaseComp => ({
   sourceUrl: r.source_url,
   confidence: r.confidence,
   confidential: r.confidential,
+  notes: r.notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── AMPendingItem ─────────────────────────────────────────────────
+
+export interface AMPendingItemRow {
+  id: string;
+  item_type: AMPendingItem['itemType'];
+  title: string;
+  description: string | null;
+  building_id: string | null;
+  building_name: string | null;
+  deal_id: string | null;
+  deal_name: string | null;
+  owner: string | null;
+  status: AMPendingItem['status'];
+  priority: AMPendingItem['priority'];
+  due_date: string | null;
+  completed_date: string | null;
+  source: string | null;
+  link: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const amPendingItemToRow = (
+  i: AMPendingItem
+): Omit<AMPendingItemRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: i.id,
+  item_type: i.itemType,
+  title: i.title,
+  description: i.description,
+  building_id: i.buildingId,
+  building_name: i.buildingName,
+  deal_id: i.dealId,
+  deal_name: i.dealName,
+  owner: i.owner,
+  status: i.status,
+  priority: i.priority,
+  due_date: i.dueDate,
+  completed_date: i.completedDate,
+  source: i.source,
+  link: i.link,
+  notes: i.notes,
+  created_at: i.createdAt,
+  updated_at: i.updatedAt,
+});
+
+export const rowToAMPendingItem = (r: AMPendingItemRow): AMPendingItem => ({
+  id: r.id,
+  itemType: r.item_type,
+  title: r.title,
+  description: r.description,
+  buildingId: r.building_id,
+  buildingName: r.building_name,
+  dealId: r.deal_id,
+  dealName: r.deal_name,
+  owner: r.owner,
+  status: r.status,
+  priority: r.priority,
+  dueDate: r.due_date,
+  completedDate: r.completed_date,
+  source: r.source,
+  link: r.link,
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
