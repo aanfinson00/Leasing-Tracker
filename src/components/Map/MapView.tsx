@@ -32,6 +32,10 @@ import {
 } from '../../lib/map-utils/parametric';
 import { bayColor, detectFrontageSide } from '../../lib/map-utils/demising';
 import { buildingDockDoors } from '../../lib/map-utils/dockDoors';
+import {
+  truckCourtPolygon,
+  trailersAtDocks,
+} from '../../lib/map-utils/groundProps';
 import { autoSpaceId } from '../../types';
 
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN ?? '').trim();
@@ -50,6 +54,15 @@ const BUILDINGS_LAYER_OUTLINE = 'lt-buildings-outline';
 // dark gray to read as a separate visual element).
 const DOCK_DOORS_SOURCE = 'lt-dock-doors';
 const DOCK_DOORS_LAYER = 'lt-dock-doors-extrusion';
+// Truck court — flat concrete pad in front of the frontage edge.
+// Renders as a low-opacity fill (no extrusion) at z=0 so it reads as
+// ground texture without obscuring the satellite below.
+const TRUCK_COURT_SOURCE = 'lt-truck-court';
+const TRUCK_COURT_LAYER = 'lt-truck-court-fill';
+// Trailers parked at a subset of dock doors. Short extrusion (~13.5ft)
+// in dark gray so they read as separate objects from the building.
+const TRUCKS_SOURCE = 'lt-trucks';
+const TRUCKS_LAYER = 'lt-trucks-extrusion';
 
 const FT_TO_METERS = 0.3048;
 
@@ -123,6 +136,12 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
   const [placingProjectId, setPlacingProjectId] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [buildings, setBuildings] = useState<Building[]>([]);
+  // True once the Mapbox style is fully loaded (and re-true after every
+  // style switch). The buildings/dock-doors render effect bails out
+  // when this is false — bumping it on `style.load` is what forces a
+  // retry so the user doesn't have to click around to coax buildings
+  // onto the map.
+  const [styleReady, setStyleReady] = useState(false);
   // Parametric building placement mode. When `params` is set, the
   // next map click drops a rectangle at that point with these dims.
   const [placement, setPlacement] = useState<PlacementParams | null>(null);
@@ -224,8 +243,20 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
       setPlacingProjectId(null);
     });
 
+    // Initial load fires before style.load on first construction.
+    map.on('load', () => {
+      ensureBuildingsLayers(map);
+      setStyleReady(true);
+    });
+    // Fires after setStyle() — re-add our layers + retrigger render.
     map.on('style.load', () => {
       ensureBuildingsLayers(map);
+      setStyleReady(true);
+    });
+    // Bookkeeping — when a style switch starts, drop ready so the
+    // render effect waits instead of pushing data to a half-built source.
+    map.on('styledataloading', () => {
+      setStyleReady(false);
     });
 
     mapRef.current = map;
@@ -447,19 +478,31 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
   }, []);
 
   // ── Render building bays as fill-extrusion ──────────────────────
+  // styleReady is in the dep array so the effect re-runs as soon as
+  // the Mapbox style finishes loading — eliminates the "click a few
+  // times for buildings to show up" race we had pre-2026-05-22.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    if (!styleReady) return;
     if (!map.isStyleLoaded()) return;
     ensureBuildingsLayers(map);
     const src = map.getSource(BUILDINGS_SOURCE) as mapboxgl.GeoJSONSource | undefined;
     const dockSrc = map.getSource(DOCK_DOORS_SOURCE) as
       | mapboxgl.GeoJSONSource
       | undefined;
+    const courtSrc = map.getSource(TRUCK_COURT_SOURCE) as
+      | mapboxgl.GeoJSONSource
+      | undefined;
+    const truckSrc = map.getSource(TRUCKS_SOURCE) as
+      | mapboxgl.GeoJSONSource
+      | undefined;
     if (!src) return;
 
     const features: Feature[] = [];
     const dockFeatures: Feature[] = [];
+    const courtFeatures: Feature[] = [];
+    const truckFeatures: Feature[] = [];
     for (const b of buildings) {
       const heightMeters = b.heightFt * FT_TO_METERS;
       const hasParams =
@@ -511,14 +554,24 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
         });
       }
 
-      // Dock doors — parametric only, requires a frontage side. We
-      // fall back to detectFrontageSide(footprint) when the user
-      // hasn't explicitly set one on the building.
+      // Dock doors, truck court, parked trailers — parametric only.
+      // We resolve frontage once and reuse it across all three.
       if (rectParams) {
         const side = b.frontageSide ?? detectFrontageSide(b.footprint as Polygon);
+
+        // Truck court — flat concrete pad in front of frontage.
+        courtFeatures.push({
+          type: 'Feature',
+          geometry: truckCourtPolygon(rectParams, side),
+          properties: {
+            id: `${b.id}:court`,
+            buildingId: b.id,
+            kind: 'truck-court',
+          },
+        });
+
+        // Dock doors.
         const doors = buildingDockDoors(rectParams, side);
-        // Cap doors at half the building height; minimum 10 ft so they
-        // remain visible on short flex buildings.
         const dockHeightMeters = Math.max(
           10 * FT_TO_METERS,
           Math.min(heightMeters * 0.4, 14 * FT_TO_METERS)
@@ -532,6 +585,26 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
               buildingId: b.id,
               kind: 'dock-door',
               heightMeters: dockHeightMeters,
+            },
+          });
+        });
+
+        // Parked trailers at a subset of the docks. Slightly shorter
+        // than the dock-door height so the doors still pop above them.
+        const trailers = trailersAtDocks(rectParams, side);
+        const trailerHeightMeters = Math.max(
+          3.5,
+          Math.min(dockHeightMeters - 0.5, 13.5 * FT_TO_METERS)
+        );
+        trailers.forEach((t) => {
+          truckFeatures.push({
+            type: 'Feature',
+            geometry: t.geometry,
+            properties: {
+              id: `${b.id}:trailer-${t.dockIndex}`,
+              buildingId: b.id,
+              kind: 'trailer',
+              heightMeters: trailerHeightMeters,
             },
           });
         });
@@ -563,7 +636,9 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     }
     src.setData({ type: 'FeatureCollection', features });
     dockSrc?.setData({ type: 'FeatureCollection', features: dockFeatures });
-  }, [buildings]);
+    courtSrc?.setData({ type: 'FeatureCollection', features: courtFeatures });
+    truckSrc?.setData({ type: 'FeatureCollection', features: truckFeatures });
+  }, [buildings, styleReady]);
 
   const handleSaveBuilding = (b: Building) => {
     // When parametric dims changed, regenerate the footprint so the
@@ -688,6 +763,28 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
 // ── Mapbox layers ────────────────────────────────────────────────
 
 function ensureBuildingsLayers(map: mapboxgl.Map) {
+  // Truck court goes FIRST so the building extrusion paints over it
+  // along the frontage edge (the court overhangs slightly past the
+  // building footprint — we want the building outline on top).
+  if (!map.getSource(TRUCK_COURT_SOURCE)) {
+    map.addSource(TRUCK_COURT_SOURCE, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+  }
+  if (!map.getLayer(TRUCK_COURT_LAYER)) {
+    map.addLayer({
+      id: TRUCK_COURT_LAYER,
+      type: 'fill',
+      source: TRUCK_COURT_SOURCE,
+      paint: {
+        // Warm concrete tone, semi-transparent over satellite.
+        'fill-color': '#a89c8d',
+        'fill-opacity': 0.55,
+        'fill-outline-color': '#7a6e5f',
+      },
+    });
+  }
   if (!map.getSource(BUILDINGS_SOURCE)) {
     map.addSource(BUILDINGS_SOURCE, {
       type: 'geojson',
@@ -736,6 +833,27 @@ function ensureBuildingsLayers(map: mapboxgl.Map) {
         'fill-extrusion-height': ['coalesce', ['get', 'heightMeters'], 3.5],
         'fill-extrusion-base': 0,
         'fill-extrusion-opacity': 0.95,
+      },
+    });
+  }
+  if (!map.getSource(TRUCKS_SOURCE)) {
+    map.addSource(TRUCKS_SOURCE, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+  }
+  if (!map.getLayer(TRUCKS_LAYER)) {
+    map.addLayer({
+      id: TRUCKS_LAYER,
+      type: 'fill-extrusion',
+      source: TRUCKS_SOURCE,
+      paint: {
+        // Slightly lighter than dock doors so the rectangles read as
+        // separate trailer bodies against the dock face.
+        'fill-extrusion-color': '#9b9690',
+        'fill-extrusion-height': ['coalesce', ['get', 'heightMeters'], 4],
+        'fill-extrusion-base': 0,
+        'fill-extrusion-opacity': 0.92,
       },
     });
   }
