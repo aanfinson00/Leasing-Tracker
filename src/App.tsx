@@ -94,6 +94,7 @@ import {
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { MapView } from './components/Map/MapView';
 import { GridBackground } from './components/GridBackground';
+import { MobileNav } from './components/MobileNav';
 
 function App() {
   const [view, setView] = useState<View>('prospects');
@@ -880,11 +881,15 @@ function App() {
                 : 'Reports';
 
   return (
-    <div className="relative flex min-h-screen bg-bg text-fg">
+    <div className="relative flex min-h-screen bg-bg text-fg pb-16 sm:pb-0">
       {/* Parce-style animated copper grid behind everything. z-0 keeps
           it under the sidebar (z-20) and main content (default stacking). */}
       <GridBackground />
       <Sidebar view={view} onChangeView={setView} />
+      {/* Mobile bottom nav — visible only on narrow viewports where
+          the desktop sidebar is hidden. pb-16 above leaves clearance
+          so content doesn't sit under it. */}
+      <MobileNav view={view} onChangeView={setView} />
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Header is OPAQUE (so scrolled content doesn't bleed through
@@ -920,6 +925,16 @@ function App() {
                       <CloudOff size={14} strokeWidth={1.75} />
                       Reconnect to {fileHandle.name}
                     </button>
+                  ) : SUPABASE_CONFIGURED ? (
+                    // Supabase is the source of truth — no file context
+                    // matters anymore. Just show the count for views
+                    // that have one; otherwise the header secondary
+                    // line is blank.
+                    showsCounts ? (
+                      <span className="tabular-nums">
+                        {currentCount} of {totalCount}
+                      </span>
+                    ) : null
                   ) : filename ? (
                     <>
                       <FileSpreadsheet size={14} strokeWidth={1.75} className="shrink-0 text-fg-subtle" />

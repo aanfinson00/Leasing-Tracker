@@ -21,10 +21,13 @@ interface NavItem {
   disabled?: boolean;
 }
 
+// Display LABELS only — the internal `view` keys ('prospects',
+// 'rentroll', 'underwrite') stay unchanged so realtime/persistence
+// keyed on them keeps working.
 const NAV_ITEMS: NavItem[] = [
-  { id: 'prospects', icon: Briefcase, label: 'Prospects' },
-  { id: 'rentroll', icon: Building, label: 'Rent Roll' },
-  { id: 'underwrite', icon: Calculator, label: 'Underwrite' },
+  { id: 'prospects', icon: Briefcase, label: 'Leasing Activity' },
+  { id: 'rentroll', icon: Building, label: 'Portfolio' },
+  { id: 'underwrite', icon: Calculator, label: 'Lease Calculator' },
   { id: 'map', icon: MapPin, label: 'Map' },
   { id: 'onboarding', icon: ClipboardCheck, label: 'Onboarding' },
   { id: 'reports', icon: BarChart3, label: 'Reports' },

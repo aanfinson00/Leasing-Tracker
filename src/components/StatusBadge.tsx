@@ -1,9 +1,10 @@
 import type { DealStatus, Priority } from '../types';
 
 const STATUS_STYLES: Record<DealStatus, string> = {
-  // Sourcing — stone
+  // Sourcing — text only, no fill (the most-common "noted, no movement yet"
+  // state shouldn't grab the eye like an in-progress pill does)
   'New Prospect':
-    'bg-stone-100 text-stone-700 dark:bg-stone-800/60 dark:text-stone-300',
+    'text-fg-muted',
   // Pre-proposal — amber
   'RFP Requested':
     'bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
@@ -22,9 +23,10 @@ const STATUS_STYLES: Record<DealStatus, string> = {
   // Closed-positive — emerald
   Executed:
     'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300',
-  // Side-states
+  // Paused — italic, no fill, muted (visually = "set aside")
   'On Hold':
-    'bg-zinc-100 text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-400',
+    'italic text-fg-subtle',
+  // Lost — rose, kept loud since it's a final negative state
   Lost:
     'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
 };
