@@ -8,6 +8,7 @@ import type {
   ActivityEntry,
   Building,
   Deal,
+  LeaseComp,
   OnboardingChecklist,
   PropertyTaxAppeal,
   PropertyTaxAppealStatus,
@@ -473,6 +474,106 @@ export const rowToPropertyTaxAppeal = (r: PropertyTaxAppealRow): PropertyTaxAppe
   consultantName: r.consultant_name,
   consultantFeePct: numOrNull(r.consultant_fee_pct),
   consultantFeeDollar: numOrNull(r.consultant_fee_dollar),
+  notes: r.notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── LeaseComp ─────────────────────────────────────────────────────
+
+export interface LeaseCompRow {
+  id: string;
+  property_name: string | null;
+  building_address: string | null;
+  market: string | null;
+  property_type: string | null;
+  building_type: string | null;
+  tenant_name: string | null;
+  tenant_industry: string | null;
+  transaction_type: LeaseComp['transactionType'];
+  signed_date: string | null;
+  delivery_date: string | null;
+  lease_sf: number | string | null;
+  building_sf: number | string | null;
+  base_rent_psf: number | string | null;
+  effective_rent_psf: number | string | null;
+  rent_type: LeaseComp['rentType'];
+  term_months: number | null;
+  free_rent_months: number | string | null;
+  ti_psf: number | string | null;
+  escalation_pct: number | string | null;
+  options: string | null;
+  source: string | null;
+  source_url: string | null;
+  confidence: LeaseComp['confidence'];
+  confidential: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const leaseCompToRow = (
+  c: LeaseComp
+): Omit<LeaseCompRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: c.id,
+  property_name: c.propertyName,
+  building_address: c.buildingAddress,
+  market: c.market,
+  property_type: c.propertyType,
+  building_type: c.buildingType,
+  tenant_name: c.tenantName,
+  tenant_industry: c.tenantIndustry,
+  transaction_type: c.transactionType,
+  signed_date: c.signedDate,
+  delivery_date: c.deliveryDate,
+  lease_sf: c.leaseSF,
+  building_sf: c.buildingSF,
+  base_rent_psf: c.baseRentPSF,
+  effective_rent_psf: c.effectiveRentPSF,
+  rent_type: c.rentType,
+  term_months: c.termMonths,
+  free_rent_months: c.freeRentMonths,
+  ti_psf: c.tiPSF,
+  escalation_pct: c.escalationPct,
+  options: c.options,
+  source: c.source,
+  source_url: c.sourceUrl,
+  confidence: c.confidence,
+  confidential: c.confidential,
+  notes: c.notes,
+  created_at: c.createdAt,
+  updated_at: c.updatedAt,
+});
+
+export const rowToLeaseComp = (r: LeaseCompRow): LeaseComp => ({
+  id: r.id,
+  propertyName: r.property_name,
+  buildingAddress: r.building_address,
+  market: r.market,
+  propertyType: r.property_type,
+  buildingType: r.building_type,
+  tenantName: r.tenant_name,
+  tenantIndustry: r.tenant_industry,
+  transactionType: r.transaction_type,
+  signedDate: r.signed_date,
+  deliveryDate: r.delivery_date,
+  leaseSF: numOrNull(r.lease_sf),
+  buildingSF: numOrNull(r.building_sf),
+  baseRentPSF: numOrNull(r.base_rent_psf),
+  effectiveRentPSF: numOrNull(r.effective_rent_psf),
+  rentType: r.rent_type,
+  termMonths: r.term_months,
+  freeRentMonths: numOrNull(r.free_rent_months),
+  tiPSF: numOrNull(r.ti_psf),
+  escalationPct: numOrNull(r.escalation_pct),
+  options: r.options,
+  source: r.source,
+  sourceUrl: r.source_url,
+  confidence: r.confidence,
+  confidential: r.confidential,
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,

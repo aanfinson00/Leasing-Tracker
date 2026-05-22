@@ -18,6 +18,7 @@ import type {
   Building,
   Deal,
   DealStatus,
+  LeaseComp,
   OnboardingChecklist,
   OnboardingItem,
   PropertyTaxAppeal,
@@ -93,6 +94,12 @@ import {
   deleteScenario as deleteScenarioRow,
   subscribeScenarios,
 } from './lib/repo/scenarios';
+import {
+  listLeaseComps,
+  upsertLeaseComp,
+  deleteLeaseComp as deleteLeaseCompRow,
+  subscribeLeaseComps,
+} from './lib/repo/leaseComps';
 import { listAllBuildings, subscribeBuildings } from './lib/repo/buildings';
 import {
   listPropertyTaxAppeals,
@@ -101,6 +108,7 @@ import {
   subscribePropertyTaxAppeals,
 } from './lib/repo/propertyTaxAppeals';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
+import { CompsView } from './components/Comps/CompsView';
 import { MapView } from './components/Map/MapView';
 import { AssetMgmtView } from './components/AssetMgmt/AssetMgmtView';
 import { GridBackground } from './components/GridBackground';
@@ -127,6 +135,7 @@ function App() {
   // Underwrite tab state — separate from deals/rentRoll/etc. because
   // scenarios are loaded per-deal on demand (not eagerly).
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [leaseComps, setLeaseComps] = useState<LeaseComp[]>([]);
   // All buildings, eagerly loaded so the rent-roll/deal drawers can offer
   // a space picker. MapView keeps its own state for now (its render path
   // already drives off it); these two subscriptions co-exist fine.
@@ -238,11 +247,12 @@ function App() {
     if (SUPABASE_CONFIGURED) {
       (async () => {
         try {
-          const [d, r, a, o, bldgs, appeals] = await Promise.all([
+          const [d, r, a, o, comps, bldgs, appeals] = await Promise.all([
             listDeals(),
             listRentRoll(),
             listActivities(),
             listOnboardings(),
+            listLeaseComps(),
             listAllBuildings(),
             listPropertyTaxAppeals(),
           ]);
@@ -252,6 +262,7 @@ function App() {
           setFilteredRentRoll(r);
           setActivities(a);
           setOnboardings(o.map(reconcileWithTemplate));
+          setLeaseComps(comps);
           setBuildings(bldgs);
           setPropertyTaxAppeals(appeals);
           setFilename('leasing-tracker.xlsx');
@@ -354,6 +365,17 @@ function App() {
         }),
       onDelete: (id) => setScenarios((prev) => prev.filter((x) => x.id !== id)),
     });
+    const unsubComps = subscribeLeaseComps({
+      onUpsert: (c) =>
+        setLeaseComps((prev) => {
+          const idx = prev.findIndex((x) => x.id === c.id);
+          if (idx === -1) return [...prev, c];
+          const next = prev.slice();
+          next[idx] = c;
+          return next;
+        }),
+      onDelete: (id) => setLeaseComps((prev) => prev.filter((x) => x.id !== id)),
+    });
     // Note: MapView also subscribes to buildings — duplicate subscriptions
     // are fine, channels are isolated. If we want to dedupe later, lift
     // MapView's state up to here and pass it down.
@@ -386,6 +408,7 @@ function App() {
       unsubAct();
       unsubOb();
       unsubScenarios();
+      unsubComps();
       unsubBldgs();
       unsubAppeals();
     };
@@ -891,6 +914,22 @@ function App() {
     writeThrough('delete scenario', deleteScenarioRow(id));
   };
 
+  const handleSaveLeaseComp = (updated: LeaseComp) => {
+    setLeaseComps((prev) => {
+      const idx = prev.findIndex((c) => c.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save comp', upsertLeaseComp(updated));
+  };
+
+  const handleDeleteLeaseComp = (id: string) => {
+    setLeaseComps((prev) => prev.filter((c) => c.id !== id));
+    writeThrough('delete comp', deleteLeaseCompRow(id));
+  };
+
   const handleSavePropertyTaxAppeal = (updated: PropertyTaxAppeal) => {
     setPropertyTaxAppeals((prev) => {
       const idx = prev.findIndex((a) => a.id === updated.id);
@@ -935,7 +974,9 @@ function App() {
         ? 'Portfolio'
         : view === 'underwrite'
           ? 'Lease Calculator'
-          : view === 'map'
+          : view === 'comps'
+            ? 'Comps Library'
+            : view === 'map'
             ? 'Map'
             : view === 'onboarding'
               ? 'Onboarding'
@@ -1157,6 +1198,12 @@ function App() {
               onSaveScenario={handleSaveScenario}
               onDeleteScenario={handleDeleteScenario}
               onToast={showToast}
+            />
+          ) : view === 'comps' ? (
+            <CompsView
+              comps={leaseComps}
+              onSave={handleSaveLeaseComp}
+              onDelete={handleDeleteLeaseComp}
             />
           ) : view === 'map' ? (
             <MapView

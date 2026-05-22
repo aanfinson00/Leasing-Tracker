@@ -445,7 +445,6 @@ export function autoSpaceId(
   return `${projectId}-B${b}-S${s}`;
 }
 
-// ──────────────────────────────────────────────────────────────────
 // Property Tax Appeals — one row per filed/considered appeal for a
 // given property and tax year. Backs Asset Management workflows
 // + .claude/skills/property-tax-appeal-{intake,watcher}.
@@ -529,3 +528,93 @@ export const PropertyTaxAppealSchema = z.object({
 }));
 
 export type PropertyTaxAppeal = z.infer<typeof PropertyTaxAppealSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Lease Comps — historical observed deals stored as reference data
+// for underwriting. Not generated from existing deals — these are
+// market data points the user gathers from brokers, reports, etc.
+// ──────────────────────────────────────────────────────────────────
+
+export const TransactionTypeEnum = z.enum([
+  'New Lease',
+  'Renewal',
+  'Sublease',
+  'Expansion',
+  'Other',
+]);
+export type TransactionType = z.infer<typeof TransactionTypeEnum>;
+
+export const RentTypeEnum = z.enum([
+  'NNN',
+  'Modified Gross',
+  'Full Service',
+  'Industrial Gross',
+]);
+export type RentType = z.infer<typeof RentTypeEnum>;
+
+export const CompConfidenceEnum = z.enum(['High', 'Medium', 'Low']);
+export type CompConfidence = z.infer<typeof CompConfidenceEnum>;
+
+export const LeaseCompSchema = z.object({
+  id: z.string().uuid(),
+
+  propertyName: z.string().nullable().optional(),
+  buildingAddress: z.string().nullable().optional(),
+  market: z.string().nullable().optional(),
+  propertyType: z.string().nullable().optional(),
+  buildingType: z.string().nullable().optional(),
+
+  tenantName: z.string().nullable().optional(),
+  tenantIndustry: z.string().nullable().optional(),
+  transactionType: TransactionTypeEnum.nullable().optional(),
+  signedDate: z.string().nullable().optional(),
+  deliveryDate: z.string().nullable().optional(),
+
+  leaseSF: z.number().positive().nullable().optional(),
+  buildingSF: z.number().positive().nullable().optional(),
+  baseRentPSF: z.number().min(0).nullable().optional(),
+  effectiveRentPSF: z.number().min(0).nullable().optional(),
+  rentType: RentTypeEnum.nullable().optional(),
+  termMonths: z.number().int().positive().nullable().optional(),
+  freeRentMonths: z.number().min(0).nullable().optional(),
+  tiPSF: z.number().min(0).nullable().optional(),
+  // Stored as fraction (0.03 for 3%).
+  escalationPct: z.number().nullable().optional(),
+  options: z.string().nullable().optional(),
+
+  source: z.string().nullable().optional(),
+  sourceUrl: z.string().nullable().optional(),
+  confidence: CompConfidenceEnum,
+  confidential: z.boolean(),
+
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((c) => ({
+  ...c,
+  propertyName: c.propertyName ?? null,
+  buildingAddress: c.buildingAddress ?? null,
+  market: c.market ?? null,
+  propertyType: c.propertyType ?? null,
+  buildingType: c.buildingType ?? null,
+  tenantName: c.tenantName ?? null,
+  tenantIndustry: c.tenantIndustry ?? null,
+  transactionType: c.transactionType ?? null,
+  signedDate: c.signedDate ?? null,
+  deliveryDate: c.deliveryDate ?? null,
+  leaseSF: c.leaseSF ?? null,
+  buildingSF: c.buildingSF ?? null,
+  baseRentPSF: c.baseRentPSF ?? null,
+  effectiveRentPSF: c.effectiveRentPSF ?? null,
+  rentType: c.rentType ?? null,
+  termMonths: c.termMonths ?? null,
+  freeRentMonths: c.freeRentMonths ?? null,
+  tiPSF: c.tiPSF ?? null,
+  escalationPct: c.escalationPct ?? null,
+  options: c.options ?? null,
+  source: c.source ?? null,
+  sourceUrl: c.sourceUrl ?? null,
+  notes: c.notes ?? null,
+}));
+
+export type LeaseComp = z.infer<typeof LeaseCompSchema>;
