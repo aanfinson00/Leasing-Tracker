@@ -885,10 +885,24 @@ function App() {
       <Sidebar view={view} onChangeView={setView} />
 
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Header sits transparent over the graph-paper grid so the
-            page reads as one continuous surface. backdrop-blur stays
-            on so scrolled content blurs softly under the title. */}
-        <header className="sticky top-0 z-10 backdrop-blur-md">
+        {/* Header is OPAQUE (so scrolled content doesn't bleed through
+            the title) but renders the SAME copper graph-paper grid as
+            the page bg. Both grids share the viewport origin, so the
+            lines align perfectly — no visible seam at the header's
+            bottom edge, and no backdrop-blur artifacts on the grid
+            lines (the prior approach smeared 1px lines into vertical
+            bands on bright displays). */}
+        <header
+          className="sticky top-0 z-10"
+          style={{
+            backgroundColor: 'var(--bg)',
+            backgroundImage: `
+              linear-gradient(rgba(184, 112, 64, 0.06) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(184, 112, 64, 0.06) 1px, transparent 1px)
+            `,
+            backgroundSize: '24px 24px',
+          }}
+        >
           <div className="px-6 sm:px-10 pt-8 pb-6 max-w-7xl mx-auto">
             <div className="flex items-start justify-between gap-6 flex-wrap">
               <div className="min-w-0">
