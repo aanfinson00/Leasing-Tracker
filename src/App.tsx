@@ -92,6 +92,7 @@ import {
   subscribeScenarios,
 } from './lib/repo/scenarios';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
+import { MapView } from './components/Map/MapView';
 
 function App() {
   const [view, setView] = useState<View>('prospects');
@@ -869,9 +870,11 @@ function App() {
         ? 'Rent Roll'
         : view === 'underwrite'
           ? 'Underwrite'
-          : view === 'onboarding'
-            ? 'Onboarding'
-            : 'Reports';
+          : view === 'map'
+            ? 'Map'
+            : view === 'onboarding'
+              ? 'Onboarding'
+              : 'Reports';
 
   return (
     <div className="flex min-h-screen bg-bg text-fg">
@@ -1048,6 +1051,8 @@ function App() {
               onDeleteScenario={handleDeleteScenario}
               onToast={showToast}
             />
+          ) : view === 'map' ? (
+            <MapView deals={deals} onSelectDeal={(d) => setEditingDeal(d)} />
           ) : view === 'onboarding' ? (
             <OnboardingView
               onboardings={onboardings}

@@ -1,10 +1,10 @@
-import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, Lock } from 'lucide-react';
+import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, Lock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 
 const PASSWORD_HASH_CONFIGURED = !!(import.meta.env.VITE_PASSWORD_HASH ?? '').trim();
 
-export type View = 'prospects' | 'rentroll' | 'underwrite' | 'onboarding' | 'reports';
+export type View = 'prospects' | 'rentroll' | 'underwrite' | 'map' | 'onboarding' | 'reports';
 
 interface NavItem {
   id: View | 'placeholder';
@@ -17,6 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'prospects', icon: Briefcase, label: 'Prospects' },
   { id: 'rentroll', icon: Building, label: 'Rent Roll' },
   { id: 'underwrite', icon: Calculator, label: 'Underwrite' },
+  { id: 'map', icon: MapPin, label: 'Map' },
   { id: 'onboarding', icon: ClipboardCheck, label: 'Onboarding' },
   { id: 'reports', icon: BarChart3, label: 'Reports' },
 ];

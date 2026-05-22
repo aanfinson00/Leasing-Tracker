@@ -51,6 +51,8 @@ type FormValues = {
   tiNote: string;
   probabilityPct: string;
   expectedStart: string;
+  lat: string;
+  lng: string;
   lastUpdated: string;
   priority: Priority;
   currentSummary: string;
@@ -144,6 +146,8 @@ export function DealDrawer({
         tiNote: toFormString(deal.tiNote),
         probabilityPct: toFormString(deal.probabilityPct),
         expectedStart: toFormString(deal.expectedStart),
+        lat: toFormString(deal.lat),
+        lng: toFormString(deal.lng),
         lastUpdated: toFormString(deal.lastUpdated),
         priority: deal.priority,
         currentSummary: toFormString(deal.currentSummary),
@@ -175,6 +179,8 @@ export function DealDrawer({
       tiNote: parseStr(values.tiNote),
       probabilityPct: parseNum(values.probabilityPct),
       expectedStart: parseStr(values.expectedStart),
+      lat: parseNum(values.lat),
+      lng: parseNum(values.lng),
       lastUpdated: parseStr(values.lastUpdated) ?? new Date().toISOString().slice(0, 10),
       priority: values.priority,
       currentSummary: parseStr(values.currentSummary),
@@ -285,6 +291,26 @@ export function DealDrawer({
                     type="number"
                     className={`${inputClass} tabular-nums`}
                     placeholder="Same as Min if exact"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Latitude</label>
+                  <input
+                    {...register('lat')}
+                    type="number"
+                    step="0.000001"
+                    placeholder="e.g. 41.8781"
+                    className={`${inputClass} tabular-nums`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Longitude</label>
+                  <input
+                    {...register('lng')}
+                    type="number"
+                    step="0.000001"
+                    placeholder="e.g. -87.6298"
+                    className={`${inputClass} tabular-nums`}
                   />
                 </div>
               </div>
