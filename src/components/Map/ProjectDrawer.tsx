@@ -43,15 +43,11 @@ export function ProjectDrawer({
 
   return (
     <div className="fixed inset-0 z-40 flex pointer-events-none">
-      {/* In draw mode the click-catcher must NOT intercept clicks — they
-          need to fall through to the map so the user can place polygon
-          vertices. When idle it stays clickable so an outside-click
-          dismisses the drawer. */}
-      <div
-        className={`flex-1 ${drawMode ? 'pointer-events-none' : 'pointer-events-auto'}`}
-        onClick={onClose}
-        aria-label="Close project drawer"
-      />
+      {/* Left side is pointer-events-none — the map underneath stays
+          fully navigable (pan, zoom, drag pins, place new pins, draw
+          polygons). Drawer dismissal is the X in the header or
+          switching to another project by clicking its pin. */}
+      <div className="flex-1 pointer-events-none" aria-hidden />
       <div className="w-full max-w-md bg-bg/95 backdrop-blur-md shadow-lift overflow-y-auto pointer-events-auto border-l border-border">
         <div className="sticky top-0 bg-bg/95 backdrop-blur-md border-b border-border px-7 py-5 z-10">
           <div className="flex items-start justify-between gap-3">
