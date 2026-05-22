@@ -1055,6 +1055,7 @@ function App() {
             <MapView
               deals={deals}
               onSelectDeal={(d) => setEditingDeal(d)}
+              onToast={showToast}
               onUpdateProjectCoords={(projectId, lat, lng) => {
                 // Project = group of deals sharing the same dealId.
                 // Write lat/lng to every deal in the group so the

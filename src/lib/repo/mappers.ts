@@ -6,12 +6,14 @@
 
 import type {
   ActivityEntry,
+  Building,
   Deal,
   OnboardingChecklist,
   RentRollRow,
   Scenario,
 } from '../../types';
 import type { Globals, ScenarioInputs, ScenarioResults } from '../lease-math/types';
+import type { Polygon } from 'geojson';
 
 // ── Deal ───────────────────────────────────────────────────────────
 
@@ -315,6 +317,46 @@ export const rowToScenario = (r: ScenarioRow): Scenario => ({
   inputs: r.inputs,
   globals: r.globals,
   results: r.results,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── Building ──────────────────────────────────────────────────────
+
+export interface BuildingRow {
+  id: string;
+  project_id: string;
+  name: string;
+  footprint: Polygon;
+  height_ft: number;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const buildingToRow = (
+  b: Building
+): Omit<BuildingRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: b.id,
+  project_id: b.projectId,
+  name: b.name,
+  footprint: b.footprint as Polygon,
+  height_ft: b.heightFt,
+  color: b.color ?? null,
+  created_at: b.createdAt,
+  updated_at: b.updatedAt,
+});
+
+export const rowToBuilding = (r: BuildingRow): Building => ({
+  id: r.id,
+  projectId: r.project_id,
+  name: r.name,
+  footprint: r.footprint,
+  heightFt: Number(r.height_ft),
+  color: r.color,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });

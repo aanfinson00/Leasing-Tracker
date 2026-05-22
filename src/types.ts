@@ -362,3 +362,29 @@ export const ScenarioSchema = z.object({
 }));
 
 export type Scenario = z.infer<typeof ScenarioSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Building — drawn polygon footprint attached to a project. Rendered
+// as 3D extrusion on the Map tab when zoomed in. `footprint` is a
+// GeoJSON Polygon in WGS84 lng/lat (the same shape Mapbox sources
+// natively, no client-side conversion required).
+// ──────────────────────────────────────────────────────────────────
+
+// Loose GeoJSON Polygon shape — z.unknown so we don't fight zod on
+// nested coordinate arrays. The drawing tool (mapbox-gl-draw) is the
+// authoritative producer of valid Polygons; readers trust the shape.
+export const BuildingSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().min(1),
+  name: z.string().default('Building'),
+  footprint: z.unknown(),
+  heightFt: z.number().positive(),
+  color: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((b) => ({
+  ...b,
+  color: b.color ?? null,
+}));
+
+export type Building = z.infer<typeof BuildingSchema>;
