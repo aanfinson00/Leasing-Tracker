@@ -115,7 +115,11 @@ function App() {
   // scenarios are loaded per-deal on demand (not eagerly).
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [selectedUwDealId, setSelectedUwDealId] = useState<string | null>(null);
-  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
+  // A/B/editing are independent: A and B drive the comparison view,
+  // editingId drives which scenario the InputsPanel writes to.
+  const [scenarioAId, setScenarioAId] = useState<string | null>(null);
+  const [scenarioBId, setScenarioBId] = useState<string | null>(null);
+  const [editingScenarioId, setEditingScenarioId] = useState<string | null>(null);
   // Mirror in a ref so the realtime closure (created once on mount) sees
   // the latest selection without re-subscribing on every change.
   const selectedUwDealIdRef = useRef<string | null>(null);
@@ -736,33 +740,39 @@ function App() {
   // ── Underwrite (scenarios) handlers
   const handleSelectUwDeal = async (deal: Deal | null) => {
     setSelectedUwDealId(deal?.id ?? null);
-    setActiveScenarioId(null);
-    if (!deal) {
-      setScenarios([]);
-      return;
-    }
-    if (!SUPABASE_CONFIGURED) {
+    setScenarioAId(null);
+    setScenarioBId(null);
+    setEditingScenarioId(null);
+    if (!deal || !SUPABASE_CONFIGURED) {
       setScenarios([]);
       return;
     }
     try {
       const rows = await listScenariosForDeal(deal.id);
       setScenarios(rows);
-      if (rows.length > 0) setActiveScenarioId(rows[0].id);
+      // Default selection: A = first scenario, B = second (if it exists),
+      // editing focus = A. Matches the way Lease-Calculator's store seeds
+      // an initial A/B pair.
+      if (rows[0]) {
+        setScenarioAId(rows[0].id);
+        setEditingScenarioId(rows[0].id);
+      }
+      if (rows[1]) setScenarioBId(rows[1].id);
     } catch (err) {
       console.error('Failed to load scenarios:', err);
       showToast('Failed to load scenarios');
     }
   };
 
-  const handleNewScenario = (deal: Deal) => {
-    // Auto-fill from the deal where we can; fall back to Lease-Calculator
-    // defaults. Lease SF defaults to maxSF, then minSF, then 100k.
+  const buildScenarioFromDeal = (deal: Deal, namePref?: string): Scenario => {
     const today = new Date().toISOString().slice(0, 10);
     const leaseSF = deal.maxSF ?? deal.minSF ?? 100_000;
+    const name =
+      namePref ??
+      (scenarios.some((s) => s.name === 'UW') ? `Scenario ${scenarios.length + 1}` : 'UW');
     const inputs: ScenarioInputs = {
       ...DEFAULT_INPUTS_BASE,
-      name: scenarios.some((s) => s.name === 'UW') ? `Scenario ${scenarios.length + 1}` : 'UW',
+      name,
       dealCode: deal.dealId ?? '',
       projectSF: leaseSF,
       buildingSF: leaseSF,
@@ -775,20 +785,43 @@ function App() {
       leaseExecutionDate: today,
     };
     const globals = { ...DEFAULT_GLOBALS };
-    const results = runScenario(inputs, globals);
-    const newScenario: Scenario = {
+    return {
       id: crypto.randomUUID(),
       dealId: deal.id,
-      name: inputs.name,
+      name,
       inputs,
       globals,
-      results,
+      results: runScenario(inputs, globals),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+  };
+
+  const handleNewScenario = (deal: Deal) => {
+    const newScenario = buildScenarioFromDeal(deal);
     setScenarios((prev) => [...prev, newScenario]);
-    setActiveScenarioId(newScenario.id);
+    // Auto-assign to a vacant A or B slot so the new scenario is
+    // immediately visible in the comparison.
+    if (!scenarioAId) setScenarioAId(newScenario.id);
+    else if (!scenarioBId) setScenarioBId(newScenario.id);
+    setEditingScenarioId(newScenario.id);
     writeThrough('create scenario', upsertScenario(newScenario));
+  };
+
+  const handleDuplicateScenario = (id: string) => {
+    const source = scenarios.find((s) => s.id === id);
+    if (!source) return;
+    const copy: Scenario = {
+      ...source,
+      id: crypto.randomUUID(),
+      name: `${source.name} copy`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setScenarios((prev) => [...prev, copy]);
+    if (!scenarioBId) setScenarioBId(copy.id);
+    setEditingScenarioId(copy.id);
+    writeThrough('duplicate scenario', upsertScenario(copy));
   };
 
   const handleSaveScenario = (updated: Scenario) => {
@@ -799,9 +832,10 @@ function App() {
   const handleDeleteScenario = (id: string) => {
     setScenarios((prev) => {
       const next = prev.filter((s) => s.id !== id);
-      if (activeScenarioId === id) {
-        setActiveScenarioId(next[0]?.id ?? null);
-      }
+      const fallback = next[0]?.id ?? null;
+      if (scenarioAId === id) setScenarioAId(fallback);
+      if (scenarioBId === id) setScenarioBId(fallback);
+      if (editingScenarioId === id) setEditingScenarioId(fallback);
       return next;
     });
     writeThrough('delete scenario', deleteScenarioRow(id));
@@ -1001,12 +1035,18 @@ function App() {
               deals={deals}
               scenarios={scenarios}
               selectedDealId={selectedUwDealId}
-              activeScenarioId={activeScenarioId}
+              aId={scenarioAId}
+              bId={scenarioBId}
+              editingId={editingScenarioId}
               onSelectDeal={handleSelectUwDeal}
-              onSelectScenario={setActiveScenarioId}
+              onSetA={setScenarioAId}
+              onSetB={setScenarioBId}
+              onSetEditing={setEditingScenarioId}
               onNewScenario={handleNewScenario}
+              onDuplicateScenario={handleDuplicateScenario}
               onSaveScenario={handleSaveScenario}
               onDeleteScenario={handleDeleteScenario}
+              onToast={showToast}
             />
           ) : view === 'onboarding' ? (
             <OnboardingView
