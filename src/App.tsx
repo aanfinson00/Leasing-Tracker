@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type {
   ActivityEntry,
+  Building,
   Deal,
   DealStatus,
   OnboardingChecklist,
@@ -91,6 +92,7 @@ import {
   deleteScenario as deleteScenarioRow,
   subscribeScenarios,
 } from './lib/repo/scenarios';
+import { listAllBuildings, subscribeBuildings } from './lib/repo/buildings';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { MapView } from './components/Map/MapView';
 import { GridBackground } from './components/GridBackground';
@@ -117,6 +119,10 @@ function App() {
   // Underwrite tab state — separate from deals/rentRoll/etc. because
   // scenarios are loaded per-deal on demand (not eagerly).
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  // All buildings, eagerly loaded so the rent-roll/deal drawers can offer
+  // a space picker. MapView keeps its own state for now (its render path
+  // already drives off it); these two subscriptions co-exist fine.
+  const [buildings, setBuildings] = useState<Building[]>([]);
   const [selectedUwDealId, setSelectedUwDealId] = useState<string | null>(null);
   // A/B/editing are independent: A and B drive the comparison view,
   // editingId drives which scenario the InputsPanel writes to.
@@ -223,11 +229,12 @@ function App() {
     if (SUPABASE_CONFIGURED) {
       (async () => {
         try {
-          const [d, r, a, o] = await Promise.all([
+          const [d, r, a, o, bldgs] = await Promise.all([
             listDeals(),
             listRentRoll(),
             listActivities(),
             listOnboardings(),
+            listAllBuildings(),
           ]);
           setDeals(d);
           setFilteredDeals(d);
@@ -235,6 +242,7 @@ function App() {
           setFilteredRentRoll(r);
           setActivities(a);
           setOnboardings(o.map(reconcileWithTemplate));
+          setBuildings(bldgs);
           setFilename('leasing-tracker.xlsx');
         } catch (err) {
           console.error('Failed to load from Supabase:', err);
@@ -335,12 +343,27 @@ function App() {
         }),
       onDelete: (id) => setScenarios((prev) => prev.filter((x) => x.id !== id)),
     });
+    // Note: MapView also subscribes to buildings — duplicate subscriptions
+    // are fine, channels are isolated. If we want to dedupe later, lift
+    // MapView's state up to here and pass it down.
+    const unsubBldgs = subscribeBuildings({
+      onUpsert: (b) =>
+        setBuildings((prev) => {
+          const idx = prev.findIndex((x) => x.id === b.id);
+          if (idx === -1) return [...prev, b];
+          const next = prev.slice();
+          next[idx] = b;
+          return next;
+        }),
+      onDelete: (id) => setBuildings((prev) => prev.filter((x) => x.id !== id)),
+    });
     return () => {
       unsubDeals();
       unsubRr();
       unsubAct();
       unsubOb();
       unsubScenarios();
+      unsubBldgs();
     };
   }, []);
 
@@ -1200,6 +1223,7 @@ function App() {
       <RentRollDrawer
         row={editingRow}
         activities={activities}
+        buildings={buildings}
         onClose={() => setEditingRow(null)}
         onSave={handleSaveRow}
         onDelete={handleDeleteRow}
