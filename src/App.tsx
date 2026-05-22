@@ -18,6 +18,7 @@ import type {
   Building,
   Deal,
   DealStatus,
+  DevelopmentProject,
   LeaseComp,
   OnboardingChecklist,
   OnboardingItem,
@@ -95,6 +96,12 @@ import {
   subscribeScenarios,
 } from './lib/repo/scenarios';
 import {
+  listDevelopmentProjects,
+  upsertDevelopmentProject,
+  deleteDevelopmentProject as deleteDevProjectRow,
+  subscribeDevelopmentProjects,
+} from './lib/repo/developmentProjects';
+import {
   listLeaseComps,
   upsertLeaseComp,
   deleteLeaseComp as deleteLeaseCompRow,
@@ -108,6 +115,7 @@ import {
   subscribePropertyTaxAppeals,
 } from './lib/repo/propertyTaxAppeals';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
+import { DevelopmentView } from './components/Development/DevelopmentView';
 import { CompsView } from './components/Comps/CompsView';
 import { MapView } from './components/Map/MapView';
 import { AssetMgmtView } from './components/AssetMgmt/AssetMgmtView';
@@ -135,6 +143,7 @@ function App() {
   // Underwrite tab state — separate from deals/rentRoll/etc. because
   // scenarios are loaded per-deal on demand (not eagerly).
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [devProjects, setDevProjects] = useState<DevelopmentProject[]>([]);
   const [leaseComps, setLeaseComps] = useState<LeaseComp[]>([]);
   // All buildings, eagerly loaded so the rent-roll/deal drawers can offer
   // a space picker. MapView keeps its own state for now (its render path
@@ -247,11 +256,12 @@ function App() {
     if (SUPABASE_CONFIGURED) {
       (async () => {
         try {
-          const [d, r, a, o, comps, bldgs, appeals] = await Promise.all([
+          const [d, r, a, o, dev, comps, bldgs, appeals] = await Promise.all([
             listDeals(),
             listRentRoll(),
             listActivities(),
             listOnboardings(),
+            listDevelopmentProjects(),
             listLeaseComps(),
             listAllBuildings(),
             listPropertyTaxAppeals(),
@@ -262,6 +272,7 @@ function App() {
           setFilteredRentRoll(r);
           setActivities(a);
           setOnboardings(o.map(reconcileWithTemplate));
+          setDevProjects(dev);
           setLeaseComps(comps);
           setBuildings(bldgs);
           setPropertyTaxAppeals(appeals);
@@ -365,6 +376,17 @@ function App() {
         }),
       onDelete: (id) => setScenarios((prev) => prev.filter((x) => x.id !== id)),
     });
+    const unsubDev = subscribeDevelopmentProjects({
+      onUpsert: (p) =>
+        setDevProjects((prev) => {
+          const idx = prev.findIndex((x) => x.id === p.id);
+          if (idx === -1) return [...prev, p];
+          const next = prev.slice();
+          next[idx] = p;
+          return next;
+        }),
+      onDelete: (id) => setDevProjects((prev) => prev.filter((x) => x.id !== id)),
+    });
     const unsubComps = subscribeLeaseComps({
       onUpsert: (c) =>
         setLeaseComps((prev) => {
@@ -408,6 +430,7 @@ function App() {
       unsubAct();
       unsubOb();
       unsubScenarios();
+      unsubDev();
       unsubComps();
       unsubBldgs();
       unsubAppeals();
@@ -914,6 +937,22 @@ function App() {
     writeThrough('delete scenario', deleteScenarioRow(id));
   };
 
+  const handleSaveDevProject = (updated: DevelopmentProject) => {
+    setDevProjects((prev) => {
+      const idx = prev.findIndex((p) => p.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save dev project', upsertDevelopmentProject(updated));
+  };
+
+  const handleDeleteDevProject = (id: string) => {
+    setDevProjects((prev) => prev.filter((p) => p.id !== id));
+    writeThrough('delete dev project', deleteDevProjectRow(id));
+  };
+
   const handleSaveLeaseComp = (updated: LeaseComp) => {
     setLeaseComps((prev) => {
       const idx = prev.findIndex((c) => c.id === updated.id);
@@ -1244,7 +1283,11 @@ function App() {
           ) : view === 'acquisitions' ? (
             <AcquisitionsPlaceholder />
           ) : view === 'development' ? (
-            <DevelopmentPipelinePlaceholder />
+            <DevelopmentView
+              projects={devProjects}
+              onSave={handleSaveDevProject}
+              onDelete={handleDeleteDevProject}
+            />
           ) : view === 'asset-mgmt' ? (
             <AssetMgmtView
               appeals={propertyTaxAppeals}
@@ -1412,23 +1455,6 @@ function AcquisitionsPlaceholder() {
         ['Hand-off → Portfolio', 'Auto-promote closed acquisitions into Portfolio + Onboarding.'],
       ]}
       awaitingNote="More info on your acquisitions workflow coming — paste in any deal-tracker spreadsheet or notes and we'll port the structure."
-    />
-  );
-}
-
-function DevelopmentPipelinePlaceholder() {
-  return (
-    <PipelinePlaceholder
-      title="Development Pipeline"
-      subtitle="A future tool to manage projects from site sourcing through stabilization."
-      sections={[
-        ['Site sourcing', 'Track land deals, options, LOIs from a target list.'],
-        ['Entitlement tracking', 'Zoning, permits, agency dates, milestone risks.'],
-        ['Pro-forma + capital stack', 'Sources/uses, equity multiples, IRR sensitivities.'],
-        ['Construction milestones', 'GMP, draws, schedule variance, change orders.'],
-        ['Lease-up → stabilization', 'Hand off to Leasing Activity + Portfolio once buildings deliver.'],
-        ['Investor reporting', 'Quarterly snapshots, fund-level rollups.'],
-      ]}
     />
   );
 }
