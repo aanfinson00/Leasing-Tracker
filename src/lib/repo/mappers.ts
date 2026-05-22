@@ -35,6 +35,8 @@ export interface DealRow {
   ti_note: string | null;
   probability_pct: number | null;
   expected_start: string | null;
+  lat: number | null;
+  lng: number | null;
   last_updated: string | null;
   priority: Deal['priority'];
   current_summary: string | null;
@@ -61,6 +63,8 @@ export const dealToRow = (d: Deal): DealRow => ({
   ti_note: d.tiNote ?? null,
   probability_pct: d.probabilityPct ?? null,
   expected_start: d.expectedStart ?? null,
+  lat: d.lat ?? null,
+  lng: d.lng ?? null,
   last_updated: d.lastUpdated ?? null,
   priority: d.priority,
   current_summary: d.currentSummary ?? null,
@@ -87,6 +91,8 @@ export const rowToDeal = (r: DealRow): Deal => ({
   tiNote: r.ti_note,
   probabilityPct: r.probability_pct,
   expectedStart: r.expected_start,
+  lat: r.lat,
+  lng: r.lng,
   lastUpdated: r.last_updated,
   priority: r.priority,
   currentSummary: r.current_summary,

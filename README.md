@@ -75,6 +75,7 @@ npm run dev
 | `VITE_SUPABASE_URL`         | yes\*    | Project URL, `https://*.supabase.co`         |
 | `VITE_SUPABASE_ANON_KEY`    | yes\*    | Publishable / anon key (safe in bundle)      |
 | `VITE_PASSWORD_HASH`        | no       | SHA-256 hex of the passcode. Blank = dev mode |
+| `VITE_MAPBOX_TOKEN`         | no\*\*   | Mapbox public token. Map tab shows a missing-token state without it; rest of app works. |
 
 \* Both must be set for Supabase mode. Without them the app runs against
 the legacy local-first flow.

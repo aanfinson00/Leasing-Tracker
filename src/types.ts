@@ -66,6 +66,10 @@ export const DealSchema = z.object({
   probabilityPct: z.number().min(0).max(100).nullable().optional(),
   expectedStart: z.string().nullable().optional(),
 
+  // Location (Map tab — Phase 1)
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+
   // Meta
   lastUpdated: z.string().nullable().optional(),
   priority: PriorityEnum,
@@ -89,6 +93,8 @@ export const DealSchema = z.object({
   tiNote: d.tiNote ?? null,
   probabilityPct: d.probabilityPct ?? null,
   expectedStart: d.expectedStart ?? null,
+  lat: d.lat ?? null,
+  lng: d.lng ?? null,
   lastUpdated: d.lastUpdated ?? null,
   currentSummary: d.currentSummary ?? null,
   notes: d.notes ?? null,
@@ -258,6 +264,8 @@ export const defaultDeal = (): Deal => ({
   tiNote: null,
   probabilityPct: null,
   expectedStart: null,
+  lat: null,
+  lng: null,
   lastUpdated: todayIso(),
   priority: 'Low',
   currentSummary: null,
