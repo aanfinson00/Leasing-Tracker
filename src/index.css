@@ -172,3 +172,52 @@ select optgroup {
 [data-theme="dark"] input[type="week"]::-webkit-calendar-picker-indicator {
   filter: invert(1) opacity(0.8);
 }
+
+/* ─────────────────────────────────────────────────────────────────
+ * Login screen animations — ported from ParceCRM.
+ *
+ * Three layers, all infinite:
+ *   - lt-grid-move: translates the whole grid 60px down-right (matches
+ *     the grid cell size, so it loops seamlessly)
+ *   - lt-grid-pulse: scale + opacity breathing
+ *   - lt-wave-sweep: mask-position sweep on the blurred-grid glow layer
+ *
+ * Plus fade-in-up for the login card entrance.
+ * ───────────────────────────────────────────────────────────────── */
+
+@keyframes lt-grid-move {
+  0%   { transform: translate(0, 0); }
+  100% { transform: translate(60px, 60px); }
+}
+@keyframes lt-grid-pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.5; }
+  50%      { transform: scale(1.05); opacity: 0.9; }
+}
+@keyframes lt-wave-sweep {
+  0%   { -webkit-mask-position: 0%   center; mask-position: 0%   center; }
+  100% { -webkit-mask-position: 100% center; mask-position: 100% center; }
+}
+@keyframes lt-fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.lt-animate-grid-move  { animation: lt-grid-move 7s linear infinite; }
+.lt-animate-grid-pulse { animation: lt-grid-pulse 6s ease-in-out infinite; }
+.lt-animate-fade-in-up { animation: lt-fade-in-up 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+
+.lt-animate-wave-sweep {
+  -webkit-mask-image: linear-gradient(to right,
+    transparent 0%, black 8%, black 20%, transparent 30%,
+    transparent 50%, black 58%, black 70%, transparent 80%,
+    transparent 100%);
+  mask-image: linear-gradient(to right,
+    transparent 0%, black 8%, black 20%, transparent 30%,
+    transparent 50%, black 58%, black 70%, transparent 80%,
+    transparent 100%);
+  -webkit-mask-size: 300% 100%;
+  mask-size: 300% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: lt-wave-sweep 5s ease-in-out infinite alternate;
+}
