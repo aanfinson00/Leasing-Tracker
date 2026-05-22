@@ -885,7 +885,10 @@ function App() {
       <Sidebar view={view} onChangeView={setView} />
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-10 bg-bg/85 backdrop-blur-md">
+        {/* Header sits transparent over the graph-paper grid so the
+            page reads as one continuous surface. backdrop-blur stays
+            on so scrolled content blurs softly under the title. */}
+        <header className="sticky top-0 z-10 backdrop-blur-md">
           <div className="px-6 sm:px-10 pt-8 pb-6 max-w-7xl mx-auto">
             <div className="flex items-start justify-between gap-6 flex-wrap">
               <div className="min-w-0">
