@@ -9,7 +9,9 @@ import type {
   Deal,
   OnboardingChecklist,
   RentRollRow,
+  Scenario,
 } from '../../types';
+import type { Globals, ScenarioInputs, ScenarioResults } from '../lease-math/types';
 
 // ── Deal ───────────────────────────────────────────────────────────
 
@@ -265,4 +267,48 @@ export const rowToOnboarding = (r: OnboardingRow): OnboardingChecklist => ({
   createdAt: r.created_at,
   templateVersion: r.template_version,
   items: r.items,
+});
+
+// ── Scenario ───────────────────────────────────────────────────────
+// inputs/globals/results travel as jsonb. The calc engine owns the
+// shape — see src/lib/lease-math/types.ts. We type the row's blobs
+// loosely (the app casts at the boundary) and trust the engine for
+// shape validation.
+
+export interface ScenarioRow {
+  id: string;
+  deal_id: string;
+  name: string;
+  inputs: ScenarioInputs;
+  globals: Globals;
+  results: ScenarioResults | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const scenarioToRow = (
+  s: Scenario
+): Omit<ScenarioRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: s.id,
+  deal_id: s.dealId,
+  name: s.name,
+  inputs: s.inputs as ScenarioInputs,
+  globals: s.globals as Globals,
+  results: (s.results ?? null) as ScenarioResults | null,
+  created_at: s.createdAt,
+  updated_at: s.updatedAt,
+});
+
+export const rowToScenario = (r: ScenarioRow): Scenario => ({
+  id: r.id,
+  dealId: r.deal_id,
+  name: r.name,
+  inputs: r.inputs,
+  globals: r.globals,
+  results: r.results,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
 });

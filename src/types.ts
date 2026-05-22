@@ -328,3 +328,29 @@ export const OnboardingChecklistSchema = z.object({
 });
 
 export type OnboardingChecklist = z.infer<typeof OnboardingChecklistSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Scenario — underwriting analysis attached to a Deal. Stores the
+// full Lease-Calculator inputs, globals snapshot, and optionally a
+// cached results blob. Lives in Supabase `scenarios` table.
+// inputs/globals/results are passed through as `unknown` here; the
+// strict shape lives in src/lib/lease-math/types.ts and is enforced
+// by the calc engine itself. We do this so changing the math model
+// doesn't require a zod migration step.
+// ──────────────────────────────────────────────────────────────────
+
+export const ScenarioSchema = z.object({
+  id: z.string().uuid(),
+  dealId: z.string(),
+  name: z.string().min(1),
+  inputs: z.unknown(),
+  globals: z.unknown(),
+  results: z.unknown().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((s) => ({
+  ...s,
+  results: s.results ?? null,
+}));
+
+export type Scenario = z.infer<typeof ScenarioSchema>;
