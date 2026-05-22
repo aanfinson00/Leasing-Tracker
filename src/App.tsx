@@ -875,7 +875,9 @@ function App() {
             ? 'Map'
             : view === 'onboarding'
               ? 'Onboarding'
-              : 'Reports';
+              : view === 'development'
+                ? 'Development Pipeline'
+                : 'Reports';
 
   return (
     <div className="relative flex min-h-screen bg-bg text-fg">
@@ -1108,6 +1110,8 @@ function App() {
               onUpdateItem={handleUpdateOnboardingItem}
               onDelete={handleDeleteOnboarding}
             />
+          ) : view === 'development' ? (
+            <DevelopmentPipelinePlaceholder />
           ) : view === 'prospects' ? (
             deals.length === 0 ? (
               <EmptyHero onAction={handleNewDeal} ctaLabel="Create your first deal" />
@@ -1205,6 +1209,49 @@ function EmptyHero({ onAction, ctaLabel }: { onAction: () => void; ctaLabel: str
         <FilePlus size={16} strokeWidth={2} />
         {ctaLabel}
       </button>
+    </div>
+  );
+}
+
+function DevelopmentPipelinePlaceholder() {
+  return (
+    <div className="max-w-3xl mx-auto">
+      <div className="flex flex-col items-center text-center py-20 px-6">
+        <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-accent-tint text-accent mb-6">
+          <Sparkles size={24} strokeWidth={1.5} />
+        </div>
+        <h2 className="text-3xl text-fg font-extralight tracking-[-0.01em]">
+          Development Pipeline
+        </h2>
+        <p className="text-base text-fg-muted mt-3 max-w-lg leading-relaxed">
+          A future tool to manage projects from site sourcing through stabilization.
+          Coming soon — leave a note in conversation with how you want this to feel and
+          it'll get built around your real workflow.
+        </p>
+
+        <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl text-left">
+          {[
+            ['Site sourcing', 'Track land deals, options, LOIs from a target list.'],
+            ['Entitlement tracking', 'Zoning, permits, agency dates, milestone risks.'],
+            ['Pro-forma + capital stack', 'Sources/uses, equity multiples, IRR sensitivities.'],
+            ['Construction milestones', 'GMP, draws, schedule variance, change orders.'],
+            ['Lease-up → stabilization', 'Hand off to Prospects + Rent Roll once buildings deliver.'],
+            ['Investor reporting', 'Quarterly snapshots, fund-level rollups.'],
+          ].map(([title, desc]) => (
+            <div
+              key={title}
+              className="px-4 py-3 rounded-xl border border-dashed border-border bg-bg-elevated/50"
+            >
+              <p className="text-sm font-semibold text-fg">{title}</p>
+              <p className="text-xs text-fg-muted mt-1 leading-relaxed">{desc}</p>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-8 text-[11px] uppercase tracking-[0.14em] text-fg-subtle">
+          Placeholder — none of these are wired up yet
+        </p>
+      </div>
     </div>
   );
 }
