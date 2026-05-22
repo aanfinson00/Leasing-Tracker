@@ -1,4 +1,4 @@
-import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database, Lock } from 'lucide-react';
+import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database, Users, Lock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { ParceIcon } from './ParceIcon';
@@ -10,6 +10,7 @@ export type View =
   | 'rentroll'
   | 'underwrite'
   | 'comps'
+  | 'contacts'
   | 'map'
   | 'onboarding'
   | 'reports'
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'rentroll', icon: Building, label: 'Portfolio' },
   { id: 'underwrite', icon: Calculator, label: 'Lease Calculator' },
   { id: 'comps', icon: Database, label: 'Comps Library' },
+  { id: 'contacts', icon: Users, label: 'Contacts' },
   { id: 'map', icon: MapPin, label: 'Map' },
   { id: 'onboarding', icon: ClipboardCheck, label: 'Onboarding' },
   { id: 'reports', icon: BarChart3, label: 'Reports' },

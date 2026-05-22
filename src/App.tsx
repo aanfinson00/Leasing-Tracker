@@ -127,6 +127,7 @@ import {
 import {
   listContacts,
   upsertContact,
+  deleteContact as deleteContactRow,
   subscribeContacts,
 } from './lib/repo/contacts';
 import {
@@ -144,6 +145,7 @@ import {
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { DevelopmentView } from './components/Development/DevelopmentView';
 import { CompsView } from './components/Comps/CompsView';
+import { ContactsView } from './components/Contacts/ContactsView';
 import { MapView } from './components/Map/MapView';
 import { AssetMgmtView } from './components/AssetMgmt/AssetMgmtView';
 import { GridBackground } from './components/GridBackground';
@@ -1107,6 +1109,18 @@ function App() {
     writeThrough('save contact', upsertContact(updated));
   };
 
+  const handleDeleteContact = (id: string) => {
+    setContacts((prev) => prev.filter((c) => c.id !== id));
+    // Cascade: also wipe any dev_project links to this contact so the
+    // drawer doesn't render a dangling stub.
+    const linksToRemove = devProjectContacts.filter((l) => l.contactId === id);
+    setDevProjectContacts((prev) => prev.filter((l) => l.contactId !== id));
+    writeThrough('delete contact', deleteContactRow(id));
+    linksToRemove.forEach((l) =>
+      writeThrough('cascade unlink contact', deleteDevProjectContactRow(l.id))
+    );
+  };
+
   const handleLinkDevProjectContact = (link: DevProjectContact) => {
     setDevProjectContacts((prev) => {
       const idx = prev.findIndex((l) => l.id === link.id);
@@ -1169,7 +1183,9 @@ function App() {
           ? 'Lease Calculator'
           : view === 'comps'
             ? 'Comps Library'
-            : view === 'map'
+            : view === 'contacts'
+              ? 'Contacts'
+              : view === 'map'
             ? 'Map'
             : view === 'onboarding'
               ? 'Onboarding'
@@ -1397,6 +1413,14 @@ function App() {
               comps={leaseComps}
               onSave={handleSaveLeaseComp}
               onDelete={handleDeleteLeaseComp}
+            />
+          ) : view === 'contacts' ? (
+            <ContactsView
+              contacts={contacts}
+              devProjectContactLinks={devProjectContacts}
+              devProjects={devProjects}
+              onSave={handleSaveContact}
+              onDelete={handleDeleteContact}
             />
           ) : view === 'map' ? (
             <MapView
