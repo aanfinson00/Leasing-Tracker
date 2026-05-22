@@ -224,7 +224,23 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
 
     mapRef.current = map;
 
+    // Mapbox doesn't observe its container's size changes — when the
+    // ProjectDrawer slides in/out the flex layout, the map needs an
+    // explicit resize() call or it renders the old dimensions until
+    // the next interaction. ResizeObserver fires on every container
+    // size change; rAF debounces so we coalesce mid-animation frames.
+    let resizeFrame = 0;
+    const resizeObs = new ResizeObserver(() => {
+      if (resizeFrame) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        map.resize();
+      });
+    });
+    resizeObs.observe(containerRef.current);
+
     return () => {
+      resizeObs.disconnect();
+      if (resizeFrame) cancelAnimationFrame(resizeFrame);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current.clear();
       map.remove();
@@ -593,24 +609,31 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
         <BuildingPlacementBanner params={placement} onCancel={handleCancelPlacement} />
       )}
 
-      <div
-        ref={containerRef}
-        className="w-full h-[calc(100vh-280px)] min-h-[460px] rounded-2xl shadow-soft overflow-hidden bg-bg-subtle"
-      />
-
-      {activeProject && (
-        <ProjectDrawer
-          project={activeProject}
-          buildings={buildings.filter((b) => b.projectId === activeProject.id)}
-          placement={placement}
-          onClose={handleCloseProject}
-          onSelectDeal={(d) => onSelectDeal(d)}
-          onStartPlacement={handleStartPlacement}
-          onCancelPlacement={handleCancelPlacement}
-          onSaveBuilding={handleSaveBuilding}
-          onDeleteBuilding={handleDeleteBuilding}
+      {/* Map + drawer sit in a horizontal flex so the drawer pushes
+          the map to the left rather than overlaying it. ResizeObserver
+          calls map.resize() whenever the container changes width so
+          Mapbox repaints to the new dimensions cleanly. */}
+      <div className="flex gap-3 h-[calc(100vh-280px)] min-h-[460px]">
+        <div
+          ref={containerRef}
+          className="flex-1 min-w-0 rounded-2xl shadow-soft overflow-hidden bg-bg-subtle"
         />
-      )}
+        {activeProject && (
+          <div className="w-full max-w-md shrink-0">
+            <ProjectDrawer
+              project={activeProject}
+              buildings={buildings.filter((b) => b.projectId === activeProject.id)}
+              placement={placement}
+              onClose={handleCloseProject}
+              onSelectDeal={(d) => onSelectDeal(d)}
+              onStartPlacement={handleStartPlacement}
+              onCancelPlacement={handleCancelPlacement}
+              onSaveBuilding={handleSaveBuilding}
+              onDeleteBuilding={handleDeleteBuilding}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

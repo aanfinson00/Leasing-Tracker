@@ -47,10 +47,11 @@ export function ProjectDrawer({
     .filter((t): t is string => !!t);
 
   return (
-    <div className="fixed inset-0 z-40 flex pointer-events-none">
-      <div className="flex-1 pointer-events-none" aria-hidden />
-      <div className="w-full max-w-md bg-bg/95 backdrop-blur-md shadow-lift overflow-y-auto pointer-events-auto border-l border-border">
-        <div className="sticky top-0 bg-bg/95 backdrop-blur-md border-b border-border px-7 py-5 z-10">
+    // Inline panel — sits as a flex sibling of the map so the map
+    // squeezes left when the drawer opens (instead of the drawer
+    // overlaying half the map). MapView wraps both in a flex row.
+    <div className="h-full w-full bg-bg-elevated shadow-lift overflow-y-auto border-l border-border rounded-r-2xl">
+        <div className="sticky top-0 bg-bg-elevated border-b border-border px-7 py-5 z-10">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex items-center gap-3 flex-wrap">
               <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-accent-tint text-accent shrink-0">
@@ -158,7 +159,6 @@ export function ProjectDrawer({
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }

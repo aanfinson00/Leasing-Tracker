@@ -163,7 +163,12 @@ export function UnderwriteView({
   const canExport = a !== null && b !== null && aResults !== null && bResults !== null;
 
   return (
-    <div className="flex flex-col gap-6">
+    // Cap the underwrite view at 1400px on ultrawide monitors — the
+    // spreadsheet panel + side-by-side waterfalls become uncomfortably
+    // spread out past that width. Map/Prospects tabs stay edge-to-edge
+    // because they benefit from the extra room. mx-auto centers the
+    // capped column within the wider main.
+    <div className="flex flex-col gap-6 max-w-[1400px] mx-auto w-full">
       {/* Toolbar — deal picker + export actions */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-wrap">
         <DealPicker deals={deals} selectedId={selectedDealId} onSelect={onSelectDeal} />
