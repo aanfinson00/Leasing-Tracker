@@ -880,9 +880,11 @@ function App() {
                 ? 'Acquisitions Pipeline'
                 : view === 'development'
                   ? 'Development Pipeline'
-                  : view === 'disposition'
-                    ? 'Disposition Tracking'
-                    : 'Reports';
+                  : view === 'asset-mgmt'
+                    ? 'Asset Management — Pending Items'
+                    : view === 'disposition'
+                      ? 'Disposition Tracking'
+                      : 'Reports';
 
   return (
     <div className="relative flex min-h-screen bg-bg text-fg pb-16 sm:pb-0">
@@ -1133,6 +1135,8 @@ function App() {
             <AcquisitionsPlaceholder />
           ) : view === 'development' ? (
             <DevelopmentPipelinePlaceholder />
+          ) : view === 'asset-mgmt' ? (
+            <AssetMgmtPendingPlaceholder />
           ) : view === 'disposition' ? (
             <DispositionPlaceholder />
           ) : view === 'prospects' ? (
@@ -1328,6 +1332,24 @@ function DispositionPlaceholder() {
         ['Post-close metrics', 'Realized IRR vs UW, hold-period actual vs reval assumption.'],
       ]}
       awaitingNote="Upload your disposition checklist when ready and the seeded sections become real."
+    />
+  );
+}
+
+function AssetMgmtPendingPlaceholder() {
+  return (
+    <PipelinePlaceholder
+      title="Asset Management — Pending Items"
+      subtitle="One running list of what's outstanding across the portfolio — what the team owes, what the GC still owes us, and what's worth watching."
+      sections={[
+        ['Outstanding deliverables', 'LOIs, lease drafts, estoppels, SNDAs, insurance certs — who owes what, due-by date, status.'],
+        ['Construction follow-up', 'Punch list items, warranty work, TI completion, deferred scope from delivery.'],
+        ['Tenant requests', 'Repairs, signage, parking, hours-of-use approvals — open inquiries with owners.'],
+        ['Building monitoring', 'Roof age, HVAC service intervals, sprinkler inspections, expiring permits.'],
+        ['Lease compliance', 'CAM reconciliations due, real-estate-tax appeals, percentage-rent reports, audit windows.'],
+        ['Capital / vendor items', 'Open POs, vendor renewals, recurring service contracts, scheduled cap-ex.'],
+      ]}
+      awaitingNote="Drop more detail here when ready — a checklist, a workflow, or just notes on how the team tracks this today."
     />
   );
 }
