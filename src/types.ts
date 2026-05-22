@@ -1027,3 +1027,132 @@ export const AcquisitionTargetNoteSchema = z.object({
 }));
 
 export type AcquisitionTargetNote = z.infer<typeof AcquisitionTargetNoteSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Disposition Listings — sells we're running. Considering →
+// Underwriting → Marketing → Under Contract → Closed / Pulled.
+// Same template as AcquisitionTarget — different status set + a
+// few disposition-specific economics (NOI / cap rate / net proceeds).
+// ──────────────────────────────────────────────────────────────────
+
+export const DispositionStatusEnum = z.enum([
+  'Considering',
+  'Underwriting',
+  'Marketing',
+  'Under Contract',
+  'Closed',
+  'Pulled',
+  'On Hold',
+]);
+export type DispositionStatus = z.infer<typeof DispositionStatusEnum>;
+
+export const DISPO_PIPELINE_ORDER: DispositionStatus[] = [
+  'Considering',
+  'Underwriting',
+  'Marketing',
+  'Under Contract',
+  'Closed',
+];
+
+export const DispositionListingSchema = z.object({
+  id: z.string().uuid(),
+  assetName: z.string().min(1, 'Asset name is required'),
+  buildingId: z.string().nullable().optional(),
+  market: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  propertyType: z.string().nullable().optional(),
+
+  status: DispositionStatusEnum,
+
+  totalSF: z.number().positive().nullable().optional(),
+  acres: z.number().positive().nullable().optional(),
+  // Stored as fraction (0.93 for 93% occupied)
+  occupancyPct: z.number().min(0).max(1).nullable().optional(),
+
+  trailingNOI: z.number().nullable().optional(),
+  forwardNOI: z.number().nullable().optional(),
+  listPrice: z.number().min(0).nullable().optional(),
+  // Stored as fraction (0.06 for 6%)
+  listCapPct: z.number().nullable().optional(),
+  achievedPrice: z.number().min(0).nullable().optional(),
+  achievedCapPct: z.number().nullable().optional(),
+  netProceeds: z.number().nullable().optional(),
+  brokerCommissionPct: z.number().nullable().optional(),
+
+  listDate: z.string().nullable().optional(),
+  bidsDueDate: z.string().nullable().optional(),
+  loiExecutedDate: z.string().nullable().optional(),
+  psaExecutedDate: z.string().nullable().optional(),
+  expectedClosingDate: z.string().nullable().optional(),
+  actualClosingDate: z.string().nullable().optional(),
+
+  riskLevel: RiskLevelEnum,
+  statusSummary: z.string().nullable().optional(),
+
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((d) => ({
+  ...d,
+  buildingId: d.buildingId ?? null,
+  market: d.market ?? null,
+  address: d.address ?? null,
+  propertyType: d.propertyType ?? null,
+  totalSF: d.totalSF ?? null,
+  acres: d.acres ?? null,
+  occupancyPct: d.occupancyPct ?? null,
+  trailingNOI: d.trailingNOI ?? null,
+  forwardNOI: d.forwardNOI ?? null,
+  listPrice: d.listPrice ?? null,
+  listCapPct: d.listCapPct ?? null,
+  achievedPrice: d.achievedPrice ?? null,
+  achievedCapPct: d.achievedCapPct ?? null,
+  netProceeds: d.netProceeds ?? null,
+  brokerCommissionPct: d.brokerCommissionPct ?? null,
+  listDate: d.listDate ?? null,
+  bidsDueDate: d.bidsDueDate ?? null,
+  loiExecutedDate: d.loiExecutedDate ?? null,
+  psaExecutedDate: d.psaExecutedDate ?? null,
+  expectedClosingDate: d.expectedClosingDate ?? null,
+  actualClosingDate: d.actualClosingDate ?? null,
+  statusSummary: d.statusSummary ?? null,
+  notes: d.notes ?? null,
+}));
+
+export type DispositionListing = z.infer<typeof DispositionListingSchema>;
+
+export const DispositionListingContactSchema = z.object({
+  id: z.string().uuid(),
+  dispositionListingId: z.string(),
+  contactId: z.string(),
+  roleOverride: ContactTypeEnum.nullable().optional(),
+  isPrimary: z.boolean().default(false),
+  linkNotes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((r) => ({
+  ...r,
+  roleOverride: r.roleOverride ?? null,
+  linkNotes: r.linkNotes ?? null,
+}));
+
+export type DispositionListingContact = z.infer<typeof DispositionListingContactSchema>;
+
+export const DispositionListingNoteSchema = z.object({
+  id: z.string().uuid(),
+  dispositionListingId: z.string(),
+  noteType: DevNoteTypeEnum,
+  eventDate: z.string().nullable().optional(),
+  content: z.string().min(1, 'Note content is required'),
+  author: z.string().nullable().optional(),
+  link: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((n) => ({
+  ...n,
+  eventDate: n.eventDate ?? null,
+  author: n.author ?? null,
+  link: n.link ?? null,
+}));
+
+export type DispositionListingNote = z.infer<typeof DispositionListingNoteSchema>;

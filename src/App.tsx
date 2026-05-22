@@ -26,6 +26,9 @@ import type {
   DevelopmentProject,
   DevProjectContact,
   DevProjectNote,
+  DispositionListing,
+  DispositionListingContact,
+  DispositionListingNote,
   LeaseComp,
   OnboardingChecklist,
   OnboardingItem,
@@ -159,11 +162,26 @@ import {
   deleteAcquisitionTargetNote as deleteAcquisitionTargetNoteRow,
   subscribeAcquisitionTargetNotes,
 } from './lib/repo/acquisitionTargets';
+import {
+  listDispositionListings,
+  upsertDispositionListing,
+  deleteDispositionListing as deleteDispositionListingRow,
+  subscribeDispositionListings,
+  listDispositionListingContacts,
+  upsertDispositionListingContact,
+  deleteDispositionListingContact as deleteDispositionListingContactRow,
+  subscribeDispositionListingContacts,
+  listDispositionListingNotes,
+  upsertDispositionListingNote,
+  deleteDispositionListingNote as deleteDispositionListingNoteRow,
+  subscribeDispositionListingNotes,
+} from './lib/repo/dispositionListings';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { DevelopmentView } from './components/Development/DevelopmentView';
 import { CompsView } from './components/Comps/CompsView';
 import { ContactsView } from './components/Contacts/ContactsView';
 import { AcquisitionsView } from './components/Acquisitions/AcquisitionsView';
+import { DispositionView } from './components/Disposition/DispositionView';
 import { MapView } from './components/Map/MapView';
 import { AssetMgmtView } from './components/AssetMgmt/AssetMgmtView';
 import { GridBackground } from './components/GridBackground';
@@ -205,6 +223,9 @@ function App() {
   const [acquisitionTargets, setAcquisitionTargets] = useState<AcquisitionTarget[]>([]);
   const [acquisitionTargetContacts, setAcquisitionTargetContacts] = useState<AcquisitionTargetContact[]>([]);
   const [acquisitionTargetNotes, setAcquisitionTargetNotes] = useState<AcquisitionTargetNote[]>([]);
+  const [dispositionListings, setDispositionListings] = useState<DispositionListing[]>([]);
+  const [dispositionListingContacts, setDispositionListingContacts] = useState<DispositionListingContact[]>([]);
+  const [dispositionListingNotes, setDispositionListingNotes] = useState<DispositionListingNote[]>([]);
   const [selectedUwDealId, setSelectedUwDealId] = useState<string | null>(null);
   // A/B/editing are independent: A and B drive the comparison view,
   // editingId drives which scenario the InputsPanel writes to.
@@ -315,6 +336,7 @@ function App() {
             d, r, a, o, dev, comps, bldgs, appeals, amItems,
             crmContacts, crmLinks, crmNotes,
             acqTargets, acqLinks, acqNotes,
+            dispoListings, dispoLinks, dispoNotes,
           ] = await Promise.all([
             listDeals(),
             listRentRoll(),
@@ -331,6 +353,9 @@ function App() {
             listAcquisitionTargets(),
             listAcquisitionTargetContacts(),
             listAcquisitionTargetNotes(),
+            listDispositionListings(),
+            listDispositionListingContacts(),
+            listDispositionListingNotes(),
           ]);
           setDeals(d);
           setFilteredDeals(d);
@@ -349,6 +374,9 @@ function App() {
           setAcquisitionTargets(acqTargets);
           setAcquisitionTargetContacts(acqLinks);
           setAcquisitionTargetNotes(acqNotes);
+          setDispositionListings(dispoListings);
+          setDispositionListingContacts(dispoLinks);
+          setDispositionListingNotes(dispoNotes);
           setFilename('leasing-tracker.xlsx');
         } catch (err) {
           console.error('Failed to load from Supabase:', err);
@@ -580,6 +608,42 @@ function App() {
       onDelete: (id) =>
         setAcquisitionTargetNotes((prev) => prev.filter((x) => x.id !== id)),
     });
+    const unsubDispoListings = subscribeDispositionListings({
+      onUpsert: (d) =>
+        setDispositionListings((prev) => {
+          const idx = prev.findIndex((x) => x.id === d.id);
+          if (idx === -1) return [...prev, d];
+          const next = prev.slice();
+          next[idx] = d;
+          return next;
+        }),
+      onDelete: (id) =>
+        setDispositionListings((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubDispoLinks = subscribeDispositionListingContacts({
+      onUpsert: (l) =>
+        setDispositionListingContacts((prev) => {
+          const idx = prev.findIndex((x) => x.id === l.id);
+          if (idx === -1) return [...prev, l];
+          const next = prev.slice();
+          next[idx] = l;
+          return next;
+        }),
+      onDelete: (id) =>
+        setDispositionListingContacts((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubDispoNotes = subscribeDispositionListingNotes({
+      onUpsert: (n) =>
+        setDispositionListingNotes((prev) => {
+          const idx = prev.findIndex((x) => x.id === n.id);
+          if (idx === -1) return [...prev, n];
+          const next = prev.slice();
+          next[idx] = n;
+          return next;
+        }),
+      onDelete: (id) =>
+        setDispositionListingNotes((prev) => prev.filter((x) => x.id !== id)),
+    });
     return () => {
       unsubDeals();
       unsubRr();
@@ -597,6 +661,9 @@ function App() {
       unsubAcqTargets();
       unsubAcqLinks();
       unsubAcqNotes();
+      unsubDispoListings();
+      unsubDispoLinks();
+      unsubDispoNotes();
     };
   }, []);
 
@@ -1178,13 +1245,23 @@ function App() {
 
   const handleDeleteContact = (id: string) => {
     setContacts((prev) => prev.filter((c) => c.id !== id));
-    // Cascade: also wipe any dev_project links to this contact so the
-    // drawer doesn't render a dangling stub.
-    const linksToRemove = devProjectContacts.filter((l) => l.contactId === id);
+    // Cascade across all parent-link tables so no drawer renders a
+    // dangling "unknown contact" stub.
+    const dpLinksToRemove = devProjectContacts.filter((l) => l.contactId === id);
+    const acqLinksToRemove = acquisitionTargetContacts.filter((l) => l.contactId === id);
+    const dispoLinksToRemove = dispositionListingContacts.filter((l) => l.contactId === id);
     setDevProjectContacts((prev) => prev.filter((l) => l.contactId !== id));
+    setAcquisitionTargetContacts((prev) => prev.filter((l) => l.contactId !== id));
+    setDispositionListingContacts((prev) => prev.filter((l) => l.contactId !== id));
     writeThrough('delete contact', deleteContactRow(id));
-    linksToRemove.forEach((l) =>
-      writeThrough('cascade unlink contact', deleteDevProjectContactRow(l.id))
+    dpLinksToRemove.forEach((l) =>
+      writeThrough('cascade unlink dev contact', deleteDevProjectContactRow(l.id))
+    );
+    acqLinksToRemove.forEach((l) =>
+      writeThrough('cascade unlink acq contact', deleteAcquisitionTargetContactRow(l.id))
+    );
+    dispoLinksToRemove.forEach((l) =>
+      writeThrough('cascade unlink dispo contact', deleteDispositionListingContactRow(l.id))
     );
   };
 
@@ -1267,6 +1344,55 @@ function App() {
   const handleDeleteAcquisitionTargetNote = (id: string) => {
     setAcquisitionTargetNotes((prev) => prev.filter((n) => n.id !== id));
     writeThrough('delete acquisition note', deleteAcquisitionTargetNoteRow(id));
+  };
+
+  // ── Disposition ─────────────────────────────────────────────────
+  const handleSaveDispositionListing = (updated: DispositionListing) => {
+    setDispositionListings((prev) => {
+      const idx = prev.findIndex((d) => d.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save disposition listing', upsertDispositionListing(updated));
+  };
+
+  const handleDeleteDispositionListing = (id: string) => {
+    setDispositionListings((prev) => prev.filter((d) => d.id !== id));
+    writeThrough('delete disposition listing', deleteDispositionListingRow(id));
+  };
+
+  const handleLinkDispositionListingContact = (link: DispositionListingContact) => {
+    setDispositionListingContacts((prev) => {
+      const idx = prev.findIndex((l) => l.id === link.id);
+      if (idx === -1) return [...prev, link];
+      const next = prev.slice();
+      next[idx] = link;
+      return next;
+    });
+    writeThrough('link contact to disposition', upsertDispositionListingContact(link));
+  };
+
+  const handleUnlinkDispositionListingContact = (linkId: string) => {
+    setDispositionListingContacts((prev) => prev.filter((l) => l.id !== linkId));
+    writeThrough('unlink disposition contact', deleteDispositionListingContactRow(linkId));
+  };
+
+  const handleSaveDispositionListingNote = (note: DispositionListingNote) => {
+    setDispositionListingNotes((prev) => {
+      const idx = prev.findIndex((n) => n.id === note.id);
+      if (idx === -1) return [...prev, note];
+      const next = prev.slice();
+      next[idx] = note;
+      return next;
+    });
+    writeThrough('save disposition note', upsertDispositionListingNote(note));
+  };
+
+  const handleDeleteDispositionListingNote = (id: string) => {
+    setDispositionListingNotes((prev) => prev.filter((n) => n.id !== id));
+    writeThrough('delete disposition note', deleteDispositionListingNoteRow(id));
   };
 
   // Lookup: which rent roll rows already have an onboarding (so the
@@ -1535,6 +1661,10 @@ function App() {
               contacts={contacts}
               devProjectContactLinks={devProjectContacts}
               devProjects={devProjects}
+              acquisitionTargetContactLinks={acquisitionTargetContacts}
+              acquisitionTargets={acquisitionTargets}
+              dispositionListingContactLinks={dispositionListingContacts}
+              dispositionListings={dispositionListings}
               onSave={handleSaveContact}
               onDelete={handleDeleteContact}
             />
@@ -1612,7 +1742,19 @@ function App() {
               onDeleteAMItem={handleDeleteAMPendingItem}
             />
           ) : view === 'disposition' ? (
-            <DispositionPlaceholder />
+            <DispositionView
+              listings={dispositionListings}
+              onSave={handleSaveDispositionListing}
+              onDelete={handleDeleteDispositionListing}
+              contacts={contacts}
+              contactLinks={dispositionListingContacts}
+              notes={dispositionListingNotes}
+              onSaveContact={handleSaveContact}
+              onLinkContact={handleLinkDispositionListingContact}
+              onUnlinkContact={handleUnlinkDispositionListingContact}
+              onSaveNote={handleSaveDispositionListingNote}
+              onDeleteNote={handleDeleteDispositionListingNote}
+            />
           ) : view === 'prospects' ? (
             deals.length === 0 ? (
               <EmptyHero onAction={handleNewDeal} ctaLabel="Create your first deal" />
@@ -1717,66 +1859,6 @@ function EmptyHero({ onAction, ctaLabel }: { onAction: () => void; ctaLabel: str
   );
 }
 
-interface PipelinePlaceholderProps {
-  title: string;
-  subtitle: string;
-  sections: Array<[string, string]>;
-  /** Optional note about future content the user will provide (checklist,
-   *  playbook, etc.). Shown below the seed cards. */
-  awaitingNote?: string;
-}
-
-function PipelinePlaceholder({ title, subtitle, sections, awaitingNote }: PipelinePlaceholderProps) {
-  return (
-    <div className="max-w-3xl mx-auto">
-      <div className="flex flex-col items-center text-center py-20 px-6">
-        <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-accent-tint text-accent mb-6">
-          <Sparkles size={24} strokeWidth={1.5} />
-        </div>
-        <h2 className="text-3xl text-fg font-extralight tracking-[-0.01em]">{title}</h2>
-        <p className="text-base text-fg-muted mt-3 max-w-lg leading-relaxed">{subtitle}</p>
-
-        <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl text-left">
-          {sections.map(([sectionTitle, desc]) => (
-            <div
-              key={sectionTitle}
-              className="px-4 py-3 rounded-xl border border-dashed border-border bg-bg-elevated/50"
-            >
-              <p className="text-sm font-semibold text-fg">{sectionTitle}</p>
-              <p className="text-xs text-fg-muted mt-1 leading-relaxed">{desc}</p>
-            </div>
-          ))}
-        </div>
-
-        {awaitingNote && (
-          <p className="mt-6 text-xs text-fg-muted max-w-lg italic">{awaitingNote}</p>
-        )}
-
-        <p className="mt-8 text-[11px] uppercase tracking-[0.14em] text-fg-subtle">
-          Placeholder — none of these are wired up yet
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function DispositionPlaceholder() {
-  return (
-    <PipelinePlaceholder
-      title="Disposition Tracking"
-      subtitle="Manage the sale-side flow: prep, BOV, marketing, LOIs, close-out."
-      sections={[
-        ['Sale prep checklist', 'Rent roll cleanup, lease abstracts, T-12 packaging, marketing OM.'],
-        ['Broker BOV / OPM', 'Broker pricing opinions, suggested guidance, pricing strategy.'],
-        ['Marketing tracker', 'CA log, tour list, dataroom access, call-for-offers timeline.'],
-        ['Offer pipeline', 'Bidders, indicative prices, financing conditions, IC approvals.'],
-        ['Closing items', 'PSA, escrow, prorations, audit holdbacks.'],
-        ['Post-close metrics', 'Realized IRR vs UW, hold-period actual vs reval assumption.'],
-      ]}
-      awaitingNote="Upload your disposition checklist when ready and the seeded sections become real."
-    />
-  );
-}
 
 function EmptyMatches() {
   return (

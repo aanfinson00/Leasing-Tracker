@@ -17,6 +17,9 @@ import type {
   DevelopmentProject,
   DevProjectContact,
   DevProjectNote,
+  DispositionListing,
+  DispositionListingContact,
+  DispositionListingNote,
   LeaseComp,
   OnboardingChecklist,
   PropertyTaxAppeal,
@@ -1047,6 +1050,192 @@ export const rowToAcquisitionTargetNote = (
 ): AcquisitionTargetNote => ({
   id: r.id,
   acquisitionTargetId: r.acquisition_target_id,
+  noteType: r.note_type,
+  eventDate: r.event_date,
+  content: r.content,
+  author: r.author,
+  link: r.link,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── DispositionListing ────────────────────────────────────────────
+
+export interface DispositionListingRow {
+  id: string;
+  asset_name: string;
+  building_id: string | null;
+  market: string | null;
+  address: string | null;
+  property_type: string | null;
+  status: DispositionListing['status'];
+  total_sf: number | string | null;
+  acres: number | string | null;
+  occupancy_pct: number | string | null;
+  trailing_noi: number | string | null;
+  forward_noi: number | string | null;
+  list_price: number | string | null;
+  list_cap_pct: number | string | null;
+  achieved_price: number | string | null;
+  achieved_cap_pct: number | string | null;
+  net_proceeds: number | string | null;
+  broker_commission_pct: number | string | null;
+  list_date: string | null;
+  bids_due_date: string | null;
+  loi_executed_date: string | null;
+  psa_executed_date: string | null;
+  expected_closing_date: string | null;
+  actual_closing_date: string | null;
+  risk_level: DispositionListing['riskLevel'];
+  status_summary: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const dispositionListingToRow = (
+  d: DispositionListing
+): Omit<DispositionListingRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: d.id,
+  asset_name: d.assetName,
+  building_id: d.buildingId,
+  market: d.market,
+  address: d.address,
+  property_type: d.propertyType,
+  status: d.status,
+  total_sf: d.totalSF,
+  acres: d.acres,
+  occupancy_pct: d.occupancyPct,
+  trailing_noi: d.trailingNOI,
+  forward_noi: d.forwardNOI,
+  list_price: d.listPrice,
+  list_cap_pct: d.listCapPct,
+  achieved_price: d.achievedPrice,
+  achieved_cap_pct: d.achievedCapPct,
+  net_proceeds: d.netProceeds,
+  broker_commission_pct: d.brokerCommissionPct,
+  list_date: d.listDate,
+  bids_due_date: d.bidsDueDate,
+  loi_executed_date: d.loiExecutedDate,
+  psa_executed_date: d.psaExecutedDate,
+  expected_closing_date: d.expectedClosingDate,
+  actual_closing_date: d.actualClosingDate,
+  risk_level: d.riskLevel,
+  status_summary: d.statusSummary,
+  notes: d.notes,
+  created_at: d.createdAt,
+  updated_at: d.updatedAt,
+});
+
+export const rowToDispositionListing = (r: DispositionListingRow): DispositionListing => ({
+  id: r.id,
+  assetName: r.asset_name,
+  buildingId: r.building_id,
+  market: r.market,
+  address: r.address,
+  propertyType: r.property_type,
+  status: r.status,
+  totalSF: numOrNull(r.total_sf),
+  acres: numOrNull(r.acres),
+  occupancyPct: numOrNull(r.occupancy_pct),
+  trailingNOI: numOrNull(r.trailing_noi),
+  forwardNOI: numOrNull(r.forward_noi),
+  listPrice: numOrNull(r.list_price),
+  listCapPct: numOrNull(r.list_cap_pct),
+  achievedPrice: numOrNull(r.achieved_price),
+  achievedCapPct: numOrNull(r.achieved_cap_pct),
+  netProceeds: numOrNull(r.net_proceeds),
+  brokerCommissionPct: numOrNull(r.broker_commission_pct),
+  listDate: r.list_date,
+  bidsDueDate: r.bids_due_date,
+  loiExecutedDate: r.loi_executed_date,
+  psaExecutedDate: r.psa_executed_date,
+  expectedClosingDate: r.expected_closing_date,
+  actualClosingDate: r.actual_closing_date,
+  riskLevel: r.risk_level,
+  statusSummary: r.status_summary,
+  notes: r.notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+export interface DispositionListingContactRow {
+  id: string;
+  disposition_listing_id: string;
+  contact_id: string;
+  role_override: DispositionListingContact['roleOverride'];
+  is_primary: boolean;
+  link_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const dispositionListingContactToRow = (
+  r: DispositionListingContact
+): Omit<DispositionListingContactRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: r.id,
+  disposition_listing_id: r.dispositionListingId,
+  contact_id: r.contactId,
+  role_override: r.roleOverride,
+  is_primary: r.isPrimary,
+  link_notes: r.linkNotes,
+  created_at: r.createdAt,
+  updated_at: r.updatedAt,
+});
+
+export const rowToDispositionListingContact = (
+  r: DispositionListingContactRow
+): DispositionListingContact => ({
+  id: r.id,
+  dispositionListingId: r.disposition_listing_id,
+  contactId: r.contact_id,
+  roleOverride: r.role_override,
+  isPrimary: r.is_primary,
+  linkNotes: r.link_notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+export interface DispositionListingNoteRow {
+  id: string;
+  disposition_listing_id: string;
+  note_type: DispositionListingNote['noteType'];
+  event_date: string | null;
+  content: string;
+  author: string | null;
+  link: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const dispositionListingNoteToRow = (
+  n: DispositionListingNote
+): Omit<DispositionListingNoteRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: n.id,
+  disposition_listing_id: n.dispositionListingId,
+  note_type: n.noteType,
+  event_date: n.eventDate,
+  content: n.content,
+  author: n.author,
+  link: n.link,
+  created_at: n.createdAt,
+  updated_at: n.updatedAt,
+});
+
+export const rowToDispositionListingNote = (
+  r: DispositionListingNoteRow
+): DispositionListingNote => ({
+  id: r.id,
+  dispositionListingId: r.disposition_listing_id,
   noteType: r.note_type,
   eventDate: r.event_date,
   content: r.content,

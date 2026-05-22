@@ -14,12 +14,16 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type {
+  AcquisitionTarget,
+  AcquisitionTargetContact,
   Contact,
   ContactChannel,
   ContactChannelLabel,
   ContactType,
   DevelopmentProject,
   DevProjectContact,
+  DispositionListing,
+  DispositionListingContact,
 } from '../../types';
 import {
   ContactChannelLabelEnum,
@@ -29,10 +33,13 @@ import {
 
 interface ContactDrawerProps {
   contact: Contact | null;
-  /** All dev-project ↔ contact links — used to show "Linked to" list. */
+  /** Links across all parent types — used to show "Linked to" list. */
   devProjectContactLinks: DevProjectContact[];
-  /** Dev projects — for resolving link IDs to display names. */
   devProjects: DevelopmentProject[];
+  acquisitionTargetContactLinks: AcquisitionTargetContact[];
+  acquisitionTargets: AcquisitionTarget[];
+  dispositionListingContactLinks: DispositionListingContact[];
+  dispositionListings: DispositionListing[];
   onClose: () => void;
   onSave: (c: Contact) => void;
   onDelete: (id: string) => void;
@@ -75,6 +82,10 @@ export function ContactDrawer({
   contact,
   devProjectContactLinks,
   devProjects,
+  acquisitionTargetContactLinks,
+  acquisitionTargets,
+  dispositionListingContactLinks,
+  dispositionListings,
   onClose,
   onSave,
   onDelete,
@@ -104,16 +115,81 @@ export function ContactDrawer({
     devProjects.forEach((p) => m.set(p.id, p));
     return m;
   }, [devProjects]);
+  const targetsById = useMemo(() => {
+    const m = new Map<string, AcquisitionTarget>();
+    acquisitionTargets.forEach((t) => m.set(t.id, t));
+    return m;
+  }, [acquisitionTargets]);
+  const listingsById = useMemo(() => {
+    const m = new Map<string, DispositionListing>();
+    dispositionListings.forEach((l) => m.set(l.id, l));
+    return m;
+  }, [dispositionListings]);
 
-  const linkedProjects = useMemo(() => {
+  // Aggregated "linked-to" rows across all three parent types.
+  interface LinkRow {
+    key: string;
+    kind: 'Dev Project' | 'Acquisition' | 'Disposition';
+    name: string;
+    role: ContactType;
+    isPrimary: boolean;
+  }
+
+  const linkedRows = useMemo<LinkRow[]>(() => {
     if (!contact) return [];
-    return devProjectContactLinks
+    const rows: LinkRow[] = [];
+    devProjectContactLinks
       .filter((l) => l.contactId === contact.id)
-      .map((l) => ({ link: l, project: projectsById.get(l.devProjectId) }))
-      .filter((x): x is { link: DevProjectContact; project: DevelopmentProject } =>
-        x.project != null
-      );
-  }, [contact, devProjectContactLinks, projectsById]);
+      .forEach((l) => {
+        const p = projectsById.get(l.devProjectId);
+        if (p) {
+          rows.push({
+            key: `dp-${l.id}`,
+            kind: 'Dev Project',
+            name: p.projectName,
+            role: l.roleOverride ?? contact.contactType,
+            isPrimary: l.isPrimary,
+          });
+        }
+      });
+    acquisitionTargetContactLinks
+      .filter((l) => l.contactId === contact.id)
+      .forEach((l) => {
+        const t = targetsById.get(l.acquisitionTargetId);
+        if (t) {
+          rows.push({
+            key: `acq-${l.id}`,
+            kind: 'Acquisition',
+            name: t.targetName,
+            role: l.roleOverride ?? contact.contactType,
+            isPrimary: l.isPrimary,
+          });
+        }
+      });
+    dispositionListingContactLinks
+      .filter((l) => l.contactId === contact.id)
+      .forEach((l) => {
+        const li = listingsById.get(l.dispositionListingId);
+        if (li) {
+          rows.push({
+            key: `dispo-${l.id}`,
+            kind: 'Disposition',
+            name: li.assetName,
+            role: l.roleOverride ?? contact.contactType,
+            isPrimary: l.isPrimary,
+          });
+        }
+      });
+    return rows;
+  }, [
+    contact,
+    devProjectContactLinks,
+    projectsById,
+    acquisitionTargetContactLinks,
+    targetsById,
+    dispositionListingContactLinks,
+    listingsById,
+  ]);
 
   if (!contact) return null;
 
@@ -231,25 +307,24 @@ export function ContactDrawer({
             </Section>
 
             <Section icon={Link2} title="Linked to">
-              {linkedProjects.length === 0 ? (
+              {linkedRows.length === 0 ? (
                 <p className="text-xs text-fg-subtle italic">
-                  Not linked to any development project yet. Link from a Dev Pipeline drawer.
+                  Not linked to any project or listing yet. Link from a Dev / Acquisitions / Disposition drawer.
                 </p>
               ) : (
                 <ul className="flex flex-col gap-1.5">
-                  {linkedProjects.map(({ link, project }) => (
+                  {linkedRows.map((r) => (
                     <li
-                      key={link.id}
+                      key={r.key}
                       className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg shadow-soft text-sm"
                     >
                       <Building size={13} strokeWidth={1.75} className="text-fg-muted" />
-                      <span className="text-fg flex-1 truncate">
-                        {project.projectName}
+                      <span className="text-fg flex-1 truncate">{r.name}</span>
+                      <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
+                        {r.kind}
                       </span>
-                      <span className="text-xs text-fg-muted">
-                        {link.roleOverride ?? contact.contactType}
-                      </span>
-                      {link.isPrimary && (
+                      <span className="text-xs text-fg-muted">{r.role}</span>
+                      {r.isPrimary && (
                         <Star
                           size={11}
                           strokeWidth={1.75}

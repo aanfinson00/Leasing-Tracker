@@ -9,10 +9,14 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type {
+  AcquisitionTarget,
+  AcquisitionTargetContact,
   Contact,
   ContactType,
   DevelopmentProject,
   DevProjectContact,
+  DispositionListing,
+  DispositionListingContact,
 } from '../../types';
 import { ContactTypeEnum, contactDisplayName } from '../../types';
 import { ContactDrawer } from './ContactDrawer';
@@ -21,6 +25,10 @@ interface ContactsViewProps {
   contacts: Contact[];
   devProjectContactLinks: DevProjectContact[];
   devProjects: DevelopmentProject[];
+  acquisitionTargetContactLinks: AcquisitionTargetContact[];
+  acquisitionTargets: AcquisitionTarget[];
+  dispositionListingContactLinks: DispositionListingContact[];
+  dispositionListings: DispositionListing[];
   onSave: (c: Contact) => void;
   onDelete: (id: string) => void;
 }
@@ -62,6 +70,10 @@ export function ContactsView({
   contacts,
   devProjectContactLinks,
   devProjects,
+  acquisitionTargetContactLinks,
+  acquisitionTargets,
+  dispositionListingContactLinks,
+  dispositionListings,
   onSave,
   onDelete,
 }: ContactsViewProps) {
@@ -69,14 +81,19 @@ export function ContactsView({
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<ContactType | 'all'>('all');
 
-  // How many projects each contact is linked to — surfaced in the list.
+  // Total link count across all 3 parent types — surfaced in the list.
   const linkCountByContactId = useMemo(() => {
     const m = new Map<string, number>();
-    devProjectContactLinks.forEach((l) => {
-      m.set(l.contactId, (m.get(l.contactId) ?? 0) + 1);
-    });
+    const bump = (id: string) => m.set(id, (m.get(id) ?? 0) + 1);
+    devProjectContactLinks.forEach((l) => bump(l.contactId));
+    acquisitionTargetContactLinks.forEach((l) => bump(l.contactId));
+    dispositionListingContactLinks.forEach((l) => bump(l.contactId));
     return m;
-  }, [devProjectContactLinks]);
+  }, [
+    devProjectContactLinks,
+    acquisitionTargetContactLinks,
+    dispositionListingContactLinks,
+  ]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -258,7 +275,7 @@ export function ContactsView({
                       {linkCount > 0 ? (
                         <span className="inline-flex items-center gap-1 text-xs text-fg-muted">
                           <ExternalLink size={11} strokeWidth={1.75} />
-                          {linkCount} {linkCount === 1 ? 'project' : 'projects'}
+                          {linkCount} link{linkCount === 1 ? '' : 's'}
                         </span>
                       ) : (
                         <span className="text-fg-subtle text-xs">—</span>
@@ -277,6 +294,10 @@ export function ContactsView({
           contact={editing}
           devProjectContactLinks={devProjectContactLinks}
           devProjects={devProjects}
+          acquisitionTargetContactLinks={acquisitionTargetContactLinks}
+          acquisitionTargets={acquisitionTargets}
+          dispositionListingContactLinks={dispositionListingContactLinks}
+          dispositionListings={dispositionListings}
           onClose={() => setEditing(null)}
           onSave={onSave}
           onDelete={onDelete}
