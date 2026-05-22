@@ -1,4 +1,4 @@
-import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, Lock } from 'lucide-react';
+import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Lock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { ParceIcon } from './ParceIcon';
@@ -14,7 +14,8 @@ export type View =
   | 'reports'
   | 'acquisitions'
   | 'development'
-  | 'disposition';
+  | 'disposition'
+  | 'asset-mgmt';
 
 interface NavItem {
   id: View | 'placeholder';
@@ -36,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   // Lifecycle pipeline tabs — placeholders for now.
   { id: 'acquisitions', icon: Crosshair, label: 'Acquisitions Pipeline' },
   { id: 'development', icon: HardHat, label: 'Development Pipeline' },
+  { id: 'asset-mgmt', icon: ListChecks, label: 'Asset Mgmt Pending' },
   { id: 'disposition', icon: HandCoins, label: 'Disposition Tracking' },
 ];
 
