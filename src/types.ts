@@ -899,3 +899,131 @@ export const DevProjectNoteSchema = z.object({
 }));
 
 export type DevProjectNote = z.infer<typeof DevProjectNoteSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Acquisition Targets — opportunities being chased. Sourcing →
+// Pursuing → LOI → PSA → Closing → Closed / Lost / On Hold.
+// Mirrors DevelopmentProject's shape so the same workflow patterns
+// (phase-grouped board, drawer, contacts + notes) apply.
+// ──────────────────────────────────────────────────────────────────
+
+export const AcquisitionStatusEnum = z.enum([
+  'Sourcing',
+  'Pursuing',
+  'LOI',
+  'PSA',
+  'Closing',
+  'Closed',
+  'Lost',
+  'On Hold',
+]);
+export type AcquisitionStatus = z.infer<typeof AcquisitionStatusEnum>;
+
+export const ACQ_PIPELINE_ORDER: AcquisitionStatus[] = [
+  'Sourcing',
+  'Pursuing',
+  'LOI',
+  'PSA',
+  'Closing',
+  'Closed',
+];
+
+export const AcquisitionTargetSchema = z.object({
+  id: z.string().uuid(),
+
+  targetName: z.string().min(1, 'Target name is required'),
+  market: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  propertyType: z.string().nullable().optional(),
+
+  status: AcquisitionStatusEnum,
+
+  acres: z.number().positive().nullable().optional(),
+  buildingCount: z.number().int().positive().nullable().optional(),
+  totalSF: z.number().positive().nullable().optional(),
+
+  askingPrice: z.number().min(0).nullable().optional(),
+  ourOffer: z.number().min(0).nullable().optional(),
+  earnestMoney: z.number().min(0).nullable().optional(),
+  closingCostsEstimate: z.number().nullable().optional(),
+  rehabBudget: z.number().nullable().optional(),
+  // Both stored as fractions: 0.15 = 15% IRR, 2.0 = 2.0x equity multiple
+  underwrittenIRR: z.number().nullable().optional(),
+  underwrittenEquityMultiple: z.number().nullable().optional(),
+
+  firstContactedDate: z.string().nullable().optional(),
+  loiDate: z.string().nullable().optional(),
+  psaDate: z.string().nullable().optional(),
+  expectedClosingDate: z.string().nullable().optional(),
+  actualClosingDate: z.string().nullable().optional(),
+
+  diligenceStatus: z.record(z.string(), z.unknown()).default({}),
+
+  riskLevel: RiskLevelEnum,
+  statusSummary: z.string().nullable().optional(),
+
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((a) => ({
+  ...a,
+  market: a.market ?? null,
+  address: a.address ?? null,
+  propertyType: a.propertyType ?? null,
+  acres: a.acres ?? null,
+  buildingCount: a.buildingCount ?? null,
+  totalSF: a.totalSF ?? null,
+  askingPrice: a.askingPrice ?? null,
+  ourOffer: a.ourOffer ?? null,
+  earnestMoney: a.earnestMoney ?? null,
+  closingCostsEstimate: a.closingCostsEstimate ?? null,
+  rehabBudget: a.rehabBudget ?? null,
+  underwrittenIRR: a.underwrittenIRR ?? null,
+  underwrittenEquityMultiple: a.underwrittenEquityMultiple ?? null,
+  firstContactedDate: a.firstContactedDate ?? null,
+  loiDate: a.loiDate ?? null,
+  psaDate: a.psaDate ?? null,
+  expectedClosingDate: a.expectedClosingDate ?? null,
+  actualClosingDate: a.actualClosingDate ?? null,
+  statusSummary: a.statusSummary ?? null,
+  notes: a.notes ?? null,
+}));
+
+export type AcquisitionTarget = z.infer<typeof AcquisitionTargetSchema>;
+
+// Same shapes as DevProjectContact / DevProjectNote — different parent.
+export const AcquisitionTargetContactSchema = z.object({
+  id: z.string().uuid(),
+  acquisitionTargetId: z.string(),
+  contactId: z.string(),
+  roleOverride: ContactTypeEnum.nullable().optional(),
+  isPrimary: z.boolean().default(false),
+  linkNotes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((r) => ({
+  ...r,
+  roleOverride: r.roleOverride ?? null,
+  linkNotes: r.linkNotes ?? null,
+}));
+
+export type AcquisitionTargetContact = z.infer<typeof AcquisitionTargetContactSchema>;
+
+export const AcquisitionTargetNoteSchema = z.object({
+  id: z.string().uuid(),
+  acquisitionTargetId: z.string(),
+  noteType: DevNoteTypeEnum,  // Reuses Dev's taxonomy — same set of activity types
+  eventDate: z.string().nullable().optional(),
+  content: z.string().min(1, 'Note content is required'),
+  author: z.string().nullable().optional(),
+  link: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((n) => ({
+  ...n,
+  eventDate: n.eventDate ?? null,
+  author: n.author ?? null,
+  link: n.link ?? null,
+}));
+
+export type AcquisitionTargetNote = z.infer<typeof AcquisitionTargetNoteSchema>;

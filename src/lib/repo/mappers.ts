@@ -6,6 +6,9 @@
 
 import type {
   ActivityEntry,
+  AcquisitionTarget,
+  AcquisitionTargetContact,
+  AcquisitionTargetNote,
   AMPendingItem,
   Building,
   Contact,
@@ -862,6 +865,188 @@ export const devProjectNoteToRow = (
 export const rowToDevProjectNote = (r: DevProjectNoteRow): DevProjectNote => ({
   id: r.id,
   devProjectId: r.dev_project_id,
+  noteType: r.note_type,
+  eventDate: r.event_date,
+  content: r.content,
+  author: r.author,
+  link: r.link,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── AcquisitionTarget ─────────────────────────────────────────────
+
+export interface AcquisitionTargetRow {
+  id: string;
+  target_name: string;
+  market: string | null;
+  address: string | null;
+  property_type: string | null;
+  status: AcquisitionTarget['status'];
+  acres: number | string | null;
+  building_count: number | null;
+  total_sf: number | string | null;
+  asking_price: number | string | null;
+  our_offer: number | string | null;
+  earnest_money: number | string | null;
+  closing_costs_estimate: number | string | null;
+  rehab_budget: number | string | null;
+  underwritten_irr: number | string | null;
+  underwritten_eqty_multiple: number | string | null;
+  first_contacted_date: string | null;
+  loi_date: string | null;
+  psa_date: string | null;
+  expected_closing_date: string | null;
+  actual_closing_date: string | null;
+  diligence_status: Record<string, unknown>;
+  risk_level: AcquisitionTarget['riskLevel'];
+  status_summary: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const acquisitionTargetToRow = (
+  a: AcquisitionTarget
+): Omit<AcquisitionTargetRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: a.id,
+  target_name: a.targetName,
+  market: a.market,
+  address: a.address,
+  property_type: a.propertyType,
+  status: a.status,
+  acres: a.acres,
+  building_count: a.buildingCount,
+  total_sf: a.totalSF,
+  asking_price: a.askingPrice,
+  our_offer: a.ourOffer,
+  earnest_money: a.earnestMoney,
+  closing_costs_estimate: a.closingCostsEstimate,
+  rehab_budget: a.rehabBudget,
+  underwritten_irr: a.underwrittenIRR,
+  underwritten_eqty_multiple: a.underwrittenEquityMultiple,
+  first_contacted_date: a.firstContactedDate,
+  loi_date: a.loiDate,
+  psa_date: a.psaDate,
+  expected_closing_date: a.expectedClosingDate,
+  actual_closing_date: a.actualClosingDate,
+  diligence_status: a.diligenceStatus,
+  risk_level: a.riskLevel,
+  status_summary: a.statusSummary,
+  notes: a.notes,
+  created_at: a.createdAt,
+  updated_at: a.updatedAt,
+});
+
+export const rowToAcquisitionTarget = (r: AcquisitionTargetRow): AcquisitionTarget => ({
+  id: r.id,
+  targetName: r.target_name,
+  market: r.market,
+  address: r.address,
+  propertyType: r.property_type,
+  status: r.status,
+  acres: numOrNull(r.acres),
+  buildingCount: r.building_count,
+  totalSF: numOrNull(r.total_sf),
+  askingPrice: numOrNull(r.asking_price),
+  ourOffer: numOrNull(r.our_offer),
+  earnestMoney: numOrNull(r.earnest_money),
+  closingCostsEstimate: numOrNull(r.closing_costs_estimate),
+  rehabBudget: numOrNull(r.rehab_budget),
+  underwrittenIRR: numOrNull(r.underwritten_irr),
+  underwrittenEquityMultiple: numOrNull(r.underwritten_eqty_multiple),
+  firstContactedDate: r.first_contacted_date,
+  loiDate: r.loi_date,
+  psaDate: r.psa_date,
+  expectedClosingDate: r.expected_closing_date,
+  actualClosingDate: r.actual_closing_date,
+  diligenceStatus: (r.diligence_status ?? {}) as Record<string, unknown>,
+  riskLevel: r.risk_level,
+  statusSummary: r.status_summary,
+  notes: r.notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── AcquisitionTargetContact / Note ───────────────────────────────
+
+export interface AcquisitionTargetContactRow {
+  id: string;
+  acquisition_target_id: string;
+  contact_id: string;
+  role_override: AcquisitionTargetContact['roleOverride'];
+  is_primary: boolean;
+  link_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const acquisitionTargetContactToRow = (
+  r: AcquisitionTargetContact
+): Omit<AcquisitionTargetContactRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: r.id,
+  acquisition_target_id: r.acquisitionTargetId,
+  contact_id: r.contactId,
+  role_override: r.roleOverride,
+  is_primary: r.isPrimary,
+  link_notes: r.linkNotes,
+  created_at: r.createdAt,
+  updated_at: r.updatedAt,
+});
+
+export const rowToAcquisitionTargetContact = (
+  r: AcquisitionTargetContactRow
+): AcquisitionTargetContact => ({
+  id: r.id,
+  acquisitionTargetId: r.acquisition_target_id,
+  contactId: r.contact_id,
+  roleOverride: r.role_override,
+  isPrimary: r.is_primary,
+  linkNotes: r.link_notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+export interface AcquisitionTargetNoteRow {
+  id: string;
+  acquisition_target_id: string;
+  note_type: AcquisitionTargetNote['noteType'];
+  event_date: string | null;
+  content: string;
+  author: string | null;
+  link: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const acquisitionTargetNoteToRow = (
+  n: AcquisitionTargetNote
+): Omit<AcquisitionTargetNoteRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: n.id,
+  acquisition_target_id: n.acquisitionTargetId,
+  note_type: n.noteType,
+  event_date: n.eventDate,
+  content: n.content,
+  author: n.author,
+  link: n.link,
+  created_at: n.createdAt,
+  updated_at: n.updatedAt,
+});
+
+export const rowToAcquisitionTargetNote = (
+  r: AcquisitionTargetNoteRow
+): AcquisitionTargetNote => ({
+  id: r.id,
+  acquisitionTargetId: r.acquisition_target_id,
   noteType: r.note_type,
   eventDate: r.event_date,
   content: r.content,

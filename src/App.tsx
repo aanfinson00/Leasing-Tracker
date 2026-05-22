@@ -14,6 +14,9 @@ import {
   Unlink,
 } from 'lucide-react';
 import type {
+  AcquisitionTarget,
+  AcquisitionTargetContact,
+  AcquisitionTargetNote,
   ActivityEntry,
   AMPendingItem,
   Building,
@@ -142,10 +145,25 @@ import {
   deleteDevProjectNote as deleteDevProjectNoteRow,
   subscribeDevProjectNotes,
 } from './lib/repo/devProjectNotes';
+import {
+  listAcquisitionTargets,
+  upsertAcquisitionTarget,
+  deleteAcquisitionTarget as deleteAcquisitionTargetRow,
+  subscribeAcquisitionTargets,
+  listAcquisitionTargetContacts,
+  upsertAcquisitionTargetContact,
+  deleteAcquisitionTargetContact as deleteAcquisitionTargetContactRow,
+  subscribeAcquisitionTargetContacts,
+  listAcquisitionTargetNotes,
+  upsertAcquisitionTargetNote,
+  deleteAcquisitionTargetNote as deleteAcquisitionTargetNoteRow,
+  subscribeAcquisitionTargetNotes,
+} from './lib/repo/acquisitionTargets';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { DevelopmentView } from './components/Development/DevelopmentView';
 import { CompsView } from './components/Comps/CompsView';
 import { ContactsView } from './components/Contacts/ContactsView';
+import { AcquisitionsView } from './components/Acquisitions/AcquisitionsView';
 import { MapView } from './components/Map/MapView';
 import { AssetMgmtView } from './components/AssetMgmt/AssetMgmtView';
 import { GridBackground } from './components/GridBackground';
@@ -184,6 +202,9 @@ function App() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [devProjectContacts, setDevProjectContacts] = useState<DevProjectContact[]>([]);
   const [devProjectNotes, setDevProjectNotes] = useState<DevProjectNote[]>([]);
+  const [acquisitionTargets, setAcquisitionTargets] = useState<AcquisitionTarget[]>([]);
+  const [acquisitionTargetContacts, setAcquisitionTargetContacts] = useState<AcquisitionTargetContact[]>([]);
+  const [acquisitionTargetNotes, setAcquisitionTargetNotes] = useState<AcquisitionTargetNote[]>([]);
   const [selectedUwDealId, setSelectedUwDealId] = useState<string | null>(null);
   // A/B/editing are independent: A and B drive the comparison view,
   // editingId drives which scenario the InputsPanel writes to.
@@ -293,6 +314,7 @@ function App() {
           const [
             d, r, a, o, dev, comps, bldgs, appeals, amItems,
             crmContacts, crmLinks, crmNotes,
+            acqTargets, acqLinks, acqNotes,
           ] = await Promise.all([
             listDeals(),
             listRentRoll(),
@@ -306,6 +328,9 @@ function App() {
             listContacts(),
             listDevProjectContacts(),
             listDevProjectNotes(),
+            listAcquisitionTargets(),
+            listAcquisitionTargetContacts(),
+            listAcquisitionTargetNotes(),
           ]);
           setDeals(d);
           setFilteredDeals(d);
@@ -321,6 +346,9 @@ function App() {
           setContacts(crmContacts);
           setDevProjectContacts(crmLinks);
           setDevProjectNotes(crmNotes);
+          setAcquisitionTargets(acqTargets);
+          setAcquisitionTargetContacts(acqLinks);
+          setAcquisitionTargetNotes(acqNotes);
           setFilename('leasing-tracker.xlsx');
         } catch (err) {
           console.error('Failed to load from Supabase:', err);
@@ -516,6 +544,42 @@ function App() {
       onDelete: (id) =>
         setDevProjectNotes((prev) => prev.filter((x) => x.id !== id)),
     });
+    const unsubAcqTargets = subscribeAcquisitionTargets({
+      onUpsert: (a) =>
+        setAcquisitionTargets((prev) => {
+          const idx = prev.findIndex((x) => x.id === a.id);
+          if (idx === -1) return [...prev, a];
+          const next = prev.slice();
+          next[idx] = a;
+          return next;
+        }),
+      onDelete: (id) =>
+        setAcquisitionTargets((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubAcqLinks = subscribeAcquisitionTargetContacts({
+      onUpsert: (l) =>
+        setAcquisitionTargetContacts((prev) => {
+          const idx = prev.findIndex((x) => x.id === l.id);
+          if (idx === -1) return [...prev, l];
+          const next = prev.slice();
+          next[idx] = l;
+          return next;
+        }),
+      onDelete: (id) =>
+        setAcquisitionTargetContacts((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubAcqNotes = subscribeAcquisitionTargetNotes({
+      onUpsert: (n) =>
+        setAcquisitionTargetNotes((prev) => {
+          const idx = prev.findIndex((x) => x.id === n.id);
+          if (idx === -1) return [...prev, n];
+          const next = prev.slice();
+          next[idx] = n;
+          return next;
+        }),
+      onDelete: (id) =>
+        setAcquisitionTargetNotes((prev) => prev.filter((x) => x.id !== id)),
+    });
     return () => {
       unsubDeals();
       unsubRr();
@@ -530,6 +594,9 @@ function App() {
       unsubCrmContacts();
       unsubCrmLinks();
       unsubCrmNotes();
+      unsubAcqTargets();
+      unsubAcqLinks();
+      unsubAcqNotes();
     };
   }, []);
 
@@ -1153,6 +1220,55 @@ function App() {
     writeThrough('delete dev note', deleteDevProjectNoteRow(id));
   };
 
+  // ── Acquisitions ────────────────────────────────────────────────
+  const handleSaveAcquisitionTarget = (updated: AcquisitionTarget) => {
+    setAcquisitionTargets((prev) => {
+      const idx = prev.findIndex((t) => t.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save acquisition target', upsertAcquisitionTarget(updated));
+  };
+
+  const handleDeleteAcquisitionTarget = (id: string) => {
+    setAcquisitionTargets((prev) => prev.filter((t) => t.id !== id));
+    writeThrough('delete acquisition target', deleteAcquisitionTargetRow(id));
+  };
+
+  const handleLinkAcquisitionTargetContact = (link: AcquisitionTargetContact) => {
+    setAcquisitionTargetContacts((prev) => {
+      const idx = prev.findIndex((l) => l.id === link.id);
+      if (idx === -1) return [...prev, link];
+      const next = prev.slice();
+      next[idx] = link;
+      return next;
+    });
+    writeThrough('link contact to acquisition', upsertAcquisitionTargetContact(link));
+  };
+
+  const handleUnlinkAcquisitionTargetContact = (linkId: string) => {
+    setAcquisitionTargetContacts((prev) => prev.filter((l) => l.id !== linkId));
+    writeThrough('unlink acquisition contact', deleteAcquisitionTargetContactRow(linkId));
+  };
+
+  const handleSaveAcquisitionTargetNote = (note: AcquisitionTargetNote) => {
+    setAcquisitionTargetNotes((prev) => {
+      const idx = prev.findIndex((n) => n.id === note.id);
+      if (idx === -1) return [...prev, note];
+      const next = prev.slice();
+      next[idx] = note;
+      return next;
+    });
+    writeThrough('save acquisition note', upsertAcquisitionTargetNote(note));
+  };
+
+  const handleDeleteAcquisitionTargetNote = (id: string) => {
+    setAcquisitionTargetNotes((prev) => prev.filter((n) => n.id !== id));
+    writeThrough('delete acquisition note', deleteAcquisitionTargetNoteRow(id));
+  };
+
   // Lookup: which rent roll rows already have an onboarding (so the
   // RentRollTable can hide the "+ Onboarding" button for them).
   const onboardingsByRentRollId = useMemo(
@@ -1459,7 +1575,19 @@ function App() {
               onDelete={handleDeleteOnboarding}
             />
           ) : view === 'acquisitions' ? (
-            <AcquisitionsPlaceholder />
+            <AcquisitionsView
+              targets={acquisitionTargets}
+              onSave={handleSaveAcquisitionTarget}
+              onDelete={handleDeleteAcquisitionTarget}
+              contacts={contacts}
+              contactLinks={acquisitionTargetContacts}
+              notes={acquisitionTargetNotes}
+              onSaveContact={handleSaveContact}
+              onLinkContact={handleLinkAcquisitionTargetContact}
+              onUnlinkContact={handleUnlinkAcquisitionTargetContact}
+              onSaveNote={handleSaveAcquisitionTargetNote}
+              onDeleteNote={handleDeleteAcquisitionTargetNote}
+            />
           ) : view === 'development' ? (
             <DevelopmentView
               projects={devProjects}
@@ -1629,24 +1757,6 @@ function PipelinePlaceholder({ title, subtitle, sections, awaitingNote }: Pipeli
         </p>
       </div>
     </div>
-  );
-}
-
-function AcquisitionsPlaceholder() {
-  return (
-    <PipelinePlaceholder
-      title="Acquisitions Pipeline"
-      subtitle="Track deals from sourcing through LOI, diligence, and close."
-      sections={[
-        ['Sourcing list', 'Target submarkets, broker outreach log, off-market leads.'],
-        ['LOI / PSA tracking', 'Offers out, counters, executed contracts, retrade history.'],
-        ['Diligence', 'PCA, ESA, ALTA, zoning letter — task tracker per asset.'],
-        ['Capital raise status', 'Equity commitments, debt term sheets, lender selection.'],
-        ['Close calendar', 'Funding date, settlement statement, day-one ownership handoff.'],
-        ['Hand-off → Portfolio', 'Auto-promote closed acquisitions into Portfolio + Onboarding.'],
-      ]}
-      awaitingNote="More info on your acquisitions workflow coming — paste in any deal-tracker spreadsheet or notes and we'll port the structure."
-    />
   );
 }
 
