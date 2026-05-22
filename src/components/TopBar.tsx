@@ -25,8 +25,11 @@ export function TopBar({
       <div className="px-6 sm:px-10 pt-8 pb-6 max-w-7xl mx-auto">
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <div className="min-w-0">
-            <h1 className="text-[26px] sm:text-[30px] leading-[1.1] tracking-[-0.02em] text-fg font-semibold">
-              Leasing Tracker
+            <h1
+              className="text-[26px] sm:text-[30px] leading-[1.1] text-fg font-extralight"
+              style={{ letterSpacing: '0.08em' }}
+            >
+              parce
             </h1>
             <div className="mt-2 flex items-center gap-2 text-sm text-fg-muted flex-wrap">
               {filename ? (

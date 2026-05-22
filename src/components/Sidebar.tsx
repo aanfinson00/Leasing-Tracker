@@ -1,6 +1,7 @@
 import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, Lock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
+import { ParceIcon } from './ParceIcon';
 
 const PASSWORD_HASH_CONFIGURED = !!(import.meta.env.VITE_PASSWORD_HASH ?? '').trim();
 
@@ -30,8 +31,9 @@ interface SidebarProps {
 export function Sidebar({ view, onChangeView }: SidebarProps) {
   return (
     <aside className="hidden sm:flex flex-col items-center w-[68px] shrink-0 bg-bg-subtle/60 h-screen sticky top-0 py-5 z-20">
-      <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-accent text-accent-fg shadow-soft mb-6">
-        <span className="font-semibold text-sm leading-none tracking-tight">LT</span>
+      {/* Parce mark — 3x3 copper grid with the playbook tilt. */}
+      <div className="flex items-center justify-center w-11 h-11 mb-6" title="parce">
+        <ParceIcon size="sm" variant="on-light" />
       </div>
 
       <nav className="flex flex-col items-center gap-1.5 flex-1">

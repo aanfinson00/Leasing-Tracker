@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Lock } from 'lucide-react';
+import { ParceIcon } from './ParceIcon';
 
 const STORAGE_KEY = 'app:unlocked';
 const ATTEMPT_KEY = 'app:auth:attempts';
@@ -142,13 +143,21 @@ export function LoginGate({ children }: LoginGateProps) {
       <div className="relative z-10 w-full max-w-sm lt-animate-fade-in-up">
         <div className="bg-bg-elevated rounded-2xl shadow-lift p-8 border border-border">
           <div className="flex flex-col items-center text-center mb-8">
-            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-accent text-accent-fg shadow-soft mb-5">
-              <Lock size={22} strokeWidth={2} />
+            <div className="flex items-center justify-center mb-4">
+              <ParceIcon size="xl" variant="on-light" />
             </div>
-            <h1 className="text-2xl font-semibold text-fg tracking-[-0.02em]">
-              Leasing Tracker
+            <h1
+              className="text-5xl text-fg font-extralight"
+              style={{ letterSpacing: '0.08em' }}
+            >
+              parce
             </h1>
-            <p className="text-sm text-fg-muted mt-1.5">Restricted access</p>
+            <p
+              className="text-sm text-fg-muted mt-4 inline-flex items-center gap-2"
+            >
+              <Lock size={12} strokeWidth={2} />
+              Restricted access
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">

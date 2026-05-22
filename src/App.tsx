@@ -93,6 +93,7 @@ import {
 } from './lib/repo/scenarios';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { MapView } from './components/Map/MapView';
+import { GridBackground } from './components/GridBackground';
 
 function App() {
   const [view, setView] = useState<View>('prospects');
@@ -877,7 +878,10 @@ function App() {
               : 'Reports';
 
   return (
-    <div className="flex min-h-screen bg-bg text-fg">
+    <div className="relative flex min-h-screen bg-bg text-fg">
+      {/* Parce-style animated copper grid behind everything. z-0 keeps
+          it under the sidebar (z-20) and main content (default stacking). */}
+      <GridBackground />
       <Sidebar view={view} onChangeView={setView} />
 
       <div className="flex-1 min-w-0 flex flex-col">
