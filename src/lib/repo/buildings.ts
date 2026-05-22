@@ -22,6 +22,23 @@ export async function listBuildingsForProject(projectId: string): Promise<Buildi
   }).filter((b): b is Building => b !== null);
 }
 
+/** All buildings across all projects — for the global map render. */
+export async function listAllBuildings(): Promise<Building[]> {
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data as BuildingRow[]).map((r) => {
+    const parsed = BuildingSchema.safeParse(rowToBuilding(r));
+    if (!parsed.success) {
+      console.warn('Dropping unparsable building row:', r, parsed.error.format());
+      return null;
+    }
+    return parsed.data;
+  }).filter((b): b is Building => b !== null);
+}
+
 export async function upsertBuilding(b: Building): Promise<void> {
   const { error } = await supabase.from(TABLE).upsert(buildingToRow(b));
   if (error) throw error;

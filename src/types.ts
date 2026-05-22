@@ -376,6 +376,24 @@ export type Scenario = z.infer<typeof ScenarioSchema>;
 export const FrontageSideEnum = z.enum(['N', 'S', 'E', 'W']);
 export type FrontageSide = z.infer<typeof FrontageSideEnum>;
 
+// Bump-out — rectangle attached to a side of the building, extending
+// outward. Stored on the Building as a jsonb array.
+export const BumpOutSchema = z.object({
+  id: z.string(),
+  side: FrontageSideEnum,
+  offsetFt: z.number().min(0),
+  widthFt: z.number().positive(),
+  depthFt: z.number().positive(),
+  name: z.string().nullable().optional(),
+  spaceId: z.string().nullable().optional(),
+}).transform((b) => ({
+  ...b,
+  name: b.name ?? null,
+  spaceId: b.spaceId ?? null,
+}));
+
+export type BumpOut = z.infer<typeof BumpOutSchema>;
+
 export const BuildingSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().min(1),
@@ -385,14 +403,20 @@ export const BuildingSchema = z.object({
   color: z.string().nullable().optional(),
   bayCount: z.number().int().min(1).max(50).default(1),
   frontageSide: FrontageSideEnum.nullable().optional(),
-  // Parametric dimensions — when set, the footprint is derived from
-  // (centerLat, centerLng, widthFt, depthFt, rotationDeg). Nullable
-  // so any legacy traced polygons keep working until migrated.
   widthFt: z.number().positive().nullable().optional(),
   depthFt: z.number().positive().nullable().optional(),
   rotationDeg: z.number().min(-360).max(360).default(0),
   centerLat: z.number().min(-90).max(90).nullable().optional(),
   centerLng: z.number().min(-180).max(180).nullable().optional(),
+  // Bump-outs: array of OUTWARD-extending rectangles attached to the
+  // building's sides. Each is rendered as its own extrusion feature.
+  bumpOuts: z.array(BumpOutSchema).default([]),
+  // Space IDs per bay (parallel to bay_count). Null entries fall back
+  // to the auto-format {projectId}-B{buildingOrdinal}-S{i+1}.
+  baySpaceIds: z.array(z.string().nullable()).default([]),
+  // 1-indexed position of this building within its project — used in
+  // the auto Space ID format. Assigned on creation.
+  buildingOrdinal: z.number().int().positive().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 }).transform((b) => ({
@@ -403,6 +427,20 @@ export const BuildingSchema = z.object({
   depthFt: b.depthFt ?? null,
   centerLat: b.centerLat ?? null,
   centerLng: b.centerLng ?? null,
+  buildingOrdinal: b.buildingOrdinal ?? null,
 }));
 
 export type Building = z.infer<typeof BuildingSchema>;
+
+// Convention: {projectId}-B{nn}-S{nn} with zero-padded 2-digit ordinals.
+// Falls back to the building's id prefix when ordinal isn't set yet
+// (shouldn't happen post-migration but kept defensive).
+export function autoSpaceId(
+  projectId: string,
+  buildingOrdinal: number | null | undefined,
+  sectionIndex: number
+): string {
+  const b = (buildingOrdinal ?? 1).toString().padStart(2, '0');
+  const s = (sectionIndex + 1).toString().padStart(2, '0');
+  return `${projectId}-B${b}-S${s}`;
+}

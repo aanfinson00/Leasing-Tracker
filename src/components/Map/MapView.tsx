@@ -19,7 +19,7 @@ import { MapPin, Satellite, Map as MapIcon, X } from 'lucide-react';
 import type { Building, Deal } from '../../types';
 import { ProjectDrawer } from './ProjectDrawer';
 import {
-  listBuildingsForProject,
+  listAllBuildings,
   upsertBuilding,
   deleteBuilding,
   subscribeBuildings,
@@ -27,9 +27,11 @@ import {
 import {
   parametricBays,
   rectangleFromCenter,
+  bumpOutPolygon,
   DEFAULT_BUILDING_PARAMS,
 } from '../../lib/map-utils/parametric';
 import { bayColor } from '../../lib/map-utils/demising';
+import { autoSpaceId } from '../../types';
 
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN ?? '').trim();
 
@@ -171,7 +173,7 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
   const handleCloseProject = () => {
     setActiveProjectId(null);
     setPlacement(null);
-    setBuildings([]);
+    // Don't clear buildings — keep all projects' buildings on the map.
   };
 
   const handleStartPlacement = (params: PlacementParams) => {
@@ -244,10 +246,19 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     };
     const footprint = rectangleFromCenter(rectangleParams);
     const now = new Date().toISOString();
+    // Building ordinal = next available slot within THIS project.
+    // (max existing ordinal in this project) + 1 so deletes don't
+    // immediately recycle.
+    const projectBuildings = buildingsRef.current.filter((b) => b.projectId === projectId);
+    const existingOrdinals = projectBuildings
+      .map((b) => b.buildingOrdinal ?? 0)
+      .filter((n) => n > 0);
+    const nextOrdinal =
+      existingOrdinals.length > 0 ? Math.max(...existingOrdinals) + 1 : 1;
     const next: Building = {
       id: crypto.randomUUID(),
       projectId,
-      name: `Building ${buildingsRef.current.length + 1}`,
+      name: `Building ${nextOrdinal}`,
       footprint,
       heightFt: 30,
       color: null,
@@ -258,6 +269,9 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
       rotationDeg: params.rotationDeg,
       centerLat: center.lat,
       centerLng: center.lng,
+      bumpOuts: [],
+      baySpaceIds: [],
+      buildingOrdinal: nextOrdinal,
       createdAt: now,
       updatedAt: now,
     };
@@ -369,14 +383,13 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
 
   const hasFitted = useRef(false);
 
-  // ── Load + subscribe to buildings for the active project ────────
+  // ── Load + subscribe to ALL buildings (every project) ──────────
+  // Buildings stay on the map regardless of which project the user
+  // has open in the drawer — the drawer just filters to its own
+  // project's list for editing.
   useEffect(() => {
-    if (!activeProjectId) {
-      setBuildings([]);
-      return;
-    }
     let cancelled = false;
-    listBuildingsForProject(activeProjectId)
+    listAllBuildings()
       .then((rows) => {
         if (!cancelled) setBuildings(rows);
       })
@@ -387,7 +400,6 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     const unsub = subscribeBuildings({
       onUpsert: (b) =>
         setBuildings((prev) => {
-          if (b.projectId !== activeProjectIdRef.current) return prev;
           const idx = prev.findIndex((x) => x.id === b.id);
           if (idx === -1) return [...prev, b];
           const next = prev.slice();
@@ -400,7 +412,7 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
       cancelled = true;
       unsub();
     };
-  }, [activeProjectId]);
+  }, []);
 
   // ── Render building bays as fill-extrusion ──────────────────────
   useEffect(() => {
@@ -414,30 +426,34 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     const features: Feature[] = [];
     for (const b of buildings) {
       const heightMeters = b.heightFt * FT_TO_METERS;
-      // Prefer parametric geometry for the bay slicing — it's
-      // rotation-aware and exact. Fall back to bay_count == 1 (whole
-      // footprint) when params are missing (legacy traced buildings).
       const hasParams =
         b.widthFt != null && b.depthFt != null && b.centerLat != null && b.centerLng != null;
-      if (hasParams && b.bayCount > 1) {
-        const bays = parametricBays(
-          {
+      const rectParams = hasParams
+        ? {
             centerLat: b.centerLat!,
             centerLng: b.centerLng!,
             widthFt: b.widthFt!,
             depthFt: b.depthFt!,
             rotationDeg: b.rotationDeg,
-          },
-          b.bayCount
-        );
+          }
+        : null;
+
+      // Main building bays.
+      if (rectParams && b.bayCount > 1) {
+        const bays = parametricBays(rectParams, b.bayCount);
         bays.forEach((bay, idx) => {
+          const customId = b.baySpaceIds[idx];
+          const spaceId =
+            customId ?? autoSpaceId(b.projectId, b.buildingOrdinal, idx);
           features.push({
             type: 'Feature',
             geometry: bay,
             properties: {
               id: `${b.id}:bay-${idx}`,
               buildingId: b.id,
+              kind: 'bay',
               name: `${b.name} · Bay ${idx + 1}`,
+              spaceId,
               heightMeters,
               color: b.color ?? bayColor(idx),
             },
@@ -450,10 +466,36 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
           properties: {
             id: b.id,
             buildingId: b.id,
+            kind: 'bay',
             name: b.name,
+            spaceId: b.baySpaceIds[0] ?? autoSpaceId(b.projectId, b.buildingOrdinal, 0),
             heightMeters,
             color: b.color ?? bayColor(0),
           },
+        });
+      }
+
+      // Bump-outs (parametric only — need building rectParams to anchor).
+      if (rectParams) {
+        b.bumpOuts.forEach((bo, idx) => {
+          const poly = bumpOutPolygon(rectParams, bo);
+          const spaceId =
+            bo.spaceId ?? autoSpaceId(b.projectId, b.buildingOrdinal, b.bayCount + idx);
+          features.push({
+            type: 'Feature',
+            geometry: poly,
+            properties: {
+              id: `${b.id}:bump-${bo.id}`,
+              buildingId: b.id,
+              kind: 'bumpout',
+              name: bo.name ?? `${b.name} · ${bo.side} bump-out`,
+              spaceId,
+              heightMeters,
+              // Subtle visual differentiation — bump-outs use a muted
+              // version of the bay color to read as "extension of".
+              color: b.color ?? bayColor(b.bayCount + idx),
+            },
+          });
         });
       }
     }
@@ -559,7 +601,7 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
       {activeProject && (
         <ProjectDrawer
           project={activeProject}
-          buildings={buildings}
+          buildings={buildings.filter((b) => b.projectId === activeProject.id)}
           placement={placement}
           onClose={handleCloseProject}
           onSelectDeal={(d) => onSelectDeal(d)}

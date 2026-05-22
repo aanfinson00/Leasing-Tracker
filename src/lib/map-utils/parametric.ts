@@ -114,3 +114,116 @@ export const DEFAULT_BUILDING_PARAMS = {
   rotationDeg: 0,
   bayCount: 1,
 } as const;
+
+// ── Bump-outs ────────────────────────────────────────────────────
+// A bump-out is a rectangle attached to one side of the parent
+// building, extending OUTWARD (away from the building). It's defined
+// in the building's local frame:
+//   - building local X axis = width (long axis)
+//   - building local Y axis = depth (short axis)
+//   - building center = (0, 0)
+//   - North side = +Y edge, South = -Y, East = +X, West = -X
+//
+// Each bump-out gets its own polygon (the union with the main
+// building is implicit — the renderer emits both as separate
+// features so each can have its own color / Space ID label).
+
+export type BumpOutSide = 'N' | 'S' | 'E' | 'W';
+
+export interface BumpOut {
+  id: string;
+  side: BumpOutSide;
+  /** Distance from the side's "left" corner along the side, in feet.
+   *  "Left" is the corner you'd see first looking AT that side from
+   *  outside the building. For S side, left = W corner; for N, left
+   *  = E corner; for E, left = S corner; for W, left = N corner. */
+  offsetFt: number;
+  /** Dimension along the side. */
+  widthFt: number;
+  /** Dimension perpendicular to the side, extending OUTWARD. */
+  depthFt: number;
+  name?: string | null;
+  /** Optional override; falls back to the building's auto-format. */
+  spaceId?: string | null;
+}
+
+/**
+ * Convert a bump-out into a rotated Polygon in lng/lat coords.
+ * Building params describe the parent — bump-out positions are
+ * resolved relative to that frame and then rotated together.
+ */
+export function bumpOutPolygon(
+  building: RectangleParams,
+  bump: Pick<BumpOut, 'side' | 'offsetFt' | 'widthFt' | 'depthFt'>
+): Polygon {
+  const wM = building.widthFt * FT_TO_M;
+  const dM = building.depthFt * FT_TO_M;
+  const halfW = wM / 2;
+  const halfD = dM / 2;
+  const offM = bump.offsetFt * FT_TO_M;
+  const bwM = bump.widthFt * FT_TO_M;
+  const bdM = bump.depthFt * FT_TO_M;
+
+  // Local-frame rectangle for the bump-out. Coordinates are in
+  // building meters before rotation.
+  let local: Array<[number, number]>;
+  switch (bump.side) {
+    case 'N': {
+      // North side runs along the +Y edge; "left" (from outside) = +X corner.
+      const x1 = halfW - offM;
+      const x0 = x1 - bwM;
+      const y0 = halfD;
+      const y1 = halfD + bdM;
+      local = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+      break;
+    }
+    case 'S': {
+      // South edge -Y; left (from outside) = -X corner.
+      const x0 = -halfW + offM;
+      const x1 = x0 + bwM;
+      const y1 = -halfD;
+      const y0 = -halfD - bdM;
+      local = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+      break;
+    }
+    case 'E': {
+      // East edge +X; left (from outside) = -Y corner.
+      const y0 = -halfD + offM;
+      const y1 = y0 + bwM;
+      const x0 = halfW;
+      const x1 = halfW + bdM;
+      local = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+      break;
+    }
+    case 'W': {
+      // West edge -X; left (from outside) = +Y corner.
+      const y1 = halfD - offM;
+      const y0 = y1 - bwM;
+      const x1 = -halfW;
+      const x0 = -halfW - bdM;
+      local = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+      break;
+    }
+  }
+
+  const rad = (building.rotationDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const rotated = local.map(([x, y]) => [
+    x * cos - y * sin,
+    x * sin + y * cos,
+  ] as [number, number]);
+
+  const cosLat = Math.cos((building.centerLat * Math.PI) / 180);
+  const corners: Array<[number, number]> = rotated.map(([dx, dy]) => [
+    building.centerLng + dx / (METERS_PER_DEG_LAT * cosLat),
+    building.centerLat + dy / METERS_PER_DEG_LAT,
+  ]);
+  corners.push([corners[0][0], corners[0][1]]);
+  return { type: 'Polygon', coordinates: [corners] };
+}
+
+/** Convenience — area of a single bump-out in SF. */
+export function bumpOutSF(bump: Pick<BumpOut, 'widthFt' | 'depthFt'>): number {
+  return bump.widthFt * bump.depthFt;
+}

@@ -337,6 +337,9 @@ export interface BuildingRow {
   rotation_deg: number;
   center_lat: number | null;
   center_lng: number | null;
+  bump_outs: Building['bumpOuts'];
+  bay_space_ids: Array<string | null>;
+  building_ordinal: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -360,6 +363,9 @@ export const buildingToRow = (
   rotation_deg: b.rotationDeg ?? 0,
   center_lat: b.centerLat ?? null,
   center_lng: b.centerLng ?? null,
+  bump_outs: b.bumpOuts ?? [],
+  bay_space_ids: b.baySpaceIds ?? [],
+  building_ordinal: b.buildingOrdinal ?? null,
   created_at: b.createdAt,
   updated_at: b.updatedAt,
 });
@@ -378,6 +384,9 @@ export const rowToBuilding = (r: BuildingRow): Building => ({
   rotationDeg: r.rotation_deg != null ? Number(r.rotation_deg) : 0,
   centerLat: r.center_lat != null ? Number(r.center_lat) : null,
   centerLng: r.center_lng != null ? Number(r.center_lng) : null,
+  bumpOuts: r.bump_outs ?? [],
+  baySpaceIds: r.bay_space_ids ?? [],
+  buildingOrdinal: r.building_ordinal,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });

@@ -5,7 +5,8 @@
 
 import { useState } from 'react';
 import { Building2, X, ChevronRight, Plus, Trash2 } from 'lucide-react';
-import type { Building, Deal } from '../../types';
+import type { Building, BumpOut, Deal, FrontageSide } from '../../types';
+import { autoSpaceId } from '../../types';
 import type { Project, PlacementParams } from './MapView';
 import { DEFAULT_BUILDING_PARAMS } from '../../lib/map-utils/parametric';
 import { StatusBadge } from '../StatusBadge';
@@ -373,6 +374,38 @@ function BuildingRow({
     });
   };
 
+  const updateBaySpaceId = (idx: number, value: string | null) => {
+    const next = [...building.baySpaceIds];
+    while (next.length <= idx) next.push(null);
+    next[idx] = value;
+    update('baySpaceIds', next);
+  };
+
+  const updateBumpOut = (boId: string, patch: Partial<BumpOut>) => {
+    update(
+      'bumpOuts',
+      building.bumpOuts.map((b) => (b.id === boId ? { ...b, ...patch } : b))
+    );
+  };
+
+  const addBumpOut = (side: FrontageSide) => {
+    const newBump: BumpOut = {
+      id: crypto.randomUUID(),
+      side,
+      offsetFt: 0,
+      // Default 50×60 — reasonable office-pod size; user tunes.
+      widthFt: 50,
+      depthFt: 60,
+      name: null,
+      spaceId: null,
+    };
+    update('bumpOuts', [...building.bumpOuts, newBump]);
+  };
+
+  const deleteBumpOut = (boId: string) => {
+    update('bumpOuts', building.bumpOuts.filter((b) => b.id !== boId));
+  };
+
   return (
     <div className="rounded-xl bg-bg-elevated border border-border shadow-soft">
       <div className="flex items-center gap-2 px-3 py-2">
@@ -383,6 +416,11 @@ function BuildingRow({
           className="flex-1 min-w-0 bg-transparent text-sm font-medium text-fg focus:outline-none focus:ring-2 focus:ring-accent/40 rounded px-1.5 py-0.5"
           aria-label="Building name"
         />
+        {building.buildingOrdinal != null && (
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-fg-subtle tabular-nums">
+            B{building.buildingOrdinal.toString().padStart(2, '0')}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
@@ -402,65 +440,314 @@ function BuildingRow({
         </button>
       </div>
       {expanded && (
-        <div className="border-t border-border/60 px-3 py-3 grid grid-cols-2 gap-3">
-          {building.widthFt != null && (
+        <div className="border-t border-border/60 px-3 py-3 flex flex-col gap-4">
+          {/* Dimensions */}
+          <div className="grid grid-cols-2 gap-3">
+            {building.widthFt != null && (
+              <NumField
+                label="Width (ft)"
+                value={building.widthFt}
+                onChange={(v) => update('widthFt', Math.max(10, v))}
+                step={10}
+              />
+            )}
+            {building.depthFt != null && (
+              <NumField
+                label="Depth (ft)"
+                value={building.depthFt}
+                onChange={(v) => update('depthFt', Math.max(10, v))}
+                step={10}
+              />
+            )}
             <NumField
-              label="Width (ft)"
-              value={building.widthFt}
-              onChange={(v) => update('widthFt', Math.max(10, v))}
-              step={10}
+              label="Rotation (deg)"
+              value={building.rotationDeg}
+              onChange={(v) => update('rotationDeg', ((v % 360) + 360) % 360)}
+              step={15}
             />
-          )}
-          {building.depthFt != null && (
             <NumField
-              label="Depth (ft)"
-              value={building.depthFt}
-              onChange={(v) => update('depthFt', Math.max(10, v))}
-              step={10}
+              label="Bays"
+              value={building.bayCount}
+              onChange={(v) => update('bayCount', Math.max(1, Math.min(50, Math.round(v))))}
+              step={1}
             />
-          )}
-          <NumField
-            label="Rotation (deg)"
-            value={building.rotationDeg}
-            onChange={(v) => update('rotationDeg', ((v % 360) + 360) % 360)}
-            step={15}
-          />
-          <NumField
-            label="Bays"
-            value={building.bayCount}
-            onChange={(v) => update('bayCount', Math.max(1, Math.min(50, Math.round(v))))}
-            step={1}
-          />
-          <NumField
-            label="Height (ft)"
-            value={building.heightFt}
-            onChange={(v) => update('heightFt', Math.max(1, v))}
-            step={1}
-          />
+            <NumField
+              label="Height (ft)"
+              value={building.heightFt}
+              onChange={(v) => update('heightFt', Math.max(1, v))}
+              step={1}
+            />
+            {building.widthFt != null && building.depthFt != null && (
+              <div className="col-span-2 text-[11px] text-fg-muted tabular-nums pt-1">
+                <strong className="text-fg">
+                  {Math.round(building.widthFt * building.depthFt).toLocaleString('en-US')}
+                </strong>{' '}
+                SF total
+                {building.bayCount > 1 && building.widthFt != null && (
+                  <>
+                    {' '}
+                    · each bay is{' '}
+                    <strong className="text-fg">
+                      {(building.widthFt / building.bayCount).toFixed(1)}
+                    </strong>{' '}
+                    ft wide
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Bays — per-bay width + space ID */}
           {building.widthFt != null && building.depthFt != null && (
-            <div className="col-span-2 text-[11px] text-fg-muted tabular-nums pt-1">
-              <strong className="text-fg">
-                {Math.round(building.widthFt * building.depthFt).toLocaleString('en-US')}
-              </strong>{' '}
-              SF total
-              {building.bayCount > 1 && (
-                <>
-                  {' '}
-                  ·{' '}
-                  <strong className="text-fg">
-                    {Math.round(
-                      (building.widthFt * building.depthFt) / building.bayCount
-                    ).toLocaleString('en-US')}
-                  </strong>{' '}
-                  SF/bay
-                </>
-              )}
-            </div>
+            <BaysSection
+              building={building}
+              onUpdateBaySpaceId={updateBaySpaceId}
+            />
+          )}
+
+          {/* Bump-outs */}
+          {building.widthFt != null && building.depthFt != null && (
+            <BumpOutsSection
+              building={building}
+              onAdd={addBumpOut}
+              onUpdate={updateBumpOut}
+              onDelete={deleteBumpOut}
+            />
           )}
         </div>
       )}
     </div>
   );
+}
+
+function BaysSection({
+  building,
+  onUpdateBaySpaceId,
+}: {
+  building: Building;
+  onUpdateBaySpaceId: (idx: number, value: string | null) => void;
+}) {
+  const bayWidth =
+    building.widthFt != null ? building.widthFt / building.bayCount : null;
+  const bayDepth = building.depthFt ?? 0;
+  const baySf = bayWidth != null ? bayWidth * bayDepth : 0;
+  return (
+    <div className="border-t border-border/40 pt-3">
+      <h4 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle mb-2">
+        Bays{' '}
+        {bayWidth != null && (
+          <span className="text-fg-muted font-medium">
+            · {bayWidth.toFixed(1)} ft wide × {bayDepth.toFixed(0)} ft deep
+          </span>
+        )}
+      </h4>
+      <div className="flex flex-col gap-1.5">
+        {Array.from({ length: building.bayCount }).map((_, idx) => {
+          const customId = building.baySpaceIds[idx] ?? null;
+          const fallbackId = autoSpaceId(
+            building.projectId,
+            building.buildingOrdinal,
+            idx
+          );
+          return (
+            <SectionRow
+              key={`bay-${idx}`}
+              label={`Bay ${idx + 1}`}
+              meta={`${Math.round(baySf).toLocaleString('en-US')} SF`}
+              spaceIdValue={customId ?? ''}
+              spaceIdPlaceholder={fallbackId}
+              onSpaceIdChange={(v) => onUpdateBaySpaceId(idx, v === '' ? null : v)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BumpOutsSection({
+  building,
+  onAdd,
+  onUpdate,
+  onDelete,
+}: {
+  building: Building;
+  onAdd: (side: FrontageSide) => void;
+  onUpdate: (id: string, patch: Partial<BumpOut>) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [showAdd, setShowAdd] = useState(false);
+  return (
+    <div className="border-t border-border/40 pt-3">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+          Bump-outs ({building.bumpOuts.length})
+        </h4>
+        <button
+          type="button"
+          onClick={() => setShowAdd((v) => !v)}
+          className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent-tint rounded-md transition-colors"
+        >
+          <Plus size={10} strokeWidth={2.5} />
+          Add
+        </button>
+      </div>
+      {showAdd && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {(['N', 'E', 'S', 'W'] as const).map((side) => (
+            <button
+              key={side}
+              type="button"
+              onClick={() => {
+                onAdd(side);
+                setShowAdd(false);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-fg bg-bg border border-border rounded-md hover:bg-bg-hover transition-colors"
+            >
+              {sideLabel(side)} side
+            </button>
+          ))}
+        </div>
+      )}
+      {building.bumpOuts.length === 0 && !showAdd && (
+        <p className="text-[11px] text-fg-subtle">None. Click + Add to attach a rectangle to a side.</p>
+      )}
+      <div className="flex flex-col gap-1.5">
+        {building.bumpOuts.map((bo, idx) => {
+          const sectionIdx = building.bayCount + idx;
+          const fallbackId = autoSpaceId(
+            building.projectId,
+            building.buildingOrdinal,
+            sectionIdx
+          );
+          return (
+            <BumpOutRow
+              key={bo.id}
+              bump={bo}
+              fallbackSpaceId={fallbackId}
+              onChange={(patch) => onUpdate(bo.id, patch)}
+              onDelete={() => {
+                if (window.confirm(`Delete ${sideLabel(bo.side)} bump-out?`)) onDelete(bo.id);
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BumpOutRow({
+  bump,
+  fallbackSpaceId,
+  onChange,
+  onDelete,
+}: {
+  bump: BumpOut;
+  fallbackSpaceId: string;
+  onChange: (patch: Partial<BumpOut>) => void;
+  onDelete: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const sf = Math.round(bump.widthFt * bump.depthFt).toLocaleString('en-US');
+  return (
+    <div className="rounded-md bg-bg border border-border/60">
+      <div className="flex items-center gap-2 px-2.5 py-1.5">
+        <span className="text-[11px] font-semibold tabular-nums text-accent w-8 shrink-0">
+          {sideLabel(bump.side)}
+        </span>
+        <span className="text-xs text-fg-muted tabular-nums flex-1 truncate">
+          {bump.widthFt} × {bump.depthFt} ft · {sf} SF
+        </span>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-[11px] text-fg-muted hover:text-fg px-1.5 py-0.5 rounded hover:bg-bg-hover transition-colors"
+        >
+          {expanded ? 'Hide' : 'Edit'}
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="p-1 rounded text-fg-subtle hover:text-danger hover:bg-danger/10 transition-colors"
+          aria-label="Delete bump-out"
+        >
+          <Trash2 size={11} strokeWidth={2} />
+        </button>
+      </div>
+      {expanded && (
+        <div className="border-t border-border/40 px-2.5 py-2 flex flex-col gap-2">
+          <div className="grid grid-cols-3 gap-2">
+            <NumField
+              label="Offset (ft)"
+              value={bump.offsetFt}
+              onChange={(v) => onChange({ offsetFt: Math.max(0, v) })}
+              step={5}
+            />
+            <NumField
+              label="Width (ft)"
+              value={bump.widthFt}
+              onChange={(v) => onChange({ widthFt: Math.max(5, v) })}
+              step={5}
+            />
+            <NumField
+              label="Depth (ft)"
+              value={bump.depthFt}
+              onChange={(v) => onChange({ depthFt: Math.max(5, v) })}
+              step={5}
+            />
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-fg-subtle">
+              Space ID (override)
+            </span>
+            <input
+              type="text"
+              value={bump.spaceId ?? ''}
+              onChange={(e) =>
+                onChange({ spaceId: e.target.value === '' ? null : e.target.value })
+              }
+              placeholder={fallbackSpaceId}
+              className="w-full px-2.5 py-1.5 bg-bg-elevated rounded-md text-xs text-fg tabular-nums focus:outline-none focus:ring-2 focus:ring-accent/40 border border-border placeholder:text-fg-subtle"
+            />
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionRow({
+  label,
+  meta,
+  spaceIdValue,
+  spaceIdPlaceholder,
+  onSpaceIdChange,
+}: {
+  label: string;
+  meta: string;
+  spaceIdValue: string;
+  spaceIdPlaceholder: string;
+  onSpaceIdChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-bg border border-border/60">
+      <span className="text-[11px] font-medium text-fg w-14 shrink-0">{label}</span>
+      <span className="text-[11px] text-fg-muted tabular-nums w-24 shrink-0">{meta}</span>
+      <input
+        type="text"
+        value={spaceIdValue}
+        onChange={(e) => onSpaceIdChange(e.target.value)}
+        placeholder={spaceIdPlaceholder}
+        className="flex-1 min-w-0 px-2 py-1 bg-bg-elevated rounded text-xs text-fg tabular-nums focus:outline-none focus:ring-2 focus:ring-accent/40 border border-border placeholder:text-fg-subtle"
+        aria-label={`Space ID for ${label}`}
+      />
+    </div>
+  );
+}
+
+function sideLabel(side: FrontageSide): string {
+  return side === 'N' ? 'North' : side === 'S' ? 'South' : side === 'E' ? 'East' : 'West';
 }
 
 function NumField({
