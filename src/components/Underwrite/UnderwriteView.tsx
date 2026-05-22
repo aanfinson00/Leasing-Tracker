@@ -1,15 +1,12 @@
-// A/B underwriting workspace. Mirrors Lease-Calculator's layout:
-// header toolbar with property + exports, ScenarioBar with A/B
-// pickers, two-column main grid (inputs left for the actively
-// edited scenario, results right with side-by-side waterfalls),
-// then full-width annual and cashflow schedules.
-//
-// Editing is single-scenario: the user clicks a scenario pill to
-// edit it (or A/B to use it as a comparison). Inputs flush to
-// Supabase debounced (300ms). Results recompute synchronously on
-// every keystroke for snappy feedback.
+// A/B underwriting workspace. Lease-Calculator-faithful spreadsheet
+// layout: InputsPanel shows BOTH A and B in one panel (fields as
+// columns, scenarios as rows), with diff highlighting + per-cell
+// warnings. Every edit fires onUpdateInput(scenarioId, field,
+// value); per-scenario debounced save (300ms) flushes to Supabase.
+// Globals are 'shared assumptions' applied to BOTH scenarios on
+// each update since our model snapshots globals per-scenario.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { Deal, Scenario } from '../../types';
 import type {
@@ -72,52 +69,64 @@ export function UnderwriteView({
   );
   const a = useMemo(() => scenarios.find((s) => s.id === aId) ?? null, [scenarios, aId]);
   const b = useMemo(() => scenarios.find((s) => s.id === bId) ?? null, [scenarios, bId]);
-  const editing = useMemo(
-    () => scenarios.find((s) => s.id === editingId) ?? null,
-    [scenarios, editingId]
-  );
 
-  // Local working copy of the scenario currently being edited.
-  // Re-syncs when editingId or upstream updatedAt changes (e.g. via
-  // a realtime event from another tab).
-  const [draft, setDraft] = useState<Scenario | null>(editing);
-  const saveTimer = useRef<number | null>(null);
-
-  useEffect(() => {
-    setDraft(editing);
-  }, [editingId, editing?.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Cleanup pending save when unmounting.
+  // Per-scenario debounced save. Each cell edit cancels the prior
+  // timer for THAT scenario only — typing in A doesn't blow away
+  // B's pending save and vice versa.
+  const saveTimers = useRef<Map<string, number>>(new Map());
   useEffect(() => {
     return () => {
-      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+      saveTimers.current.forEach((t) => window.clearTimeout(t));
+      saveTimers.current.clear();
     };
   }, []);
 
-  const flushSave = (next: Scenario) => {
-    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => {
+  const scheduleSave = (scenario: Scenario) => {
+    const existing = saveTimers.current.get(scenario.id);
+    if (existing !== undefined) window.clearTimeout(existing);
+    const t = window.setTimeout(() => {
       const withResults: Scenario = {
-        ...next,
-        results: runScenario(next.inputs as ScenarioInputs, next.globals as Globals),
+        ...scenario,
+        results: runScenario(
+          scenario.inputs as ScenarioInputs,
+          scenario.globals as Globals
+        ),
         updatedAt: new Date().toISOString(),
       };
       onSaveScenario(withResults);
+      saveTimers.current.delete(scenario.id);
     }, SAVE_DEBOUNCE_MS);
+    saveTimers.current.set(scenario.id, t);
   };
 
-  const handleInputsChange = (next: ScenarioInputs) => {
-    if (!draft) return;
-    const updated: Scenario = { ...draft, inputs: next };
-    setDraft(updated);
-    flushSave(updated);
+  const handleUpdateInput = <K extends keyof ScenarioInputs>(
+    scenarioId: string,
+    field: K,
+    value: ScenarioInputs[K]
+  ) => {
+    const target = scenarios.find((s) => s.id === scenarioId);
+    if (!target) return;
+    const nextInputs = { ...(target.inputs as ScenarioInputs), [field]: value };
+    const updated: Scenario = { ...target, inputs: nextInputs };
+    // Optimistic local: rely on parent's setScenarios via onSaveScenario.
+    // The debounce delays the actual write; the calc-rerun for results
+    // happens at flush time. Live display in HeadlineCard/Waterfall
+    // recomputes from `a`/`b` props each render below.
+    scheduleSave(updated);
   };
-  const handleGlobalsChange = (next: Globals) => {
-    if (!draft) return;
-    const updated: Scenario = { ...draft, globals: next };
-    setDraft(updated);
-    flushSave(updated);
+
+  const handleUpdateGlobals = (patch: Partial<Globals>) => {
+    // Globals are 'shared' in Lease-Calc; here they're snapshotted
+    // per-scenario, so apply to BOTH A and B. Each gets its own
+    // debounced save.
+    [a, b].forEach((s) => {
+      if (!s) return;
+      const nextGlobals = { ...(s.globals as Globals), ...patch };
+      const updated: Scenario = { ...s, globals: nextGlobals };
+      scheduleSave(updated);
+    });
   };
+
   const handleRename = (id: string, name: string) => {
     const target = scenarios.find((s) => s.id === id);
     if (!target) return;
@@ -126,36 +135,30 @@ export function UnderwriteView({
       name,
       updatedAt: new Date().toISOString(),
     };
-    if (id === editingId) setDraft(updated);
     onSaveScenario(updated);
   };
 
-  // Results — recomputed synchronously on every render. Live for the
-  // draft (so typing feels instant); cached `results` on A and B for
-  // their separate waterfalls and the comparison.
-  const liveDraftResults = useMemo(() => {
-    if (!draft) return null;
+  // Results — recompute each render from current props. Since edits
+  // schedule debounced saves but don't mutate local state here, the
+  // visible result lags the keystroke by ~300ms. (Earlier 'draft'
+  // approach made it live but added cross-scenario fight conditions
+  // when both A and B were being edited from the same panel.)
+  const aResults = useMemo<ScenarioResults | null>(() => {
+    if (!a) return null;
     try {
-      return runScenario(draft.inputs as ScenarioInputs, draft.globals as Globals);
+      return runScenario(a.inputs as ScenarioInputs, a.globals as Globals);
     } catch {
       return null;
     }
-  }, [draft]);
-
-  // For A and B, prefer the live draft result when it's the one being
-  // edited (so the comparison reflects unsaved keystrokes); otherwise
-  // fall back to cached `results` or a recompute.
-  const computeFor = (s: Scenario | null): ScenarioResults | null => {
-    if (!s) return null;
-    if (s.id === draft?.id && liveDraftResults) return liveDraftResults;
+  }, [a]);
+  const bResults = useMemo<ScenarioResults | null>(() => {
+    if (!b) return null;
     try {
-      return runScenario(s.inputs as ScenarioInputs, s.globals as Globals);
+      return runScenario(b.inputs as ScenarioInputs, b.globals as Globals);
     } catch {
       return null;
     }
-  };
-  const aResults = useMemo(() => computeFor(a), [a, liveDraftResults]); // eslint-disable-line react-hooks/exhaustive-deps
-  const bResults = useMemo(() => computeFor(b), [b, liveDraftResults]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [b]);
 
   const canExport = a !== null && b !== null && aResults !== null && bResults !== null;
 
@@ -208,41 +211,40 @@ export function UnderwriteView({
             onAdd={() => onNewScenario(selectedDeal)}
           />
 
-          <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
-            {/* LEFT — inputs for the actively-edited scenario */}
-            {draft ? (
-              <InputsPanel
-                inputs={draft.inputs as ScenarioInputs}
-                globals={draft.globals as Globals}
-                onInputsChange={handleInputsChange}
-                onGlobalsChange={handleGlobalsChange}
-              />
-            ) : (
-              <div className="bg-bg-elevated rounded-2xl shadow-soft p-6 text-sm text-fg-muted">
-                Click a scenario above to edit its inputs.
-              </div>
-            )}
+          {/* Spreadsheet InputsPanel — both A and B together in one
+              wide grid. Globals (shared assumptions) live at the top
+              of the panel; per-section field grids below. */}
+          {a && b ? (
+            <InputsPanel
+              aId={a.id}
+              aName={a.name}
+              aInputs={a.inputs as ScenarioInputs}
+              bId={b.id}
+              bName={b.name}
+              bInputs={b.inputs as ScenarioInputs}
+              globals={(a.globals ?? b.globals) as Globals}
+              onUpdateInput={handleUpdateInput}
+              onUpdateGlobals={handleUpdateGlobals}
+            />
+          ) : (
+            <SelectABHint />
+          )}
 
-            {/* RIGHT — results */}
+          {/* Results — headline + side-by-side waterfalls. */}
+          {a && b && aResults && bResults && (
             <div className="flex flex-col gap-4 min-w-0">
-              {a && b && aResults && bResults ? (
-                <>
-                  <HeadlineCard
-                    aName={a.name}
-                    aResults={aResults}
-                    bName={b.name}
-                    bResults={bResults}
-                  />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <WaterfallChart title={a.name} waterfall={aResults.waterfall} />
-                    <WaterfallChart title={b.name} waterfall={bResults.waterfall} />
-                  </div>
-                </>
-              ) : (
-                <SelectABHint />
-              )}
+              <HeadlineCard
+                aName={a.name}
+                aResults={aResults}
+                bName={b.name}
+                bResults={bResults}
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <WaterfallChart title={a.name} waterfall={aResults.waterfall} />
+                <WaterfallChart title={b.name} waterfall={bResults.waterfall} />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Full-width schedules below */}
           {a && b && aResults && bResults && (
