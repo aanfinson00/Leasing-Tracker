@@ -589,7 +589,7 @@ function Cell({
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.currentTarget.blur();
           }}
-          className="h-8 w-full px-2 text-sm bg-bg-elevated border border-border rounded-md text-fg focus:outline-none focus:ring-2 focus:ring-accent/40"
+          className="h-8 w-full px-2 text-sm bg-accent/[0.06] border border-accent/30 rounded-md text-fg caret-accent hover:bg-accent/[0.10] hover:border-accent/50 focus:outline-none focus:bg-bg-elevated focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors"
         />
       </CellWrapper>
     );

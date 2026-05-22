@@ -19,9 +19,16 @@ interface Props {
   className?: string;
 }
 
+// Visual cue that this is an EDITABLE cell. Subtle copper-tinted fill
+// + accent border distinguishes it from the surrounding card surface
+// (which was making the value read as static text). Caret + spin
+// affordance comes from the inline `caret-accent` color.
 const BASE_CLASS =
-  'h-8 w-full px-2 text-sm tabular-nums bg-bg-elevated border border-border rounded-md ' +
-  'text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent/40';
+  'h-8 w-full px-2 text-sm tabular-nums bg-accent/[0.06] border border-accent/30 rounded-md ' +
+  'text-fg caret-accent placeholder:text-fg-subtle ' +
+  'hover:bg-accent/[0.10] hover:border-accent/50 ' +
+  'focus:outline-none focus:bg-bg-elevated focus:border-accent focus:ring-2 focus:ring-accent/30 ' +
+  'transition-colors';
 
 export function FormattedNumberInput({
   value,
