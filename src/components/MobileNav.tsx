@@ -3,7 +3,7 @@
 // horizontally-scrollable strip of icon + label buttons pinned to
 // the bottom of the screen.
 
-import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database } from 'lucide-react';
+import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { View } from './Sidebar';
 
@@ -19,6 +19,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'rentroll', icon: Building, label: 'Portfolio' },
   { id: 'underwrite', icon: Calculator, label: 'Calc' },
   { id: 'comps', icon: Database, label: 'Comps' },
+  { id: 'contacts', icon: Users, label: 'People' },
   { id: 'map', icon: MapPin, label: 'Map' },
   { id: 'onboarding', icon: ClipboardCheck, label: 'Onboard' },
   { id: 'reports', icon: BarChart3, label: 'Reports' },
