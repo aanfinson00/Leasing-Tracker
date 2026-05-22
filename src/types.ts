@@ -373,6 +373,9 @@ export type Scenario = z.infer<typeof ScenarioSchema>;
 // Loose GeoJSON Polygon shape — z.unknown so we don't fight zod on
 // nested coordinate arrays. The drawing tool (mapbox-gl-draw) is the
 // authoritative producer of valid Polygons; readers trust the shape.
+export const FrontageSideEnum = z.enum(['N', 'S', 'E', 'W']);
+export type FrontageSide = z.infer<typeof FrontageSideEnum>;
+
 export const BuildingSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().min(1),
@@ -380,11 +383,14 @@ export const BuildingSchema = z.object({
   footprint: z.unknown(),
   heightFt: z.number().positive(),
   color: z.string().nullable().optional(),
+  bayCount: z.number().int().min(1).max(50).default(1),
+  frontageSide: FrontageSideEnum.nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 }).transform((b) => ({
   ...b,
   color: b.color ?? null,
+  frontageSide: b.frontageSide ?? null,
 }));
 
 export type Building = z.infer<typeof BuildingSchema>;

@@ -330,6 +330,8 @@ export interface BuildingRow {
   footprint: Polygon;
   height_ft: number;
   color: string | null;
+  bay_count: number;
+  frontage_side: 'N' | 'S' | 'E' | 'W' | null;
   created_at: string;
   updated_at: string;
 }
@@ -346,6 +348,8 @@ export const buildingToRow = (
   footprint: b.footprint as Polygon,
   height_ft: b.heightFt,
   color: b.color ?? null,
+  bay_count: b.bayCount ?? 1,
+  frontage_side: b.frontageSide ?? null,
   created_at: b.createdAt,
   updated_at: b.updatedAt,
 });
@@ -357,6 +361,8 @@ export const rowToBuilding = (r: BuildingRow): Building => ({
   footprint: r.footprint,
   heightFt: Number(r.height_ft),
   color: r.color,
+  bayCount: r.bay_count ?? 1,
+  frontageSide: r.frontage_side,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });

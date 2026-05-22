@@ -415,6 +415,10 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
         footprint: snapped,
         heightFt: 30,
         color: null,
+        // bay_count defaults to 1 (no demising). Frontage side null =
+        // auto-detect from AABB aspect ratio at render time.
+        bayCount: 1,
+        frontageSide: null,
         createdAt: now,
         updatedAt: now,
       };

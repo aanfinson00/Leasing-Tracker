@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { X, Trash2, ChevronDown, ChevronRight, Link as LinkIcon, NotebookPen } from 'lucide-react';
+import { X, Trash2, ChevronDown, ChevronRight, Link as LinkIcon, NotebookPen, ExternalLink } from 'lucide-react';
 import type { OnboardingChecklist, OnboardingItem, RentRollRow } from '../../types';
 import {
   ONBOARDING_TEMPLATE,
@@ -253,23 +253,30 @@ function ItemRow({
                 {template.hint}
               </span>
             )}
-            {hasExtras && !expanded && (
-              <span className="inline-flex items-center gap-2 mt-1">
-                {state.notes && (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-fg-muted">
-                    <NotebookPen size={10} strokeWidth={2} />
-                    {state.notes.length > 40 ? state.notes.slice(0, 40) + '…' : state.notes}
-                  </span>
-                )}
-                {state.link && (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-accent">
-                    <LinkIcon size={10} strokeWidth={2} />
-                    {shortDomain(state.link)}
-                  </span>
-                )}
+            {hasExtras && !expanded && state.notes && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-fg-muted mt-1">
+                <NotebookPen size={10} strokeWidth={2} />
+                {state.notes.length > 40 ? state.notes.slice(0, 40) + '…' : state.notes}
               </span>
             )}
           </button>
+          {/* Link chip sits OUTSIDE the expand-toggle button so it can
+              be a real clickable <a> — clicking the chip opens the file
+              URL in a new tab without toggling the row's expanded state. */}
+          {state.link && !expanded && (
+            <a
+              href={state.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline mt-1"
+              title={state.link}
+            >
+              <LinkIcon size={10} strokeWidth={2} />
+              {shortDomain(state.link)}
+              <ExternalLink size={9} strokeWidth={2} />
+            </a>
+          )}
           {expanded && (
             <div className="mt-2 space-y-2 pb-2">
               <input
@@ -282,16 +289,30 @@ function ItemRow({
                 }}
                 className={inputClass}
               />
-              <input
-                type="url"
-                placeholder="Link (SharePoint URL, email thread, etc.)"
-                defaultValue={state.link ?? ''}
-                onBlur={(e) => {
-                  const v = e.target.value.trim();
-                  onLinkChange(v === '' ? null : v);
-                }}
-                className={inputClass}
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="url"
+                  placeholder="File URL (SharePoint, OneDrive, Drive, email thread…)"
+                  defaultValue={state.link ?? ''}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    onLinkChange(v === '' ? null : v);
+                  }}
+                  className={inputClass}
+                />
+                {state.link && (
+                  <a
+                    href={state.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-accent bg-accent-tint hover:bg-accent-soft rounded-md transition-colors shrink-0"
+                    title="Open file in new tab"
+                  >
+                    <ExternalLink size={12} strokeWidth={2} />
+                    Open
+                  </a>
+                )}
+              </div>
             </div>
           )}
         </div>
