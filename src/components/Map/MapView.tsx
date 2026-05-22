@@ -223,15 +223,24 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
   }, [placingProjectId]);
 
   // ── Flatten camera in draw mode ─────────────────────────────────
-  // 55° pitch is great for the cinematic project arrival, awful for
+  // 55° pitch is great for cinematic project arrival, awful for
   // polygon tracing — perspective makes click-to-place feel imprecise
   // near the bottom of the screen. Flatten to top-down satellite for
-  // draw mode, restore the tilt when the user finishes or cancels.
+  // draw mode AND bump the zoom so the parcel doesn't visually shrink
+  // (without the foreground emphasis of pitch 55, the building looks
+  // smaller at the same nominal zoom). Restore the tilt when the
+  // user finishes or cancels.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     if (drawMode) {
-      map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+      map.easeTo({
+        pitch: 0,
+        bearing: 0,
+        // max() so a user who manually zoomed in further isn't yanked back.
+        zoom: Math.max(map.getZoom(), 18.5),
+        duration: 600,
+      });
     } else if (activeProjectId) {
       map.easeTo({ pitch: 55, bearing: -45, duration: 600 });
     }
