@@ -8,6 +8,7 @@ import type {
   ActivityEntry,
   Building,
   Deal,
+  DevelopmentProject,
   OnboardingChecklist,
   RentRollRow,
   Scenario,
@@ -387,6 +388,93 @@ export const rowToBuilding = (r: BuildingRow): Building => ({
   bumpOuts: r.bump_outs ?? [],
   baySpaceIds: r.bay_space_ids ?? [],
   buildingOrdinal: r.building_ordinal,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── DevelopmentProject ────────────────────────────────────────────
+
+export interface DevelopmentProjectRow {
+  id: string;
+  project_name: string;
+  market: string | null;
+  address: string | null;
+  phase: DevelopmentProject['phase'];
+  total_sf: number | string | null;
+  acres: number | string | null;
+  building_count: number | null;
+  start_date: string | null;
+  expected_delivery_date: string | null;
+  actual_delivery_date: string | null;
+  total_budget: number | string | null;
+  spent_to_date: number | string | null;
+  pm_name: string | null;
+  gc_name: string | null;
+  gc_contact: string | null;
+  architect: string | null;
+  risk_level: DevelopmentProject['riskLevel'];
+  status_summary: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const numOr = (v: number | string | null | undefined): number | null =>
+  v == null ? null : Number(v);
+
+export const developmentProjectToRow = (
+  p: DevelopmentProject
+): Omit<DevelopmentProjectRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: p.id,
+  project_name: p.projectName,
+  market: p.market,
+  address: p.address,
+  phase: p.phase,
+  total_sf: p.totalSF,
+  acres: p.acres,
+  building_count: p.buildingCount,
+  start_date: p.startDate,
+  expected_delivery_date: p.expectedDeliveryDate,
+  actual_delivery_date: p.actualDeliveryDate,
+  total_budget: p.totalBudget,
+  spent_to_date: p.spentToDate,
+  pm_name: p.pmName,
+  gc_name: p.gcName,
+  gc_contact: p.gcContact,
+  architect: p.architect,
+  risk_level: p.riskLevel,
+  status_summary: p.statusSummary,
+  notes: p.notes,
+  created_at: p.createdAt,
+  updated_at: p.updatedAt,
+});
+
+export const rowToDevelopmentProject = (
+  r: DevelopmentProjectRow
+): DevelopmentProject => ({
+  id: r.id,
+  projectName: r.project_name,
+  market: r.market,
+  address: r.address,
+  phase: r.phase,
+  totalSF: numOr(r.total_sf),
+  acres: numOr(r.acres),
+  buildingCount: r.building_count,
+  startDate: r.start_date,
+  expectedDeliveryDate: r.expected_delivery_date,
+  actualDeliveryDate: r.actual_delivery_date,
+  totalBudget: numOr(r.total_budget),
+  spentToDate: numOr(r.spent_to_date),
+  pmName: r.pm_name,
+  gcName: r.gc_name,
+  gcContact: r.gc_contact,
+  architect: r.architect,
+  riskLevel: r.risk_level,
+  statusSummary: r.status_summary,
+  notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });

@@ -17,6 +17,7 @@ import type {
   ActivityEntry,
   Deal,
   DealStatus,
+  DevelopmentProject,
   OnboardingChecklist,
   OnboardingItem,
   RentRollRow,
@@ -91,7 +92,14 @@ import {
   deleteScenario as deleteScenarioRow,
   subscribeScenarios,
 } from './lib/repo/scenarios';
+import {
+  listDevelopmentProjects,
+  upsertDevelopmentProject,
+  deleteDevelopmentProject as deleteDevProjectRow,
+  subscribeDevelopmentProjects,
+} from './lib/repo/developmentProjects';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
+import { DevelopmentView } from './components/Development/DevelopmentView';
 import { MapView } from './components/Map/MapView';
 import { GridBackground } from './components/GridBackground';
 import { MobileNav } from './components/MobileNav';
@@ -117,6 +125,7 @@ function App() {
   // Underwrite tab state — separate from deals/rentRoll/etc. because
   // scenarios are loaded per-deal on demand (not eagerly).
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [devProjects, setDevProjects] = useState<DevelopmentProject[]>([]);
   const [selectedUwDealId, setSelectedUwDealId] = useState<string | null>(null);
   // A/B/editing are independent: A and B drive the comparison view,
   // editingId drives which scenario the InputsPanel writes to.
@@ -223,11 +232,12 @@ function App() {
     if (SUPABASE_CONFIGURED) {
       (async () => {
         try {
-          const [d, r, a, o] = await Promise.all([
+          const [d, r, a, o, dev] = await Promise.all([
             listDeals(),
             listRentRoll(),
             listActivities(),
             listOnboardings(),
+            listDevelopmentProjects(),
           ]);
           setDeals(d);
           setFilteredDeals(d);
@@ -235,6 +245,7 @@ function App() {
           setFilteredRentRoll(r);
           setActivities(a);
           setOnboardings(o.map(reconcileWithTemplate));
+          setDevProjects(dev);
           setFilename('leasing-tracker.xlsx');
         } catch (err) {
           console.error('Failed to load from Supabase:', err);
@@ -335,12 +346,24 @@ function App() {
         }),
       onDelete: (id) => setScenarios((prev) => prev.filter((x) => x.id !== id)),
     });
+    const unsubDev = subscribeDevelopmentProjects({
+      onUpsert: (p) =>
+        setDevProjects((prev) => {
+          const idx = prev.findIndex((x) => x.id === p.id);
+          if (idx === -1) return [...prev, p];
+          const next = prev.slice();
+          next[idx] = p;
+          return next;
+        }),
+      onDelete: (id) => setDevProjects((prev) => prev.filter((x) => x.id !== id)),
+    });
     return () => {
       unsubDeals();
       unsubRr();
       unsubAct();
       unsubOb();
       unsubScenarios();
+      unsubDev();
     };
   }, []);
 
@@ -844,6 +867,22 @@ function App() {
     writeThrough('delete scenario', deleteScenarioRow(id));
   };
 
+  const handleSaveDevProject = (updated: DevelopmentProject) => {
+    setDevProjects((prev) => {
+      const idx = prev.findIndex((p) => p.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save dev project', upsertDevelopmentProject(updated));
+  };
+
+  const handleDeleteDevProject = (id: string) => {
+    setDevProjects((prev) => prev.filter((p) => p.id !== id));
+    writeThrough('delete dev project', deleteDevProjectRow(id));
+  };
+
   // Lookup: which rent roll rows already have an onboarding (so the
   // RentRollTable can hide the "+ Onboarding" button for them).
   const onboardingsByRentRollId = useMemo(
@@ -1134,7 +1173,11 @@ function App() {
           ) : view === 'acquisitions' ? (
             <AcquisitionsPlaceholder />
           ) : view === 'development' ? (
-            <DevelopmentPipelinePlaceholder />
+            <DevelopmentView
+              projects={devProjects}
+              onSave={handleSaveDevProject}
+              onDelete={handleDeleteDevProject}
+            />
           ) : view === 'asset-mgmt' ? (
             <AssetMgmtPendingPlaceholder />
           ) : view === 'disposition' ? (
@@ -1297,23 +1340,6 @@ function AcquisitionsPlaceholder() {
         ['Hand-off → Portfolio', 'Auto-promote closed acquisitions into Portfolio + Onboarding.'],
       ]}
       awaitingNote="More info on your acquisitions workflow coming — paste in any deal-tracker spreadsheet or notes and we'll port the structure."
-    />
-  );
-}
-
-function DevelopmentPipelinePlaceholder() {
-  return (
-    <PipelinePlaceholder
-      title="Development Pipeline"
-      subtitle="A future tool to manage projects from site sourcing through stabilization."
-      sections={[
-        ['Site sourcing', 'Track land deals, options, LOIs from a target list.'],
-        ['Entitlement tracking', 'Zoning, permits, agency dates, milestone risks.'],
-        ['Pro-forma + capital stack', 'Sources/uses, equity multiples, IRR sensitivities.'],
-        ['Construction milestones', 'GMP, draws, schedule variance, change orders.'],
-        ['Lease-up → stabilization', 'Hand off to Leasing Activity + Portfolio once buildings deliver.'],
-        ['Investor reporting', 'Quarterly snapshots, fund-level rollups.'],
-      ]}
     />
   );
 }

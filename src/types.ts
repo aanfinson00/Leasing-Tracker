@@ -444,3 +444,87 @@ export function autoSpaceId(
   const s = (sectionIndex + 1).toString().padStart(2, '0');
   return `${projectId}-B${b}-S${s}`;
 }
+
+// ──────────────────────────────────────────────────────────────────
+// Development Projects — capital projects from site selection through
+// delivery. Each row is one project (often becomes 1+ buildings on
+// delivery, then handoff to Rent Roll for lease-up).
+// ──────────────────────────────────────────────────────────────────
+
+export const DevPhaseEnum = z.enum([
+  'Site Selection',
+  'Entitlement',
+  'Design',
+  'Construction',
+  'Lease-Up',
+  'Delivered',
+  'On Hold',
+  'Cancelled',
+]);
+export type DevPhase = z.infer<typeof DevPhaseEnum>;
+
+// Linear phase order — On Hold / Cancelled are side states.
+export const DEV_PHASE_ORDER: DevPhase[] = [
+  'Site Selection',
+  'Entitlement',
+  'Design',
+  'Construction',
+  'Lease-Up',
+  'Delivered',
+];
+
+export const RiskLevelEnum = z.enum(['Low', 'Medium', 'High']);
+export type RiskLevel = z.infer<typeof RiskLevelEnum>;
+
+export const DevelopmentProjectSchema = z.object({
+  id: z.string().uuid(),
+
+  projectName: z.string().min(1, 'Project name is required'),
+  market: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+
+  phase: DevPhaseEnum,
+
+  totalSF: z.number().positive().nullable().optional(),
+  acres: z.number().positive().nullable().optional(),
+  buildingCount: z.number().int().positive().nullable().optional(),
+
+  startDate: z.string().nullable().optional(),
+  expectedDeliveryDate: z.string().nullable().optional(),
+  actualDeliveryDate: z.string().nullable().optional(),
+
+  totalBudget: z.number().min(0).nullable().optional(),
+  spentToDate: z.number().min(0).nullable().optional(),
+
+  pmName: z.string().nullable().optional(),
+  gcName: z.string().nullable().optional(),
+  gcContact: z.string().nullable().optional(),
+  architect: z.string().nullable().optional(),
+
+  riskLevel: RiskLevelEnum,
+  statusSummary: z.string().nullable().optional(),
+
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((p) => ({
+  ...p,
+  market: p.market ?? null,
+  address: p.address ?? null,
+  totalSF: p.totalSF ?? null,
+  acres: p.acres ?? null,
+  buildingCount: p.buildingCount ?? null,
+  startDate: p.startDate ?? null,
+  expectedDeliveryDate: p.expectedDeliveryDate ?? null,
+  actualDeliveryDate: p.actualDeliveryDate ?? null,
+  totalBudget: p.totalBudget ?? null,
+  spentToDate: p.spentToDate ?? null,
+  pmName: p.pmName ?? null,
+  gcName: p.gcName ?? null,
+  gcContact: p.gcContact ?? null,
+  architect: p.architect ?? null,
+  statusSummary: p.statusSummary ?? null,
+  notes: p.notes ?? null,
+}));
+
+export type DevelopmentProject = z.infer<typeof DevelopmentProjectSchema>;
