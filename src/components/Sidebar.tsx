@@ -1,10 +1,20 @@
-import { Briefcase, Building, ClipboardCheck, BarChart3, Settings, Lock } from 'lucide-react';
+import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, Lock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
+import { ParceIcon } from './ParceIcon';
 
 const PASSWORD_HASH_CONFIGURED = !!(import.meta.env.VITE_PASSWORD_HASH ?? '').trim();
 
-export type View = 'prospects' | 'rentroll' | 'onboarding' | 'reports';
+export type View =
+  | 'prospects'
+  | 'rentroll'
+  | 'underwrite'
+  | 'map'
+  | 'onboarding'
+  | 'reports'
+  | 'acquisitions'
+  | 'development'
+  | 'disposition';
 
 interface NavItem {
   id: View | 'placeholder';
@@ -13,12 +23,20 @@ interface NavItem {
   disabled?: boolean;
 }
 
+// Display LABELS only — the internal `view` keys ('prospects',
+// 'rentroll', 'underwrite') stay unchanged so realtime/persistence
+// keyed on them keeps working.
 const NAV_ITEMS: NavItem[] = [
-  { id: 'prospects', icon: Briefcase, label: 'Prospects' },
-  { id: 'rentroll', icon: Building, label: 'Rent Roll' },
+  { id: 'prospects', icon: Briefcase, label: 'Leasing Activity' },
+  { id: 'rentroll', icon: Building, label: 'Portfolio' },
+  { id: 'underwrite', icon: Calculator, label: 'Lease Calculator' },
+  { id: 'map', icon: MapPin, label: 'Map' },
   { id: 'onboarding', icon: ClipboardCheck, label: 'Onboarding' },
   { id: 'reports', icon: BarChart3, label: 'Reports' },
-  { id: 'placeholder', icon: Settings, label: 'Settings (coming soon)', disabled: true },
+  // Lifecycle pipeline tabs — placeholders for now.
+  { id: 'acquisitions', icon: Crosshair, label: 'Acquisitions Pipeline' },
+  { id: 'development', icon: HardHat, label: 'Development Pipeline' },
+  { id: 'disposition', icon: HandCoins, label: 'Disposition Tracking' },
 ];
 
 interface SidebarProps {
@@ -29,8 +47,9 @@ interface SidebarProps {
 export function Sidebar({ view, onChangeView }: SidebarProps) {
   return (
     <aside className="hidden sm:flex flex-col items-center w-[68px] shrink-0 bg-bg-subtle/60 h-screen sticky top-0 py-5 z-20">
-      <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-accent text-accent-fg shadow-soft mb-6">
-        <span className="font-semibold text-sm leading-none tracking-tight">LT</span>
+      {/* Parce mark — 3x3 copper grid with the playbook tilt. */}
+      <div className="flex items-center justify-center w-11 h-11 mb-6" title="parce">
+        <ParceIcon size="sm" variant="on-light" />
       </div>
 
       <nav className="flex flex-col items-center gap-1.5 flex-1">

@@ -2,6 +2,15 @@
 
 @custom-variant dark (&:where([data-theme="dark"] *));
 
+/* ─────────────────────────────────────────────────────────────────
+ * Design tokens — ported from ParceCRM Brand Playbook v1.0.
+ *
+ * We keep Leasing-Tracker's existing CSS variable NAMES (--bg,
+ * --accent, etc.) so no component imports change; the VALUES are
+ * re-skinned to the Parce palette: copper accent, warm-white page,
+ * warm-black dark mode, Outfit typography, copper-glow focus rings.
+ * ───────────────────────────────────────────────────────────────── */
+
 @theme {
   --color-bg: var(--bg);
   --color-bg-elevated: var(--bg-elevated);
@@ -25,66 +34,88 @@
   --shadow-soft: var(--shadow-sm);
   --shadow-lift: var(--shadow-md);
 
-  --radius-2xl: 14px;
+  /* Parce radii: sm 8, md 12, lg 16, xl 20. Map 2xl to Parce-lg
+   * (16px) since most of the app uses rounded-2xl for cards. */
+  --radius-2xl: 16px;
 
-  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 :root {
-  --bg: #faf9f5;
-  --bg-elevated: #ffffff;
-  --bg-subtle: #f0efe8;
-  --bg-hover: #e8e5d6;
-  --border: #e4e1d3;
-  --border-strong: #c9c5b5;
-  --text: #1f1e1b;
-  --text-muted: #58564f;
-  --text-subtle: #8e8b81;
-  --accent: #c96442;
-  --accent-hover: #b0573a;
-  --accent-fg: #ffffff;
-  --accent-soft: rgba(201, 100, 66, 0.1);
-  --accent-tint: rgba(201, 100, 66, 0.06);
-  --success: #4f8a4d;
-  --warning: #c98a42;
-  --danger: #c54a3a;
-  --danger-hover: #a83a2d;
-  --shadow-sm: 0 1px 2px 0 rgb(31 30 27 / 0.04);
-  --shadow-md: 0 4px 12px -2px rgb(31 30 27 / 0.06), 0 2px 4px -1px rgb(31 30 27 / 0.04);
+  /* Page / surface — warm white + cream cards (Parce light mode) */
+  --bg: #f5f0eb;           /* warm-white */
+  --bg-elevated: #fafafa;  /* white (cards) */
+  --bg-subtle: #f5f5f4;    /* stone-100 */
+  --bg-hover: #e7e5e4;     /* stone-200 */
+
+  --border: #e7e0d8;       /* border-light */
+  --border-strong: #d6d3d1;/* stone-300 */
+
+  --text: #18181b;         /* near-black */
+  --text-muted: #57534e;   /* between stone-500 and stone-600 */
+  --text-subtle: #a8a29e;  /* stone-400 / text-muted */
+
+  /* Copper accent system */
+  --accent: #b87040;       /* copper-deep — primary on light backgrounds */
+  --accent-hover: #a35e30;
+  --accent-fg: #fafafa;    /* white text on copper */
+  --accent-soft: rgba(212, 137, 90, 0.16); /* copper @ ~16% */
+  --accent-tint: rgba(212, 137, 90, 0.08); /* copper @ ~8% */
+
+  /* Semantic — Parce palette */
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger:  #f87171;
+  --danger-hover: #ef4444;
+
+  /* Warm-toned shadows (Parce shadow-xs / shadow-sm) */
+  --shadow-sm: 0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-md: 0 8px 24px rgba(28, 25, 23, 0.10), 0 2px 8px rgba(28, 25, 23, 0.06);
+
+  /* Parce icon — 3x3 grid mark (per Brand Playbook Section 01) */
+  --icon-tilt: rotate(4deg) translateY(3px);
+  --icon-grid: 1.4fr 1fr 0.8fr;
+  --icon-rows: 1fr 1.2fr 0.8fr;
 }
 
 [data-theme="dark"] {
-  --bg: #1f1e1b;
-  --bg-elevated: #2a2826;
-  --bg-subtle: #34322e;
-  --bg-hover: #3f3d38;
-  --border: #3a3833;
-  --border-strong: #524f48;
-  --text: #f5f4ed;
-  --text-muted: #a5a29c;
-  --text-subtle: #75736d;
-  --accent: #d97757;
-  --accent-hover: #e68b6e;
-  --accent-fg: #ffffff;
-  --accent-soft: rgba(217, 119, 87, 0.18);
-  --accent-tint: rgba(217, 119, 87, 0.08);
-  --success: #6ba968;
-  --warning: #e0a05a;
-  --danger: #e07060;
-  --danger-hover: #ec8978;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-md: 0 4px 16px -2px rgb(0 0 0 / 0.4), 0 2px 6px -1px rgb(0 0 0 / 0.3);
+  /* Warm-black surface stack */
+  --bg: #1c1917;           /* warm-black */
+  --bg-elevated: #27272a;  /* card-dark */
+  --bg-subtle: #292524;    /* between warm-black and card-dark */
+  --bg-hover: #3f3f46;
+
+  --border: #292524;       /* border-dark */
+  --border-strong: #44403c;
+
+  --text: #fafafa;         /* text-white */
+  --text-muted: #d6d3d1;   /* stone-300 — readable secondary */
+  --text-subtle: #a8a29e;  /* stone-400 / text-muted */
+
+  /* On dark bg, the bright copper reads better than the deeper one */
+  --accent: #d4895a;       /* copper */
+  --accent-hover: #e8a87a; /* copper-light */
+  --accent-fg: #fafafa;
+  --accent-soft: rgba(212, 137, 90, 0.24);
+  --accent-tint: rgba(212, 137, 90, 0.12);
+
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger:  #f87171;
+  --danger-hover: #ef4444;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 html,
 body {
   background-color: var(--bg);
   color: var(--text);
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-feature-settings: 'cv11', 'ss01';
+  font-family: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .tabular-nums {
@@ -103,8 +134,122 @@ button {
   font-family: inherit;
 }
 
+/* Parce focus ring — copper glow instead of a hard outline */
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(212, 137, 90, 0.18);
   border-radius: 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * Scrollbars
+ *
+ * Default macOS / Chromium scrollbars render as a bright translucent
+ * strip that's jarring against the dark theme. Style them to use the
+ * border-strong + bg-subtle palette so they fade into whichever theme
+ * is active. Firefox uses scrollbar-color; everything else uses the
+ * ::-webkit-scrollbar pseudo-elements. Apply to html so all scrollable
+ * containers inherit it.
+ * ───────────────────────────────────────────────────────────────── */
+
+html {
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-subtle);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * Native <select> dark-mode dropdown
+ *
+ * Browsers paint the popup using `background-color` and `color` of
+ * the <option> elements via the host UA. In dark mode our selects
+ * use bg-transparent (so they blend with the toolbar pill), but the
+ * popup itself still needs explicit colors or it renders white-on-
+ * white on macOS Safari + Chromium. Force the option list to use
+ * the elevated surface + text token so it matches the theme.
+ * ───────────────────────────────────────────────────────────────── */
+
+select option,
+select optgroup {
+  background-color: var(--bg-elevated);
+  color: var(--text);
+}
+
+/* Date input picker icon shows as a near-invisible black square in
+ * dark mode (Chromium ships it as pure black SVG). Invert it so it
+ * picks up the foreground color in dark themes. */
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="month"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="week"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.8);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * Login screen animations — ported from ParceCRM.
+ *
+ * Three layers, all infinite:
+ *   - lt-grid-move: translates the whole grid 60px down-right (matches
+ *     the grid cell size, so it loops seamlessly)
+ *   - lt-grid-pulse: scale + opacity breathing
+ *   - lt-wave-sweep: mask-position sweep on the blurred-grid glow layer
+ *
+ * Plus fade-in-up for the login card entrance.
+ * ───────────────────────────────────────────────────────────────── */
+
+@keyframes lt-grid-move {
+  0%   { transform: translate(0, 0); }
+  100% { transform: translate(60px, 60px); }
+}
+@keyframes lt-grid-pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.5; }
+  50%      { transform: scale(1.05); opacity: 0.9; }
+}
+@keyframes lt-wave-sweep {
+  0%   { -webkit-mask-position: 0%   center; mask-position: 0%   center; }
+  100% { -webkit-mask-position: 100% center; mask-position: 100% center; }
+}
+@keyframes lt-fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.lt-animate-grid-move  { animation: lt-grid-move 7s linear infinite; }
+.lt-animate-grid-pulse { animation: lt-grid-pulse 6s ease-in-out infinite; }
+.lt-animate-fade-in-up { animation: lt-fade-in-up 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+
+.lt-animate-wave-sweep {
+  -webkit-mask-image: linear-gradient(to right,
+    transparent 0%, black 8%, black 20%, transparent 30%,
+    transparent 50%, black 58%, black 70%, transparent 80%,
+    transparent 100%);
+  mask-image: linear-gradient(to right,
+    transparent 0%, black 8%, black 20%, transparent 30%,
+    transparent 50%, black 58%, black 70%, transparent 80%,
+    transparent 100%);
+  -webkit-mask-size: 300% 100%;
+  mask-size: 300% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: lt-wave-sweep 5s ease-in-out infinite alternate;
 }

@@ -20,8 +20,12 @@ import type {
   OnboardingChecklist,
   OnboardingItem,
   RentRollRow,
+  Scenario,
 } from './types';
 import { defaultDeal, defaultOnboardingChecklist, defaultRentRollRow } from './types';
+import { DEFAULT_GLOBALS, DEFAULT_INPUTS_BASE } from './lib/lease-math/types';
+import type { ScenarioInputs } from './lib/lease-math/types';
+import { runScenario } from './lib/lease-math/calc';
 import { loadFromFile, saveToFile, buildWorkbookBlob } from './lib/excel';
 import { saveSnapshot, loadSnapshot, clearSnapshot } from './lib/autosave';
 import { encodeShare, decodeShare, readShareFromUrl, clearShareFromUrl } from './lib/share';
@@ -51,6 +55,46 @@ import { PromoteDrawer } from './components/PromoteDrawer';
 import { ReportsView } from './components/ReportsView';
 import { OnboardingView } from './components/Onboarding/OnboardingView';
 import { Sidebar, type View } from './components/Sidebar';
+import { SUPABASE_CONFIGURED } from './lib/supabase';
+import {
+  listDeals,
+  upsertDeal,
+  bulkUpsertDeals,
+  deleteDeal as deleteDealRow,
+  subscribeDeals,
+} from './lib/repo/deals';
+import {
+  listRentRoll,
+  upsertRentRoll,
+  bulkUpsertRentRoll,
+  deleteRentRoll as deleteRentRollRow,
+  subscribeRentRoll,
+} from './lib/repo/rentRoll';
+import {
+  listActivities,
+  insertActivity,
+  upsertActivity,
+  bulkInsertActivities,
+  deleteActivity as deleteActivityRow,
+  subscribeActivities,
+} from './lib/repo/activities';
+import {
+  listOnboardings,
+  upsertOnboarding,
+  bulkUpsertOnboardings,
+  deleteOnboarding as deleteOnboardingRow,
+  subscribeOnboardings,
+} from './lib/repo/onboardings';
+import {
+  listScenariosForDeal,
+  upsertScenario,
+  deleteScenario as deleteScenarioRow,
+  subscribeScenarios,
+} from './lib/repo/scenarios';
+import { UnderwriteView } from './components/Underwrite/UnderwriteView';
+import { MapView } from './components/Map/MapView';
+import { GridBackground } from './components/GridBackground';
+import { MobileNav } from './components/MobileNav';
 
 function App() {
   const [view, setView] = useState<View>('prospects');
@@ -70,6 +114,19 @@ function App() {
   const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
   const [needsReconnect, setNeedsReconnect] = useState(false);
   const [lastSeenModified, setLastSeenModified] = useState<number | null>(null);
+  // Underwrite tab state — separate from deals/rentRoll/etc. because
+  // scenarios are loaded per-deal on demand (not eagerly).
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [selectedUwDealId, setSelectedUwDealId] = useState<string | null>(null);
+  // A/B/editing are independent: A and B drive the comparison view,
+  // editingId drives which scenario the InputsPanel writes to.
+  const [scenarioAId, setScenarioAId] = useState<string | null>(null);
+  const [scenarioBId, setScenarioBId] = useState<string | null>(null);
+  const [editingScenarioId, setEditingScenarioId] = useState<string | null>(null);
+  // Mirror in a ref so the realtime closure (created once on mount) sees
+  // the latest selection without re-subscribing on every change.
+  const selectedUwDealIdRef = useRef<string | null>(null);
+  useEffect(() => { selectedUwDealIdRef.current = selectedUwDealId; }, [selectedUwDealId]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fsAccessSupported = isFileSystemAccessSupported();
 
@@ -92,6 +149,32 @@ function App() {
     return m;
   }, [deals]);
 
+  // Push a freshly-parsed workbook into Supabase (bulk upsert by id).
+  // Called from the legacy file-handle reconnect path AND the Excel import
+  // buttons. Idempotent — re-importing the same workbook is a no-op.
+  const pushWorkbookToSupabase = async (result: {
+    deals: Deal[];
+    rentRoll: RentRollRow[];
+    activities: ActivityEntry[];
+    onboardings: OnboardingChecklist[];
+  }) => {
+    if (!SUPABASE_CONFIGURED) return;
+    try {
+      await Promise.all([
+        bulkUpsertDeals(result.deals),
+        bulkUpsertRentRoll(result.rentRoll),
+        bulkInsertActivities(result.activities),
+        bulkUpsertOnboardings(result.onboardings),
+      ]);
+      showToast(
+        `Imported ${result.deals.length} deals, ${result.rentRoll.length} rent roll rows`
+      );
+    } catch (err) {
+      console.error('Bulk import to Supabase failed:', err);
+      showToast('Server import failed — see console');
+    }
+  };
+
   const loadFromHandleResult = async (handle: FileSystemFileHandle): Promise<boolean> => {
     try {
       const file = await readFromHandle(handle);
@@ -104,6 +187,7 @@ function App() {
       setOnboardings(result.onboardings);
       setFilename(file.name);
       setLastSeenModified(file.lastModified);
+      void pushWorkbookToSupabase(result);
       return true;
     } catch (err) {
       console.error('Failed to load from handle:', err);
@@ -112,6 +196,9 @@ function App() {
   };
 
   useEffect(() => {
+    // Share-link snapshots stay local — they're a side-channel for showing
+    // a frozen view to someone without DB access. Don't write them through
+    // to Supabase.
     const encoded = readShareFromUrl();
     if (encoded) {
       decodeShare(encoded).then((payload) => {
@@ -133,10 +220,34 @@ function App() {
       return;
     }
 
+    if (SUPABASE_CONFIGURED) {
+      (async () => {
+        try {
+          const [d, r, a, o] = await Promise.all([
+            listDeals(),
+            listRentRoll(),
+            listActivities(),
+            listOnboardings(),
+          ]);
+          setDeals(d);
+          setFilteredDeals(d);
+          setRentRoll(r);
+          setFilteredRentRoll(r);
+          setActivities(a);
+          setOnboardings(o.map(reconcileWithTemplate));
+          setFilename('leasing-tracker.xlsx');
+        } catch (err) {
+          console.error('Failed to load from Supabase:', err);
+          showToast('Failed to load from server — falling back to local snapshot');
+        } finally {
+          setHydrated(true);
+        }
+      })();
+      return;
+    }
+
+    // Legacy local-first flow — only runs when Supabase env vars are absent.
     (async () => {
-      // Try to reconnect to a previously-saved file handle first. If it
-      // resolves cleanly with granted permission, we skip the autosave-restore
-      // prompt entirely — the canonical file IS the source of truth.
       if (fsAccessSupported) {
         const rec = await loadHandle();
         if (rec) {
@@ -178,8 +289,66 @@ function App() {
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Realtime — when other clients change rows, merge into local state.
+  // Self-emitted events are idempotent (the row's already in state with
+  // the same shape), so we don't need to dedupe by client_id.
+  useEffect(() => {
+    if (!SUPABASE_CONFIGURED) return;
+    const unsubDeals = subscribeDeals({
+      onInsert: (d) => setDeals((prev) => (prev.some((x) => x.id === d.id) ? prev : [...prev, d])),
+      onUpdate: (d) => setDeals((prev) => prev.map((x) => (x.id === d.id ? d : x))),
+      onDelete: (id) => setDeals((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubRr = subscribeRentRoll({
+      onInsert: (r) => setRentRoll((prev) => (prev.some((x) => x.id === r.id) ? prev : [...prev, r])),
+      onUpdate: (r) => setRentRoll((prev) => prev.map((x) => (x.id === r.id ? r : x))),
+      onDelete: (id) => setRentRoll((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubAct = subscribeActivities({
+      onInsert: (a) =>
+        setActivities((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a])),
+      onDelete: (id) => setActivities((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubOb = subscribeOnboardings({
+      onUpsert: (o) =>
+        setOnboardings((prev) => {
+          const idx = prev.findIndex((x) => x.id === o.id);
+          if (idx === -1) return [...prev, reconcileWithTemplate(o)];
+          const next = prev.slice();
+          next[idx] = reconcileWithTemplate(o);
+          return next;
+        }),
+      onDelete: (id) => setOnboardings((prev) => prev.filter((x) => x.id !== id)),
+    });
+    // Scenarios: filter realtime events by the currently-selected deal in
+    // the handler since the channel isn't filtered server-side.
+    const unsubScenarios = subscribeScenarios({
+      onUpsert: (s) =>
+        setScenarios((prev) => {
+          // Only merge if this scenario belongs to the deal we're viewing.
+          if (s.dealId !== selectedUwDealIdRef.current) return prev;
+          const idx = prev.findIndex((x) => x.id === s.id);
+          if (idx === -1) return [...prev, s];
+          const next = prev.slice();
+          next[idx] = s;
+          return next;
+        }),
+      onDelete: (id) => setScenarios((prev) => prev.filter((x) => x.id !== id)),
+    });
+    return () => {
+      unsubDeals();
+      unsubRr();
+      unsubAct();
+      unsubOb();
+      unsubScenarios();
+    };
+  }, []);
+
   useEffect(() => {
     if (!hydrated) return;
+    // Supabase is the source of truth — skip Dexie autosave to avoid a
+    // stale local snapshot that could shadow live data on next load.
+    if (SUPABASE_CONFIGURED) return;
     if (
       deals.length === 0 &&
       rentRoll.length === 0 &&
@@ -211,6 +380,7 @@ function App() {
         setNeedsReconnect(false);
         await saveHandle(handle, file.lastModified);
         showToast(`Connected to ${file.name}`);
+        void pushWorkbookToSupabase(result);
       } catch (err) {
         alert(`Error opening file: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
@@ -232,6 +402,7 @@ function App() {
       setActivities(result.activities);
       setOnboardings(result.onboardings);
       setFilename(file.name);
+      void pushWorkbookToSupabase(result);
     } catch (err) {
       alert(`Error loading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -339,6 +510,17 @@ function App() {
     }
   };
 
+  // Fire-and-forget Supabase write. Errors get logged + toasted but we
+  // don't roll back the optimistic UI update — the next page load (or a
+  // realtime event from a successful write) will reconcile.
+  const writeThrough = (label: string, p: Promise<unknown>) => {
+    if (!SUPABASE_CONFIGURED) return;
+    p.catch((err) => {
+      console.error(`Supabase ${label} failed:`, err);
+      showToast(`Server sync failed: ${label}`);
+    });
+  };
+
   // ── Prospects handlers
   const handleNewDeal = () => {
     const newDeal = defaultDeal();
@@ -346,12 +528,14 @@ function App() {
     setDeals(updated);
     setFilteredDeals(updated);
     setEditingDeal(newDeal);
+    writeThrough('create deal', upsertDeal(newDeal));
   };
   const handleSelectDeal = (deal: Deal) => setEditingDeal(deal);
   const handleSaveDeal = (updated: Deal) => {
     const newDeals = deals.map((d) => (d.id === updated.id ? updated : d));
     setDeals(newDeals);
     setFilteredDeals((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+    writeThrough('save deal', upsertDeal(updated));
   };
   const handleDeleteDeal = (id: string) => {
     const newDeals = deals.filter((d) => d.id !== id);
@@ -360,6 +544,12 @@ function App() {
     setActivities((prev) =>
       prev.filter((a) => !(a.parentType === 'deal' && a.parentId === id))
     );
+    writeThrough('delete deal', deleteDealRow(id));
+    // Cascade: drop the deal's activities server-side too.
+    if (SUPABASE_CONFIGURED) {
+      const orphaned = activities.filter((a) => a.parentType === 'deal' && a.parentId === id);
+      orphaned.forEach((a) => writeThrough('delete activity', deleteActivityRow(a.id)));
+    }
   };
 
   // ── Rent Roll handlers
@@ -369,12 +559,14 @@ function App() {
     setRentRoll(updated);
     setFilteredRentRoll(updated);
     setEditingRow(newRow);
+    writeThrough('create rent roll row', upsertRentRoll(newRow));
   };
   const handleSelectRow = (row: RentRollRow) => setEditingRow(row);
   const handleSaveRow = (updated: RentRollRow) => {
     const newRows = rentRoll.map((r) => (r.id === updated.id ? updated : r));
     setRentRoll(newRows);
     setFilteredRentRoll((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    writeThrough('save rent roll row', upsertRentRoll(updated));
   };
   const handleDeleteRow = (id: string) => {
     const newRows = rentRoll.filter((r) => r.id !== id);
@@ -384,6 +576,15 @@ function App() {
       prev.filter((a) => !(a.parentType === 'rentroll' && a.parentId === id))
     );
     setOnboardings((prev) => prev.filter((o) => o.rentRollId !== id));
+    writeThrough('delete rent roll row', deleteRentRollRow(id));
+    if (SUPABASE_CONFIGURED) {
+      activities
+        .filter((a) => a.parentType === 'rentroll' && a.parentId === id)
+        .forEach((a) => writeThrough('delete activity', deleteActivityRow(a.id)));
+      onboardings
+        .filter((o) => o.rentRollId === id)
+        .forEach((o) => writeThrough('delete onboarding', deleteOnboardingRow(o.id)));
+    }
   };
 
   // ── Activity handlers
@@ -394,14 +595,17 @@ function App() {
       createdAt: new Date().toISOString(),
     };
     setActivities((prev) => [...prev, full]);
+    writeThrough('add activity', insertActivity(full));
   };
   const handleDeleteActivity = (id: string) => {
     setActivities((prev) => prev.filter((a) => a.id !== id));
+    writeThrough('delete activity', deleteActivityRow(id));
   };
   const handleDealStatusChange = (deal: Deal, from: DealStatus, to: DealStatus) => {
     if (from === to) return;
     const entry = makeStatusChangeEntry('deal', deal.id, from, to);
     setActivities((prev) => [...prev, entry]);
+    writeThrough('log status change', insertActivity(entry));
   };
 
   // ── Cross-tab: Promote a prospect → Rent Roll
@@ -412,13 +616,14 @@ function App() {
 
   const handleConfirmPromote = (rrRow: RentRollRow, isNew: boolean) => {
     if (!promotingDeal) return;
+    const promotedDealId = promotingDeal.id;
     const newRows = isNew
       ? [...rentRoll, rrRow]
       : rentRoll.map((r) => (r.id === rrRow.id ? rrRow : r));
     setRentRoll(newRows);
     setFilteredRentRoll(newRows);
     // Delete the prospect — it lives in the rent roll from here on
-    const newDeals = deals.filter((d) => d.id !== promotingDeal.id);
+    const newDeals = deals.filter((d) => d.id !== promotedDealId);
     setDeals(newDeals);
     setFilteredDeals(newDeals);
 
@@ -430,9 +635,12 @@ function App() {
       'Executed',
       'Promoted to Rent Roll'
     );
+    const reparented = activities
+      .filter((a) => a.parentType === 'deal' && a.parentId === promotedDealId)
+      .map((a) => ({ ...a, parentType: 'rentroll' as const, parentId: rrRow.id }));
     setActivities((prev) => [
       ...prev.map((a) =>
-        a.parentType === 'deal' && a.parentId === promotingDeal.id
+        a.parentType === 'deal' && a.parentId === promotedDealId
           ? { ...a, parentType: 'rentroll' as const, parentId: rrRow.id }
           : a
       ),
@@ -442,11 +650,22 @@ function App() {
     // Auto-start an onboarding checklist for this tenant if one doesn't
     // already exist. Idempotent so re-promoting the same rent roll row
     // reuses the existing checklist (preserving any prior checkmarks).
+    const existingChecklist = getOnboardingFor(onboardings, rrRow.id);
+    const newChecklist = existingChecklist
+      ? null
+      : defaultOnboardingChecklist(rrRow.id, makeBlankItems());
     setOnboardings((prev) =>
-      getOnboardingFor(prev, rrRow.id)
-        ? prev
-        : [...prev, defaultOnboardingChecklist(rrRow.id, makeBlankItems())]
+      newChecklist && !getOnboardingFor(prev, rrRow.id) ? [...prev, newChecklist] : prev
     );
+
+    // Sync the whole transition to Supabase.
+    writeThrough('promote: save rent roll row', upsertRentRoll(rrRow));
+    writeThrough('promote: delete prospect', deleteDealRow(promotedDealId));
+    reparented.forEach((a) => writeThrough('promote: reparent activity', upsertActivity(a)));
+    writeThrough('promote: log transition', insertActivity(transition));
+    if (newChecklist) {
+      writeThrough('promote: start onboarding', upsertOnboarding(newChecklist));
+    }
 
     setPromotingDeal(null);
     setView('rentroll');
@@ -480,14 +699,19 @@ function App() {
     setFilteredDeals(updated);
     setView('prospects');
     setEditingDeal(newDeal);
+    writeThrough('start prospect from vacant', upsertDeal(newDeal));
   };
 
   // ── Onboarding handlers
   const handleStartOnboarding = (row: RentRollRow) => {
-    setOnboardings((prev) => {
-      if (getOnboardingFor(prev, row.id)) return prev;
-      return [...prev, defaultOnboardingChecklist(row.id, makeBlankItems())];
-    });
+    const existing = getOnboardingFor(onboardings, row.id);
+    if (!existing) {
+      const newChecklist = defaultOnboardingChecklist(row.id, makeBlankItems());
+      setOnboardings((prev) =>
+        getOnboardingFor(prev, row.id) ? prev : [...prev, newChecklist]
+      );
+      writeThrough('start onboarding', upsertOnboarding(newChecklist));
+    }
     setView('onboarding');
   };
   const handleUpdateOnboardingItem = (
@@ -495,19 +719,129 @@ function App() {
     itemId: string,
     patch: Partial<OnboardingItem>
   ) => {
+    let updatedChecklist: OnboardingChecklist | null = null;
     setOnboardings((prev) =>
-      prev.map((c) =>
-        c.id !== checklistId
-          ? c
-          : {
-              ...c,
-              items: c.items.map((i) => (i.itemId === itemId ? { ...i, ...patch } : i)),
-            }
-      )
+      prev.map((c) => {
+        if (c.id !== checklistId) return c;
+        const next: OnboardingChecklist = {
+          ...c,
+          items: c.items.map((i) => (i.itemId === itemId ? { ...i, ...patch } : i)),
+        };
+        updatedChecklist = next;
+        return next;
+      })
     );
+    if (updatedChecklist) {
+      writeThrough('update onboarding item', upsertOnboarding(updatedChecklist));
+    }
   };
   const handleDeleteOnboarding = (id: string) => {
     setOnboardings((prev) => prev.filter((o) => o.id !== id));
+    writeThrough('delete onboarding', deleteOnboardingRow(id));
+  };
+
+  // ── Underwrite (scenarios) handlers
+  const handleSelectUwDeal = async (deal: Deal | null) => {
+    setSelectedUwDealId(deal?.id ?? null);
+    setScenarioAId(null);
+    setScenarioBId(null);
+    setEditingScenarioId(null);
+    if (!deal || !SUPABASE_CONFIGURED) {
+      setScenarios([]);
+      return;
+    }
+    try {
+      const rows = await listScenariosForDeal(deal.id);
+      setScenarios(rows);
+      // Default selection: A = first scenario, B = second (if it exists),
+      // editing focus = A. Matches the way Lease-Calculator's store seeds
+      // an initial A/B pair.
+      if (rows[0]) {
+        setScenarioAId(rows[0].id);
+        setEditingScenarioId(rows[0].id);
+      }
+      if (rows[1]) setScenarioBId(rows[1].id);
+    } catch (err) {
+      console.error('Failed to load scenarios:', err);
+      showToast('Failed to load scenarios');
+    }
+  };
+
+  const buildScenarioFromDeal = (deal: Deal, namePref?: string): Scenario => {
+    const today = new Date().toISOString().slice(0, 10);
+    const leaseSF = deal.maxSF ?? deal.minSF ?? 100_000;
+    const name =
+      namePref ??
+      (scenarios.some((s) => s.name === 'UW') ? `Scenario ${scenarios.length + 1}` : 'UW');
+    const inputs: ScenarioInputs = {
+      ...DEFAULT_INPUTS_BASE,
+      name,
+      dealCode: deal.dealId ?? '',
+      projectSF: leaseSF,
+      buildingSF: leaseSF,
+      proposedLeaseSF: leaseSF,
+      baseRatePSF: deal.targetRent ?? deal.lastRevalUWRent ?? DEFAULT_INPUTS_BASE.baseRatePSF,
+      tiAllowancePSF: deal.tiPerSF ?? DEFAULT_INPUTS_BASE.tiAllowancePSF,
+      freeRentMonths: deal.freeRentMonths ?? DEFAULT_INPUTS_BASE.freeRentMonths,
+      leaseTermMonths: deal.proposedTermMonths ?? DEFAULT_INPUTS_BASE.leaseTermMonths,
+      leaseCommencement: deal.expectedStart ?? today,
+      leaseExecutionDate: today,
+    };
+    const globals = { ...DEFAULT_GLOBALS };
+    return {
+      id: crypto.randomUUID(),
+      dealId: deal.id,
+      name,
+      inputs,
+      globals,
+      results: runScenario(inputs, globals),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  };
+
+  const handleNewScenario = (deal: Deal) => {
+    const newScenario = buildScenarioFromDeal(deal);
+    setScenarios((prev) => [...prev, newScenario]);
+    // Auto-assign to a vacant A or B slot so the new scenario is
+    // immediately visible in the comparison.
+    if (!scenarioAId) setScenarioAId(newScenario.id);
+    else if (!scenarioBId) setScenarioBId(newScenario.id);
+    setEditingScenarioId(newScenario.id);
+    writeThrough('create scenario', upsertScenario(newScenario));
+  };
+
+  const handleDuplicateScenario = (id: string) => {
+    const source = scenarios.find((s) => s.id === id);
+    if (!source) return;
+    const copy: Scenario = {
+      ...source,
+      id: crypto.randomUUID(),
+      name: `${source.name} copy`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setScenarios((prev) => [...prev, copy]);
+    if (!scenarioBId) setScenarioBId(copy.id);
+    setEditingScenarioId(copy.id);
+    writeThrough('duplicate scenario', upsertScenario(copy));
+  };
+
+  const handleSaveScenario = (updated: Scenario) => {
+    setScenarios((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    writeThrough('save scenario', upsertScenario(updated));
+  };
+
+  const handleDeleteScenario = (id: string) => {
+    setScenarios((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      const fallback = next[0]?.id ?? null;
+      if (scenarioAId === id) setScenarioAId(fallback);
+      if (scenarioBId === id) setScenarioBId(fallback);
+      if (editingScenarioId === id) setEditingScenarioId(fallback);
+      return next;
+    });
+    writeThrough('delete scenario', deleteScenarioRow(id));
   };
 
   // Lookup: which rent roll rows already have an onboarding (so the
@@ -533,20 +867,54 @@ function App() {
     view === 'prospects' ? deals.length : view === 'rentroll' ? rentRoll.length : 0;
   const viewTitle =
     view === 'prospects'
-      ? 'Prospects'
+      ? 'Leasing Activity'
       : view === 'rentroll'
-        ? 'Rent Roll'
-        : view === 'onboarding'
-          ? 'Onboarding'
-          : 'Reports';
+        ? 'Portfolio'
+        : view === 'underwrite'
+          ? 'Lease Calculator'
+          : view === 'map'
+            ? 'Map'
+            : view === 'onboarding'
+              ? 'Onboarding'
+              : view === 'acquisitions'
+                ? 'Acquisitions Pipeline'
+                : view === 'development'
+                  ? 'Development Pipeline'
+                  : view === 'disposition'
+                    ? 'Disposition Tracking'
+                    : 'Reports';
 
   return (
-    <div className="flex min-h-screen bg-bg text-fg">
+    <div className="relative flex min-h-screen bg-bg text-fg pb-16 sm:pb-0">
+      {/* Parce-style animated copper grid behind everything. z-0 keeps
+          it under the sidebar (z-20) and main content (default stacking). */}
+      <GridBackground />
       <Sidebar view={view} onChangeView={setView} />
+      {/* Mobile bottom nav — visible only on narrow viewports where
+          the desktop sidebar is hidden. pb-16 above leaves clearance
+          so content doesn't sit under it. */}
+      <MobileNav view={view} onChangeView={setView} />
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-10 bg-bg/85 backdrop-blur-md">
-          <div className="px-6 sm:px-10 pt-8 pb-6 max-w-7xl mx-auto">
+        {/* Header is OPAQUE (so scrolled content doesn't bleed through
+            the title) but renders the SAME copper graph-paper grid as
+            the page bg. background-attachment: fixed anchors the
+            pattern to the VIEWPORT (not the header element), so the
+            sidebar's 68px offset doesn't shift the grid out of phase
+            with the page bg behind the main content. */}
+        <header
+          className="sticky top-0 z-10"
+          style={{
+            backgroundColor: 'var(--bg)',
+            backgroundImage: `
+              linear-gradient(rgba(184, 112, 64, 0.06) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(184, 112, 64, 0.06) 1px, transparent 1px)
+            `,
+            backgroundSize: '24px 24px',
+            backgroundAttachment: 'fixed',
+          }}
+        >
+          <div className="px-6 sm:px-10 lg:px-12 pt-8 pb-6">
             <div className="flex items-start justify-between gap-6 flex-wrap">
               <div className="min-w-0">
                 <h1 className="text-[26px] sm:text-[30px] leading-[1.1] tracking-[-0.02em] text-fg font-semibold">
@@ -561,6 +929,16 @@ function App() {
                       <CloudOff size={14} strokeWidth={1.75} />
                       Reconnect to {fileHandle.name}
                     </button>
+                  ) : SUPABASE_CONFIGURED ? (
+                    // Supabase is the source of truth — no file context
+                    // matters anymore. Just show the count for views
+                    // that have one; otherwise the header secondary
+                    // line is blank.
+                    showsCounts ? (
+                      <span className="tabular-nums">
+                        {currentCount} of {totalCount}
+                      </span>
+                    ) : null
                   ) : filename ? (
                     <>
                       <FileSpreadsheet size={14} strokeWidth={1.75} className="shrink-0 text-fg-subtle" />
@@ -669,7 +1047,7 @@ function App() {
         </header>
 
         {sharedSnapshot && (
-          <div className="max-w-7xl w-full mx-auto px-6 sm:px-10 -mt-2 mb-4">
+          <div className="w-full px-6 sm:px-10 lg:px-12 -mt-2 mb-4">
             <div className="flex items-center gap-3 px-4 py-3 bg-accent-tint border border-accent/20 rounded-xl">
               <Sparkles size={16} strokeWidth={2} className="text-accent shrink-0" />
               <div className="flex-1 text-sm">
@@ -694,9 +1072,56 @@ function App() {
           </div>
         )}
 
-        <main className="flex-1 px-6 sm:px-10 pb-12 max-w-7xl w-full mx-auto space-y-8">
+        <main className="flex-1 px-6 sm:px-10 lg:px-12 pb-12 w-full space-y-8">
           {view === 'reports' ? (
             <ReportsView deals={deals} rentRoll={rentRoll} />
+          ) : view === 'underwrite' ? (
+            <UnderwriteView
+              deals={deals}
+              scenarios={scenarios}
+              selectedDealId={selectedUwDealId}
+              aId={scenarioAId}
+              bId={scenarioBId}
+              editingId={editingScenarioId}
+              onSelectDeal={handleSelectUwDeal}
+              onSetA={setScenarioAId}
+              onSetB={setScenarioBId}
+              onSetEditing={setEditingScenarioId}
+              onNewScenario={handleNewScenario}
+              onDuplicateScenario={handleDuplicateScenario}
+              onSaveScenario={handleSaveScenario}
+              onDeleteScenario={handleDeleteScenario}
+              onToast={showToast}
+            />
+          ) : view === 'map' ? (
+            <MapView
+              deals={deals}
+              onSelectDeal={(d) => setEditingDeal(d)}
+              onToast={showToast}
+              onUpdateProjectCoords={(projectId, lat, lng) => {
+                // Project = group of deals sharing the same dealId.
+                // Write lat/lng to every deal in the group so the
+                // denormalized coordinate stays consistent and any
+                // deal-level read still returns the right pin.
+                const today = new Date().toISOString().slice(0, 10);
+                const targets = deals.filter((d) => d.dealId?.trim() === projectId);
+                if (targets.length === 0) return;
+                const updates = targets.map<Deal>((t) => ({
+                  ...t,
+                  lat,
+                  lng,
+                  lastUpdated: today,
+                }));
+                const byId = new Map(updates.map((u) => [u.id, u] as const));
+                setDeals((prev) => prev.map((d) => byId.get(d.id) ?? d));
+                setFilteredDeals((prev) => prev.map((d) => byId.get(d.id) ?? d));
+                updates.forEach((u) => writeThrough('place project pin', upsertDeal(u)));
+                showToast(
+                  `Pinned ${updates[0].dealName || 'project'} (${projectId}) · ${lat.toFixed(4)}, ${lng.toFixed(4)}` +
+                    (updates.length > 1 ? ` · ${updates.length} deals updated` : '')
+                );
+              }}
+            />
           ) : view === 'onboarding' ? (
             <OnboardingView
               onboardings={onboardings}
@@ -704,6 +1129,12 @@ function App() {
               onUpdateItem={handleUpdateOnboardingItem}
               onDelete={handleDeleteOnboarding}
             />
+          ) : view === 'acquisitions' ? (
+            <AcquisitionsPlaceholder />
+          ) : view === 'development' ? (
+            <DevelopmentPipelinePlaceholder />
+          ) : view === 'disposition' ? (
+            <DispositionPlaceholder />
           ) : view === 'prospects' ? (
             deals.length === 0 ? (
               <EmptyHero onAction={handleNewDeal} ctaLabel="Create your first deal" />
@@ -802,6 +1233,102 @@ function EmptyHero({ onAction, ctaLabel }: { onAction: () => void; ctaLabel: str
         {ctaLabel}
       </button>
     </div>
+  );
+}
+
+interface PipelinePlaceholderProps {
+  title: string;
+  subtitle: string;
+  sections: Array<[string, string]>;
+  /** Optional note about future content the user will provide (checklist,
+   *  playbook, etc.). Shown below the seed cards. */
+  awaitingNote?: string;
+}
+
+function PipelinePlaceholder({ title, subtitle, sections, awaitingNote }: PipelinePlaceholderProps) {
+  return (
+    <div className="max-w-3xl mx-auto">
+      <div className="flex flex-col items-center text-center py-20 px-6">
+        <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-accent-tint text-accent mb-6">
+          <Sparkles size={24} strokeWidth={1.5} />
+        </div>
+        <h2 className="text-3xl text-fg font-extralight tracking-[-0.01em]">{title}</h2>
+        <p className="text-base text-fg-muted mt-3 max-w-lg leading-relaxed">{subtitle}</p>
+
+        <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl text-left">
+          {sections.map(([sectionTitle, desc]) => (
+            <div
+              key={sectionTitle}
+              className="px-4 py-3 rounded-xl border border-dashed border-border bg-bg-elevated/50"
+            >
+              <p className="text-sm font-semibold text-fg">{sectionTitle}</p>
+              <p className="text-xs text-fg-muted mt-1 leading-relaxed">{desc}</p>
+            </div>
+          ))}
+        </div>
+
+        {awaitingNote && (
+          <p className="mt-6 text-xs text-fg-muted max-w-lg italic">{awaitingNote}</p>
+        )}
+
+        <p className="mt-8 text-[11px] uppercase tracking-[0.14em] text-fg-subtle">
+          Placeholder — none of these are wired up yet
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AcquisitionsPlaceholder() {
+  return (
+    <PipelinePlaceholder
+      title="Acquisitions Pipeline"
+      subtitle="Track deals from sourcing through LOI, diligence, and close."
+      sections={[
+        ['Sourcing list', 'Target submarkets, broker outreach log, off-market leads.'],
+        ['LOI / PSA tracking', 'Offers out, counters, executed contracts, retrade history.'],
+        ['Diligence', 'PCA, ESA, ALTA, zoning letter — task tracker per asset.'],
+        ['Capital raise status', 'Equity commitments, debt term sheets, lender selection.'],
+        ['Close calendar', 'Funding date, settlement statement, day-one ownership handoff.'],
+        ['Hand-off → Portfolio', 'Auto-promote closed acquisitions into Portfolio + Onboarding.'],
+      ]}
+      awaitingNote="More info on your acquisitions workflow coming — paste in any deal-tracker spreadsheet or notes and we'll port the structure."
+    />
+  );
+}
+
+function DevelopmentPipelinePlaceholder() {
+  return (
+    <PipelinePlaceholder
+      title="Development Pipeline"
+      subtitle="A future tool to manage projects from site sourcing through stabilization."
+      sections={[
+        ['Site sourcing', 'Track land deals, options, LOIs from a target list.'],
+        ['Entitlement tracking', 'Zoning, permits, agency dates, milestone risks.'],
+        ['Pro-forma + capital stack', 'Sources/uses, equity multiples, IRR sensitivities.'],
+        ['Construction milestones', 'GMP, draws, schedule variance, change orders.'],
+        ['Lease-up → stabilization', 'Hand off to Leasing Activity + Portfolio once buildings deliver.'],
+        ['Investor reporting', 'Quarterly snapshots, fund-level rollups.'],
+      ]}
+    />
+  );
+}
+
+function DispositionPlaceholder() {
+  return (
+    <PipelinePlaceholder
+      title="Disposition Tracking"
+      subtitle="Manage the sale-side flow: prep, BOV, marketing, LOIs, close-out."
+      sections={[
+        ['Sale prep checklist', 'Rent roll cleanup, lease abstracts, T-12 packaging, marketing OM.'],
+        ['Broker BOV / OPM', 'Broker pricing opinions, suggested guidance, pricing strategy.'],
+        ['Marketing tracker', 'CA log, tour list, dataroom access, call-for-offers timeline.'],
+        ['Offer pipeline', 'Bidders, indicative prices, financing conditions, IC approvals.'],
+        ['Closing items', 'PSA, escrow, prorations, audit holdbacks.'],
+        ['Post-close metrics', 'Realized IRR vs UW, hold-period actual vs reval assumption.'],
+      ]}
+      awaitingNote="Upload your disposition checklist when ready and the seeded sections become real."
+    />
   );
 }
 

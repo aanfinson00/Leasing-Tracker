@@ -66,6 +66,10 @@ export const DealSchema = z.object({
   probabilityPct: z.number().min(0).max(100).nullable().optional(),
   expectedStart: z.string().nullable().optional(),
 
+  // Location (Map tab — Phase 1)
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+
   // Meta
   lastUpdated: z.string().nullable().optional(),
   priority: PriorityEnum,
@@ -89,6 +93,8 @@ export const DealSchema = z.object({
   tiNote: d.tiNote ?? null,
   probabilityPct: d.probabilityPct ?? null,
   expectedStart: d.expectedStart ?? null,
+  lat: d.lat ?? null,
+  lng: d.lng ?? null,
   lastUpdated: d.lastUpdated ?? null,
   currentSummary: d.currentSummary ?? null,
   notes: d.notes ?? null,
@@ -258,6 +264,8 @@ export const defaultDeal = (): Deal => ({
   tiNote: null,
   probabilityPct: null,
   expectedStart: null,
+  lat: null,
+  lng: null,
   lastUpdated: todayIso(),
   priority: 'Low',
   currentSummary: null,
@@ -328,3 +336,111 @@ export const OnboardingChecklistSchema = z.object({
 });
 
 export type OnboardingChecklist = z.infer<typeof OnboardingChecklistSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Scenario — underwriting analysis attached to a Deal. Stores the
+// full Lease-Calculator inputs, globals snapshot, and optionally a
+// cached results blob. Lives in Supabase `scenarios` table.
+// inputs/globals/results are passed through as `unknown` here; the
+// strict shape lives in src/lib/lease-math/types.ts and is enforced
+// by the calc engine itself. We do this so changing the math model
+// doesn't require a zod migration step.
+// ──────────────────────────────────────────────────────────────────
+
+export const ScenarioSchema = z.object({
+  id: z.string().uuid(),
+  dealId: z.string(),
+  name: z.string().min(1),
+  inputs: z.unknown(),
+  globals: z.unknown(),
+  results: z.unknown().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((s) => ({
+  ...s,
+  results: s.results ?? null,
+}));
+
+export type Scenario = z.infer<typeof ScenarioSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Building — drawn polygon footprint attached to a project. Rendered
+// as 3D extrusion on the Map tab when zoomed in. `footprint` is a
+// GeoJSON Polygon in WGS84 lng/lat (the same shape Mapbox sources
+// natively, no client-side conversion required).
+// ──────────────────────────────────────────────────────────────────
+
+// Loose GeoJSON Polygon shape — z.unknown so we don't fight zod on
+// nested coordinate arrays. The drawing tool (mapbox-gl-draw) is the
+// authoritative producer of valid Polygons; readers trust the shape.
+export const FrontageSideEnum = z.enum(['N', 'S', 'E', 'W']);
+export type FrontageSide = z.infer<typeof FrontageSideEnum>;
+
+// Bump-out — rectangle attached to a side of the building, extending
+// outward. Stored on the Building as a jsonb array.
+export const BumpOutSchema = z.object({
+  id: z.string(),
+  side: FrontageSideEnum,
+  offsetFt: z.number().min(0),
+  widthFt: z.number().positive(),
+  depthFt: z.number().positive(),
+  name: z.string().nullable().optional(),
+  spaceId: z.string().nullable().optional(),
+}).transform((b) => ({
+  ...b,
+  name: b.name ?? null,
+  spaceId: b.spaceId ?? null,
+}));
+
+export type BumpOut = z.infer<typeof BumpOutSchema>;
+
+export const BuildingSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().min(1),
+  name: z.string().default('Building'),
+  footprint: z.unknown(),
+  heightFt: z.number().positive(),
+  color: z.string().nullable().optional(),
+  bayCount: z.number().int().min(1).max(50).default(1),
+  frontageSide: FrontageSideEnum.nullable().optional(),
+  widthFt: z.number().positive().nullable().optional(),
+  depthFt: z.number().positive().nullable().optional(),
+  rotationDeg: z.number().min(-360).max(360).default(0),
+  centerLat: z.number().min(-90).max(90).nullable().optional(),
+  centerLng: z.number().min(-180).max(180).nullable().optional(),
+  // Bump-outs: array of OUTWARD-extending rectangles attached to the
+  // building's sides. Each is rendered as its own extrusion feature.
+  bumpOuts: z.array(BumpOutSchema).default([]),
+  // Space IDs per bay (parallel to bay_count). Null entries fall back
+  // to the auto-format {projectId}-B{buildingOrdinal}-S{i+1}.
+  baySpaceIds: z.array(z.string().nullable()).default([]),
+  // 1-indexed position of this building within its project — used in
+  // the auto Space ID format. Assigned on creation.
+  buildingOrdinal: z.number().int().positive().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((b) => ({
+  ...b,
+  color: b.color ?? null,
+  frontageSide: b.frontageSide ?? null,
+  widthFt: b.widthFt ?? null,
+  depthFt: b.depthFt ?? null,
+  centerLat: b.centerLat ?? null,
+  centerLng: b.centerLng ?? null,
+  buildingOrdinal: b.buildingOrdinal ?? null,
+}));
+
+export type Building = z.infer<typeof BuildingSchema>;
+
+// Convention: {projectId}-B{nn}-S{nn} with zero-padded 2-digit ordinals.
+// Falls back to the building's id prefix when ordinal isn't set yet
+// (shouldn't happen post-migration but kept defensive).
+export function autoSpaceId(
+  projectId: string,
+  buildingOrdinal: number | null | undefined,
+  sectionIndex: number
+): string {
+  const b = (buildingOrdinal ?? 1).toString().padStart(2, '0');
+  const s = (sectionIndex + 1).toString().padStart(2, '0');
+  return `${projectId}-B${b}-S${s}`;
+}

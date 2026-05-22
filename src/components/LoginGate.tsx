@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Lock } from 'lucide-react';
+import { ParceIcon } from './ParceIcon';
 
 const STORAGE_KEY = 'app:unlocked';
 const ATTEMPT_KEY = 'app:auth:attempts';
@@ -86,53 +87,115 @@ export function LoginGate({ children }: LoginGateProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg p-6">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col items-center text-center mb-8">
-          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-accent text-accent-fg shadow-soft mb-5">
-            <Lock size={22} strokeWidth={2} />
-          </div>
-          <h1 className="text-2xl font-semibold text-fg tracking-[-0.02em]">
-            Leasing Tracker
-          </h1>
-          <p className="text-sm text-fg-muted mt-1.5">Restricted access</p>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden p-6"
+      style={{ background: '#121010' }}
+    >
+      {/* Hero texture — subtle accent radial gradients */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: `
+            radial-gradient(ellipse at 35% 40%, rgba(201, 100, 66, 0.10) 0%, transparent 60%),
+            radial-gradient(ellipse at 65% 70%, rgba(201, 100, 66, 0.06) 0%, transparent 50%)
+          `,
+        }}
+      />
+
+      {/* Animated grid — three nested layers:
+          outer drifts, middle pulses, inner glow sweeps with a wave mask.
+          Ported from ParceCRM's login screen. */}
+      <div
+        className="pointer-events-none lt-animate-grid-move"
+        style={{ position: 'absolute', inset: '-80px' }}
+      >
+        <div
+          className="absolute inset-0 lt-animate-grid-pulse will-change-[transform,opacity]"
+          style={{ transformOrigin: 'center' }}
+        >
+          {/* Glow layer: blurred grid with wave mask */}
+          <div
+            className="absolute inset-0 lt-animate-wave-sweep"
+            style={{
+              backgroundImage: `
+                linear-gradient(rgba(201, 100, 66, 0.35) 2px, transparent 2px),
+                linear-gradient(90deg, rgba(201, 100, 66, 0.35) 2px, transparent 2px)
+              `,
+              backgroundSize: '60px 60px',
+              filter: 'blur(5px)',
+            }}
+          />
+          {/* Sharp grid lines */}
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `
+                linear-gradient(rgba(201, 100, 66, 0.14) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(201, 100, 66, 0.14) 1px, transparent 1px)
+              `,
+              backgroundSize: '60px 60px',
+            }}
+          />
         </div>
+      </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              autoFocus
-              disabled={isLockedOut || submitting}
-              className="w-full px-3.5 py-3 bg-bg-elevated rounded-xl text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent transition-all shadow-soft text-center tracking-wider"
-            />
-            {error && (
-              <p className="mt-2 text-xs text-danger text-center">{error}</p>
-            )}
-            {isLockedOut && !error && (
-              <p className="mt-2 text-xs text-fg-subtle text-center">
-                Locked out — {Math.ceil(lockoutRemaining / 1000)}s remaining
-              </p>
-            )}
+      {/* Card */}
+      <div className="relative z-10 w-full max-w-sm lt-animate-fade-in-up">
+        <div className="bg-bg-elevated rounded-2xl shadow-lift p-8 border border-border">
+          <div className="flex flex-col items-center text-center mb-8">
+            <div className="flex items-center justify-center mb-4">
+              <ParceIcon size="xl" variant="on-light" />
+            </div>
+            <h1
+              className="text-5xl text-fg font-extralight"
+              style={{ letterSpacing: '0.08em' }}
+            >
+              parce
+            </h1>
+            <p
+              className="text-sm text-fg-muted mt-4 inline-flex items-center gap-2"
+            >
+              <Lock size={12} strokeWidth={2} />
+              Restricted access
+            </p>
           </div>
 
-          <button
-            type="submit"
-            disabled={isLockedOut || submitting || password.length === 0}
-            className="w-full px-4 py-3 text-sm font-semibold bg-accent text-accent-fg rounded-xl hover:bg-accent-hover transition-colors shadow-soft disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {submitting ? 'Checking…' : 'Continue'}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                autoFocus
+                disabled={isLockedOut || submitting}
+                className="w-full px-3.5 py-3 bg-bg rounded-xl text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-accent transition-all shadow-soft text-center tracking-wider border border-border"
+              />
+              {error && (
+                <p className="mt-2 text-xs text-danger text-center">{error}</p>
+              )}
+              {isLockedOut && !error && (
+                <p className="mt-2 text-xs text-fg-subtle text-center">
+                  Locked out — {Math.ceil(lockoutRemaining / 1000)}s remaining
+                </p>
+              )}
+            </div>
 
-        <p className="mt-6 text-[11px] text-fg-subtle text-center leading-relaxed">
-          Unlock state is stored locally on this device.
-          <br />
-          Log out from the sidebar to clear.
-        </p>
+            <button
+              type="submit"
+              disabled={isLockedOut || submitting || password.length === 0}
+              className="w-full px-4 py-3 text-sm font-semibold bg-accent text-accent-fg rounded-xl hover:bg-accent-hover transition-colors shadow-soft disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {submitting ? 'Checking…' : 'Continue'}
+            </button>
+          </form>
+
+          <p className="mt-6 text-[11px] text-fg-subtle text-center leading-relaxed">
+            Unlock state is stored locally on this device.
+            <br />
+            Log out from the sidebar to clear.
+          </p>
+        </div>
       </div>
     </div>
   );
