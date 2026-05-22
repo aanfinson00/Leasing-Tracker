@@ -444,3 +444,88 @@ export function autoSpaceId(
   const s = (sectionIndex + 1).toString().padStart(2, '0');
   return `${projectId}-B${b}-S${s}`;
 }
+
+// ──────────────────────────────────────────────────────────────────
+// Property Tax Appeals — one row per filed/considered appeal for a
+// given property and tax year. Backs Asset Management workflows
+// + .claude/skills/property-tax-appeal-{intake,watcher}.
+// ──────────────────────────────────────────────────────────────────
+
+export const PropertyTaxAppealStatusEnum = z.enum([
+  'Considering',
+  'Filed',
+  'Under Review',
+  'Hearing Scheduled',
+  'Settled',
+  'Withdrawn',
+  'Lost',
+]);
+export type PropertyTaxAppealStatus = z.infer<typeof PropertyTaxAppealStatusEnum>;
+
+// Statuses that close out the appeal — exclude from "open work" reports.
+export const APPEAL_OPEN_STATUSES: PropertyTaxAppealStatus[] = [
+  'Considering',
+  'Filed',
+  'Under Review',
+  'Hearing Scheduled',
+];
+
+export const PropertyTaxAppealSchema = z.object({
+  id: z.string().uuid(),
+
+  // Property reference (soft link)
+  buildingId: z.string().nullable().optional(),
+  building: z.string().nullable().optional(),
+  parcelNumber: z.string().nullable().optional(),
+  jurisdiction: z.string().nullable().optional(),
+
+  // Required: which tax year we're appealing
+  taxYear: z.number().int().min(2000).max(2100),
+
+  // Valuation triangle
+  assessedValue: z.number().nullable().optional(),
+  proposedValue: z.number().nullable().optional(),
+  marketValue: z.number().nullable().optional(),
+
+  status: PropertyTaxAppealStatusEnum,
+
+  // Dates (ISO YYYY-MM-DD)
+  filedDate: z.string().nullable().optional(),
+  hearingDate: z.string().nullable().optional(),
+  resolutionDate: z.string().nullable().optional(),
+
+  // Outcome
+  initialAssessedValue: z.number().nullable().optional(),
+  finalAssessedValue: z.number().nullable().optional(),
+  estimatedSavings: z.number().nullable().optional(),
+
+  // Consultant
+  consultantName: z.string().nullable().optional(),
+  consultantFeePct: z.number().min(0).max(1).nullable().optional(),
+  consultantFeeDollar: z.number().min(0).nullable().optional(),
+
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((a) => ({
+  ...a,
+  buildingId: a.buildingId ?? null,
+  building: a.building ?? null,
+  parcelNumber: a.parcelNumber ?? null,
+  jurisdiction: a.jurisdiction ?? null,
+  assessedValue: a.assessedValue ?? null,
+  proposedValue: a.proposedValue ?? null,
+  marketValue: a.marketValue ?? null,
+  filedDate: a.filedDate ?? null,
+  hearingDate: a.hearingDate ?? null,
+  resolutionDate: a.resolutionDate ?? null,
+  initialAssessedValue: a.initialAssessedValue ?? null,
+  finalAssessedValue: a.finalAssessedValue ?? null,
+  estimatedSavings: a.estimatedSavings ?? null,
+  consultantName: a.consultantName ?? null,
+  consultantFeePct: a.consultantFeePct ?? null,
+  consultantFeeDollar: a.consultantFeeDollar ?? null,
+  notes: a.notes ?? null,
+}));
+
+export type PropertyTaxAppeal = z.infer<typeof PropertyTaxAppealSchema>;

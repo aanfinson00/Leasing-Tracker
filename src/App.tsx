@@ -20,6 +20,7 @@ import type {
   DealStatus,
   OnboardingChecklist,
   OnboardingItem,
+  PropertyTaxAppeal,
   RentRollRow,
   Scenario,
 } from './types';
@@ -93,8 +94,15 @@ import {
   subscribeScenarios,
 } from './lib/repo/scenarios';
 import { listAllBuildings, subscribeBuildings } from './lib/repo/buildings';
+import {
+  listPropertyTaxAppeals,
+  upsertPropertyTaxAppeal,
+  deletePropertyTaxAppeal as deletePropertyTaxAppealRow,
+  subscribePropertyTaxAppeals,
+} from './lib/repo/propertyTaxAppeals';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { MapView } from './components/Map/MapView';
+import { AssetMgmtView } from './components/AssetMgmt/AssetMgmtView';
 import { GridBackground } from './components/GridBackground';
 import { MobileNav } from './components/MobileNav';
 
@@ -123,6 +131,7 @@ function App() {
   // a space picker. MapView keeps its own state for now (its render path
   // already drives off it); these two subscriptions co-exist fine.
   const [buildings, setBuildings] = useState<Building[]>([]);
+  const [propertyTaxAppeals, setPropertyTaxAppeals] = useState<PropertyTaxAppeal[]>([]);
   const [selectedUwDealId, setSelectedUwDealId] = useState<string | null>(null);
   // A/B/editing are independent: A and B drive the comparison view,
   // editingId drives which scenario the InputsPanel writes to.
@@ -229,12 +238,13 @@ function App() {
     if (SUPABASE_CONFIGURED) {
       (async () => {
         try {
-          const [d, r, a, o, bldgs] = await Promise.all([
+          const [d, r, a, o, bldgs, appeals] = await Promise.all([
             listDeals(),
             listRentRoll(),
             listActivities(),
             listOnboardings(),
             listAllBuildings(),
+            listPropertyTaxAppeals(),
           ]);
           setDeals(d);
           setFilteredDeals(d);
@@ -243,6 +253,7 @@ function App() {
           setActivities(a);
           setOnboardings(o.map(reconcileWithTemplate));
           setBuildings(bldgs);
+          setPropertyTaxAppeals(appeals);
           setFilename('leasing-tracker.xlsx');
         } catch (err) {
           console.error('Failed to load from Supabase:', err);
@@ -357,6 +368,18 @@ function App() {
         }),
       onDelete: (id) => setBuildings((prev) => prev.filter((x) => x.id !== id)),
     });
+    const unsubAppeals = subscribePropertyTaxAppeals({
+      onUpsert: (a) =>
+        setPropertyTaxAppeals((prev) => {
+          const idx = prev.findIndex((x) => x.id === a.id);
+          if (idx === -1) return [...prev, a];
+          const next = prev.slice();
+          next[idx] = a;
+          return next;
+        }),
+      onDelete: (id) =>
+        setPropertyTaxAppeals((prev) => prev.filter((x) => x.id !== id)),
+    });
     return () => {
       unsubDeals();
       unsubRr();
@@ -364,6 +387,7 @@ function App() {
       unsubOb();
       unsubScenarios();
       unsubBldgs();
+      unsubAppeals();
     };
   }, []);
 
@@ -867,6 +891,22 @@ function App() {
     writeThrough('delete scenario', deleteScenarioRow(id));
   };
 
+  const handleSavePropertyTaxAppeal = (updated: PropertyTaxAppeal) => {
+    setPropertyTaxAppeals((prev) => {
+      const idx = prev.findIndex((a) => a.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save tax appeal', upsertPropertyTaxAppeal(updated));
+  };
+
+  const handleDeletePropertyTaxAppeal = (id: string) => {
+    setPropertyTaxAppeals((prev) => prev.filter((a) => a.id !== id));
+    writeThrough('delete tax appeal', deletePropertyTaxAppealRow(id));
+  };
+
   // Lookup: which rent roll rows already have an onboarding (so the
   // RentRollTable can hide the "+ Onboarding" button for them).
   const onboardingsByRentRollId = useMemo(
@@ -1159,7 +1199,11 @@ function App() {
           ) : view === 'development' ? (
             <DevelopmentPipelinePlaceholder />
           ) : view === 'asset-mgmt' ? (
-            <AssetMgmtPendingPlaceholder />
+            <AssetMgmtView
+              appeals={propertyTaxAppeals}
+              onSaveAppeal={handleSavePropertyTaxAppeal}
+              onDeleteAppeal={handleDeletePropertyTaxAppeal}
+            />
           ) : view === 'disposition' ? (
             <DispositionPlaceholder />
           ) : view === 'prospects' ? (
@@ -1356,24 +1400,6 @@ function DispositionPlaceholder() {
         ['Post-close metrics', 'Realized IRR vs UW, hold-period actual vs reval assumption.'],
       ]}
       awaitingNote="Upload your disposition checklist when ready and the seeded sections become real."
-    />
-  );
-}
-
-function AssetMgmtPendingPlaceholder() {
-  return (
-    <PipelinePlaceholder
-      title="Asset Management — Pending Items"
-      subtitle="One running list of what's outstanding across the portfolio — what the team owes, what the GC still owes us, and what's worth watching."
-      sections={[
-        ['Outstanding deliverables', 'LOIs, lease drafts, estoppels, SNDAs, insurance certs — who owes what, due-by date, status.'],
-        ['Construction follow-up', 'Punch list items, warranty work, TI completion, deferred scope from delivery.'],
-        ['Tenant requests', 'Repairs, signage, parking, hours-of-use approvals — open inquiries with owners.'],
-        ['Building monitoring', 'Roof age, HVAC service intervals, sprinkler inspections, expiring permits.'],
-        ['Lease compliance', 'CAM reconciliations due, real-estate-tax appeals, percentage-rent reports, audit windows.'],
-        ['Capital / vendor items', 'Open POs, vendor renewals, recurring service contracts, scheduled cap-ex.'],
-      ]}
-      awaitingNote="Drop more detail here when ready — a checklist, a workflow, or just notes on how the team tracks this today."
     />
   );
 }
