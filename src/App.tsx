@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type {
   ActivityEntry,
+  AMPendingItem,
   Building,
   Deal,
   DealStatus,
@@ -114,6 +115,12 @@ import {
   deletePropertyTaxAppeal as deletePropertyTaxAppealRow,
   subscribePropertyTaxAppeals,
 } from './lib/repo/propertyTaxAppeals';
+import {
+  listAMPendingItems,
+  upsertAMPendingItem,
+  deleteAMPendingItem as deleteAMPendingItemRow,
+  subscribeAMPendingItems,
+} from './lib/repo/amPendingItems';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { DevelopmentView } from './components/Development/DevelopmentView';
 import { CompsView } from './components/Comps/CompsView';
@@ -150,6 +157,7 @@ function App() {
   // already drives off it); these two subscriptions co-exist fine.
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [propertyTaxAppeals, setPropertyTaxAppeals] = useState<PropertyTaxAppeal[]>([]);
+  const [amPendingItems, setAMPendingItems] = useState<AMPendingItem[]>([]);
   const [selectedUwDealId, setSelectedUwDealId] = useState<string | null>(null);
   // A/B/editing are independent: A and B drive the comparison view,
   // editingId drives which scenario the InputsPanel writes to.
@@ -256,7 +264,7 @@ function App() {
     if (SUPABASE_CONFIGURED) {
       (async () => {
         try {
-          const [d, r, a, o, dev, comps, bldgs, appeals] = await Promise.all([
+          const [d, r, a, o, dev, comps, bldgs, appeals, amItems] = await Promise.all([
             listDeals(),
             listRentRoll(),
             listActivities(),
@@ -265,6 +273,7 @@ function App() {
             listLeaseComps(),
             listAllBuildings(),
             listPropertyTaxAppeals(),
+            listAMPendingItems(),
           ]);
           setDeals(d);
           setFilteredDeals(d);
@@ -276,6 +285,7 @@ function App() {
           setLeaseComps(comps);
           setBuildings(bldgs);
           setPropertyTaxAppeals(appeals);
+          setAMPendingItems(amItems);
           setFilename('leasing-tracker.xlsx');
         } catch (err) {
           console.error('Failed to load from Supabase:', err);
@@ -424,6 +434,18 @@ function App() {
       onDelete: (id) =>
         setPropertyTaxAppeals((prev) => prev.filter((x) => x.id !== id)),
     });
+    const unsubAMItems = subscribeAMPendingItems({
+      onUpsert: (i) =>
+        setAMPendingItems((prev) => {
+          const idx = prev.findIndex((x) => x.id === i.id);
+          if (idx === -1) return [...prev, i];
+          const next = prev.slice();
+          next[idx] = i;
+          return next;
+        }),
+      onDelete: (id) =>
+        setAMPendingItems((prev) => prev.filter((x) => x.id !== id)),
+    });
     return () => {
       unsubDeals();
       unsubRr();
@@ -434,6 +456,7 @@ function App() {
       unsubComps();
       unsubBldgs();
       unsubAppeals();
+      unsubAMItems();
     };
   }, []);
 
@@ -985,6 +1008,22 @@ function App() {
     writeThrough('delete tax appeal', deletePropertyTaxAppealRow(id));
   };
 
+  const handleSaveAMPendingItem = (updated: AMPendingItem) => {
+    setAMPendingItems((prev) => {
+      const idx = prev.findIndex((i) => i.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save AM item', upsertAMPendingItem(updated));
+  };
+
+  const handleDeleteAMPendingItem = (id: string) => {
+    setAMPendingItems((prev) => prev.filter((i) => i.id !== id));
+    writeThrough('delete AM item', deleteAMPendingItemRow(id));
+  };
+
   // Lookup: which rent roll rows already have an onboarding (so the
   // RentRollTable can hide the "+ Onboarding" button for them).
   const onboardingsByRentRollId = useMemo(
@@ -1293,6 +1332,9 @@ function App() {
               appeals={propertyTaxAppeals}
               onSaveAppeal={handleSavePropertyTaxAppeal}
               onDeleteAppeal={handleDeletePropertyTaxAppeal}
+              amItems={amPendingItems}
+              onSaveAMItem={handleSaveAMPendingItem}
+              onDeleteAMItem={handleDeleteAMPendingItem}
             />
           ) : view === 'disposition' ? (
             <DispositionPlaceholder />

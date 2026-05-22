@@ -703,3 +703,70 @@ export const LeaseCompSchema = z.object({
 }));
 
 export type LeaseComp = z.infer<typeof LeaseCompSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// Asset Management Pending Items — operating to-do list across the
+// portfolio. One table covers all 5 playbook categories.
+// ──────────────────────────────────────────────────────────────────
+
+export const AMItemTypeEnum = z.enum([
+  'Deliverable',
+  'Construction Followup',
+  'Tenant Request',
+  'Building Monitoring',
+  'Capital Vendor',
+]);
+export type AMItemType = z.infer<typeof AMItemTypeEnum>;
+
+export const AMStatusEnum = z.enum([
+  'Open',
+  'In Progress',
+  'Waiting',
+  'Done',
+  'Cancelled',
+]);
+export type AMStatus = z.infer<typeof AMStatusEnum>;
+
+// Statuses that mean the item is no longer outstanding.
+export const AM_OPEN_STATUSES: AMStatus[] = ['Open', 'In Progress', 'Waiting'];
+
+export const AMPendingItemSchema = z.object({
+  id: z.string().uuid(),
+
+  itemType: AMItemTypeEnum,
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().nullable().optional(),
+
+  buildingId: z.string().nullable().optional(),
+  buildingName: z.string().nullable().optional(),
+  dealId: z.string().nullable().optional(),
+  dealName: z.string().nullable().optional(),
+
+  owner: z.string().nullable().optional(),
+  status: AMStatusEnum,
+  priority: PriorityEnum,
+  dueDate: z.string().nullable().optional(),
+  completedDate: z.string().nullable().optional(),
+
+  source: z.string().nullable().optional(),
+  link: z.string().nullable().optional(),
+
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((i) => ({
+  ...i,
+  description: i.description ?? null,
+  buildingId: i.buildingId ?? null,
+  buildingName: i.buildingName ?? null,
+  dealId: i.dealId ?? null,
+  dealName: i.dealName ?? null,
+  owner: i.owner ?? null,
+  dueDate: i.dueDate ?? null,
+  completedDate: i.completedDate ?? null,
+  source: i.source ?? null,
+  link: i.link ?? null,
+  notes: i.notes ?? null,
+}));
+
+export type AMPendingItem = z.infer<typeof AMPendingItemSchema>;
