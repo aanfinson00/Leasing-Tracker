@@ -903,7 +903,7 @@ function App() {
             backgroundAttachment: 'fixed',
           }}
         >
-          <div className="px-6 sm:px-10 pt-8 pb-6 max-w-7xl mx-auto">
+          <div className="px-6 sm:px-10 lg:px-12 pt-8 pb-6">
             <div className="flex items-start justify-between gap-6 flex-wrap">
               <div className="min-w-0">
                 <h1 className="text-[26px] sm:text-[30px] leading-[1.1] tracking-[-0.02em] text-fg font-semibold">
@@ -1026,7 +1026,7 @@ function App() {
         </header>
 
         {sharedSnapshot && (
-          <div className="max-w-7xl w-full mx-auto px-6 sm:px-10 -mt-2 mb-4">
+          <div className="w-full px-6 sm:px-10 lg:px-12 -mt-2 mb-4">
             <div className="flex items-center gap-3 px-4 py-3 bg-accent-tint border border-accent/20 rounded-xl">
               <Sparkles size={16} strokeWidth={2} className="text-accent shrink-0" />
               <div className="flex-1 text-sm">
@@ -1051,7 +1051,7 @@ function App() {
           </div>
         )}
 
-        <main className="flex-1 px-6 sm:px-10 pb-12 max-w-7xl w-full mx-auto space-y-8">
+        <main className="flex-1 px-6 sm:px-10 lg:px-12 pb-12 w-full space-y-8">
           {view === 'reports' ? (
             <ReportsView deals={deals} rentRoll={rentRoll} />
           ) : view === 'underwrite' ? (
