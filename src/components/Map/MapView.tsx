@@ -316,18 +316,28 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     map.getCanvas().style.cursor = placingProjectId || placement ? 'crosshair' : '';
   }, [placingProjectId, placement]);
 
-  // Flatten + bump zoom while placing a building.
+  // Flatten + bump zoom while placing a building; restore tilt when
+  // exiting placement. Only fires on placement TRANSITIONS — if this
+  // also fired on activeProjectId changes (as it used to), it would
+  // interrupt handleSelectProject's flyTo and wipe out the zoom +
+  // center it just set. The ref tracks the previous placement value
+  // so we know when we're actually transitioning vs. just re-running
+  // because activeProjectId changed.
+  const wasPlacementRef = useRef(false);
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (placement) {
+    const enteringPlacement = !!placement && !wasPlacementRef.current;
+    const exitingPlacement = !placement && wasPlacementRef.current;
+    wasPlacementRef.current = !!placement;
+    if (enteringPlacement) {
       map.easeTo({
         pitch: 0,
         bearing: 0,
         zoom: Math.max(map.getZoom(), 18.5),
         duration: 600,
       });
-    } else if (activeProjectId) {
+    } else if (exitingPlacement && activeProjectId) {
       map.easeTo({ pitch: 55, bearing: -45, duration: 600 });
     }
   }, [placement, activeProjectId]);
