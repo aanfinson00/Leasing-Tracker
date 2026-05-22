@@ -51,6 +51,36 @@ import { PromoteDrawer } from './components/PromoteDrawer';
 import { ReportsView } from './components/ReportsView';
 import { OnboardingView } from './components/Onboarding/OnboardingView';
 import { Sidebar, type View } from './components/Sidebar';
+import { SUPABASE_CONFIGURED } from './lib/supabase';
+import {
+  listDeals,
+  upsertDeal,
+  bulkUpsertDeals,
+  deleteDeal as deleteDealRow,
+  subscribeDeals,
+} from './lib/repo/deals';
+import {
+  listRentRoll,
+  upsertRentRoll,
+  bulkUpsertRentRoll,
+  deleteRentRoll as deleteRentRollRow,
+  subscribeRentRoll,
+} from './lib/repo/rentRoll';
+import {
+  listActivities,
+  insertActivity,
+  upsertActivity,
+  bulkInsertActivities,
+  deleteActivity as deleteActivityRow,
+  subscribeActivities,
+} from './lib/repo/activities';
+import {
+  listOnboardings,
+  upsertOnboarding,
+  bulkUpsertOnboardings,
+  deleteOnboarding as deleteOnboardingRow,
+  subscribeOnboardings,
+} from './lib/repo/onboardings';
 
 function App() {
   const [view, setView] = useState<View>('prospects');
@@ -92,6 +122,32 @@ function App() {
     return m;
   }, [deals]);
 
+  // Push a freshly-parsed workbook into Supabase (bulk upsert by id).
+  // Called from the legacy file-handle reconnect path AND the Excel import
+  // buttons. Idempotent — re-importing the same workbook is a no-op.
+  const pushWorkbookToSupabase = async (result: {
+    deals: Deal[];
+    rentRoll: RentRollRow[];
+    activities: ActivityEntry[];
+    onboardings: OnboardingChecklist[];
+  }) => {
+    if (!SUPABASE_CONFIGURED) return;
+    try {
+      await Promise.all([
+        bulkUpsertDeals(result.deals),
+        bulkUpsertRentRoll(result.rentRoll),
+        bulkInsertActivities(result.activities),
+        bulkUpsertOnboardings(result.onboardings),
+      ]);
+      showToast(
+        `Imported ${result.deals.length} deals, ${result.rentRoll.length} rent roll rows`
+      );
+    } catch (err) {
+      console.error('Bulk import to Supabase failed:', err);
+      showToast('Server import failed — see console');
+    }
+  };
+
   const loadFromHandleResult = async (handle: FileSystemFileHandle): Promise<boolean> => {
     try {
       const file = await readFromHandle(handle);
@@ -104,6 +160,7 @@ function App() {
       setOnboardings(result.onboardings);
       setFilename(file.name);
       setLastSeenModified(file.lastModified);
+      void pushWorkbookToSupabase(result);
       return true;
     } catch (err) {
       console.error('Failed to load from handle:', err);
@@ -112,6 +169,9 @@ function App() {
   };
 
   useEffect(() => {
+    // Share-link snapshots stay local — they're a side-channel for showing
+    // a frozen view to someone without DB access. Don't write them through
+    // to Supabase.
     const encoded = readShareFromUrl();
     if (encoded) {
       decodeShare(encoded).then((payload) => {
@@ -133,10 +193,34 @@ function App() {
       return;
     }
 
+    if (SUPABASE_CONFIGURED) {
+      (async () => {
+        try {
+          const [d, r, a, o] = await Promise.all([
+            listDeals(),
+            listRentRoll(),
+            listActivities(),
+            listOnboardings(),
+          ]);
+          setDeals(d);
+          setFilteredDeals(d);
+          setRentRoll(r);
+          setFilteredRentRoll(r);
+          setActivities(a);
+          setOnboardings(o.map(reconcileWithTemplate));
+          setFilename('leasing-tracker.xlsx');
+        } catch (err) {
+          console.error('Failed to load from Supabase:', err);
+          showToast('Failed to load from server — falling back to local snapshot');
+        } finally {
+          setHydrated(true);
+        }
+      })();
+      return;
+    }
+
+    // Legacy local-first flow — only runs when Supabase env vars are absent.
     (async () => {
-      // Try to reconnect to a previously-saved file handle first. If it
-      // resolves cleanly with granted permission, we skip the autosave-restore
-      // prompt entirely — the canonical file IS the source of truth.
       if (fsAccessSupported) {
         const rec = await loadHandle();
         if (rec) {
@@ -178,8 +262,50 @@ function App() {
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Realtime — when other clients change rows, merge into local state.
+  // Self-emitted events are idempotent (the row's already in state with
+  // the same shape), so we don't need to dedupe by client_id.
+  useEffect(() => {
+    if (!SUPABASE_CONFIGURED) return;
+    const unsubDeals = subscribeDeals({
+      onInsert: (d) => setDeals((prev) => (prev.some((x) => x.id === d.id) ? prev : [...prev, d])),
+      onUpdate: (d) => setDeals((prev) => prev.map((x) => (x.id === d.id ? d : x))),
+      onDelete: (id) => setDeals((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubRr = subscribeRentRoll({
+      onInsert: (r) => setRentRoll((prev) => (prev.some((x) => x.id === r.id) ? prev : [...prev, r])),
+      onUpdate: (r) => setRentRoll((prev) => prev.map((x) => (x.id === r.id ? r : x))),
+      onDelete: (id) => setRentRoll((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubAct = subscribeActivities({
+      onInsert: (a) =>
+        setActivities((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a])),
+      onDelete: (id) => setActivities((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubOb = subscribeOnboardings({
+      onUpsert: (o) =>
+        setOnboardings((prev) => {
+          const idx = prev.findIndex((x) => x.id === o.id);
+          if (idx === -1) return [...prev, reconcileWithTemplate(o)];
+          const next = prev.slice();
+          next[idx] = reconcileWithTemplate(o);
+          return next;
+        }),
+      onDelete: (id) => setOnboardings((prev) => prev.filter((x) => x.id !== id)),
+    });
+    return () => {
+      unsubDeals();
+      unsubRr();
+      unsubAct();
+      unsubOb();
+    };
+  }, []);
+
   useEffect(() => {
     if (!hydrated) return;
+    // Supabase is the source of truth — skip Dexie autosave to avoid a
+    // stale local snapshot that could shadow live data on next load.
+    if (SUPABASE_CONFIGURED) return;
     if (
       deals.length === 0 &&
       rentRoll.length === 0 &&
@@ -211,6 +337,7 @@ function App() {
         setNeedsReconnect(false);
         await saveHandle(handle, file.lastModified);
         showToast(`Connected to ${file.name}`);
+        void pushWorkbookToSupabase(result);
       } catch (err) {
         alert(`Error opening file: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
@@ -232,6 +359,7 @@ function App() {
       setActivities(result.activities);
       setOnboardings(result.onboardings);
       setFilename(file.name);
+      void pushWorkbookToSupabase(result);
     } catch (err) {
       alert(`Error loading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -339,6 +467,17 @@ function App() {
     }
   };
 
+  // Fire-and-forget Supabase write. Errors get logged + toasted but we
+  // don't roll back the optimistic UI update — the next page load (or a
+  // realtime event from a successful write) will reconcile.
+  const writeThrough = (label: string, p: Promise<unknown>) => {
+    if (!SUPABASE_CONFIGURED) return;
+    p.catch((err) => {
+      console.error(`Supabase ${label} failed:`, err);
+      showToast(`Server sync failed: ${label}`);
+    });
+  };
+
   // ── Prospects handlers
   const handleNewDeal = () => {
     const newDeal = defaultDeal();
@@ -346,12 +485,14 @@ function App() {
     setDeals(updated);
     setFilteredDeals(updated);
     setEditingDeal(newDeal);
+    writeThrough('create deal', upsertDeal(newDeal));
   };
   const handleSelectDeal = (deal: Deal) => setEditingDeal(deal);
   const handleSaveDeal = (updated: Deal) => {
     const newDeals = deals.map((d) => (d.id === updated.id ? updated : d));
     setDeals(newDeals);
     setFilteredDeals((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+    writeThrough('save deal', upsertDeal(updated));
   };
   const handleDeleteDeal = (id: string) => {
     const newDeals = deals.filter((d) => d.id !== id);
@@ -360,6 +501,12 @@ function App() {
     setActivities((prev) =>
       prev.filter((a) => !(a.parentType === 'deal' && a.parentId === id))
     );
+    writeThrough('delete deal', deleteDealRow(id));
+    // Cascade: drop the deal's activities server-side too.
+    if (SUPABASE_CONFIGURED) {
+      const orphaned = activities.filter((a) => a.parentType === 'deal' && a.parentId === id);
+      orphaned.forEach((a) => writeThrough('delete activity', deleteActivityRow(a.id)));
+    }
   };
 
   // ── Rent Roll handlers
@@ -369,12 +516,14 @@ function App() {
     setRentRoll(updated);
     setFilteredRentRoll(updated);
     setEditingRow(newRow);
+    writeThrough('create rent roll row', upsertRentRoll(newRow));
   };
   const handleSelectRow = (row: RentRollRow) => setEditingRow(row);
   const handleSaveRow = (updated: RentRollRow) => {
     const newRows = rentRoll.map((r) => (r.id === updated.id ? updated : r));
     setRentRoll(newRows);
     setFilteredRentRoll((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    writeThrough('save rent roll row', upsertRentRoll(updated));
   };
   const handleDeleteRow = (id: string) => {
     const newRows = rentRoll.filter((r) => r.id !== id);
@@ -384,6 +533,15 @@ function App() {
       prev.filter((a) => !(a.parentType === 'rentroll' && a.parentId === id))
     );
     setOnboardings((prev) => prev.filter((o) => o.rentRollId !== id));
+    writeThrough('delete rent roll row', deleteRentRollRow(id));
+    if (SUPABASE_CONFIGURED) {
+      activities
+        .filter((a) => a.parentType === 'rentroll' && a.parentId === id)
+        .forEach((a) => writeThrough('delete activity', deleteActivityRow(a.id)));
+      onboardings
+        .filter((o) => o.rentRollId === id)
+        .forEach((o) => writeThrough('delete onboarding', deleteOnboardingRow(o.id)));
+    }
   };
 
   // ── Activity handlers
@@ -394,14 +552,17 @@ function App() {
       createdAt: new Date().toISOString(),
     };
     setActivities((prev) => [...prev, full]);
+    writeThrough('add activity', insertActivity(full));
   };
   const handleDeleteActivity = (id: string) => {
     setActivities((prev) => prev.filter((a) => a.id !== id));
+    writeThrough('delete activity', deleteActivityRow(id));
   };
   const handleDealStatusChange = (deal: Deal, from: DealStatus, to: DealStatus) => {
     if (from === to) return;
     const entry = makeStatusChangeEntry('deal', deal.id, from, to);
     setActivities((prev) => [...prev, entry]);
+    writeThrough('log status change', insertActivity(entry));
   };
 
   // ── Cross-tab: Promote a prospect → Rent Roll
@@ -412,13 +573,14 @@ function App() {
 
   const handleConfirmPromote = (rrRow: RentRollRow, isNew: boolean) => {
     if (!promotingDeal) return;
+    const promotedDealId = promotingDeal.id;
     const newRows = isNew
       ? [...rentRoll, rrRow]
       : rentRoll.map((r) => (r.id === rrRow.id ? rrRow : r));
     setRentRoll(newRows);
     setFilteredRentRoll(newRows);
     // Delete the prospect — it lives in the rent roll from here on
-    const newDeals = deals.filter((d) => d.id !== promotingDeal.id);
+    const newDeals = deals.filter((d) => d.id !== promotedDealId);
     setDeals(newDeals);
     setFilteredDeals(newDeals);
 
@@ -430,9 +592,12 @@ function App() {
       'Executed',
       'Promoted to Rent Roll'
     );
+    const reparented = activities
+      .filter((a) => a.parentType === 'deal' && a.parentId === promotedDealId)
+      .map((a) => ({ ...a, parentType: 'rentroll' as const, parentId: rrRow.id }));
     setActivities((prev) => [
       ...prev.map((a) =>
-        a.parentType === 'deal' && a.parentId === promotingDeal.id
+        a.parentType === 'deal' && a.parentId === promotedDealId
           ? { ...a, parentType: 'rentroll' as const, parentId: rrRow.id }
           : a
       ),
@@ -442,11 +607,22 @@ function App() {
     // Auto-start an onboarding checklist for this tenant if one doesn't
     // already exist. Idempotent so re-promoting the same rent roll row
     // reuses the existing checklist (preserving any prior checkmarks).
+    const existingChecklist = getOnboardingFor(onboardings, rrRow.id);
+    const newChecklist = existingChecklist
+      ? null
+      : defaultOnboardingChecklist(rrRow.id, makeBlankItems());
     setOnboardings((prev) =>
-      getOnboardingFor(prev, rrRow.id)
-        ? prev
-        : [...prev, defaultOnboardingChecklist(rrRow.id, makeBlankItems())]
+      newChecklist && !getOnboardingFor(prev, rrRow.id) ? [...prev, newChecklist] : prev
     );
+
+    // Sync the whole transition to Supabase.
+    writeThrough('promote: save rent roll row', upsertRentRoll(rrRow));
+    writeThrough('promote: delete prospect', deleteDealRow(promotedDealId));
+    reparented.forEach((a) => writeThrough('promote: reparent activity', upsertActivity(a)));
+    writeThrough('promote: log transition', insertActivity(transition));
+    if (newChecklist) {
+      writeThrough('promote: start onboarding', upsertOnboarding(newChecklist));
+    }
 
     setPromotingDeal(null);
     setView('rentroll');
@@ -480,14 +656,19 @@ function App() {
     setFilteredDeals(updated);
     setView('prospects');
     setEditingDeal(newDeal);
+    writeThrough('start prospect from vacant', upsertDeal(newDeal));
   };
 
   // ── Onboarding handlers
   const handleStartOnboarding = (row: RentRollRow) => {
-    setOnboardings((prev) => {
-      if (getOnboardingFor(prev, row.id)) return prev;
-      return [...prev, defaultOnboardingChecklist(row.id, makeBlankItems())];
-    });
+    const existing = getOnboardingFor(onboardings, row.id);
+    if (!existing) {
+      const newChecklist = defaultOnboardingChecklist(row.id, makeBlankItems());
+      setOnboardings((prev) =>
+        getOnboardingFor(prev, row.id) ? prev : [...prev, newChecklist]
+      );
+      writeThrough('start onboarding', upsertOnboarding(newChecklist));
+    }
     setView('onboarding');
   };
   const handleUpdateOnboardingItem = (
@@ -495,19 +676,25 @@ function App() {
     itemId: string,
     patch: Partial<OnboardingItem>
   ) => {
+    let updatedChecklist: OnboardingChecklist | null = null;
     setOnboardings((prev) =>
-      prev.map((c) =>
-        c.id !== checklistId
-          ? c
-          : {
-              ...c,
-              items: c.items.map((i) => (i.itemId === itemId ? { ...i, ...patch } : i)),
-            }
-      )
+      prev.map((c) => {
+        if (c.id !== checklistId) return c;
+        const next: OnboardingChecklist = {
+          ...c,
+          items: c.items.map((i) => (i.itemId === itemId ? { ...i, ...patch } : i)),
+        };
+        updatedChecklist = next;
+        return next;
+      })
     );
+    if (updatedChecklist) {
+      writeThrough('update onboarding item', upsertOnboarding(updatedChecklist));
+    }
   };
   const handleDeleteOnboarding = (id: string) => {
     setOnboardings((prev) => prev.filter((o) => o.id !== id));
+    writeThrough('delete onboarding', deleteOnboardingRow(id));
   };
 
   // Lookup: which rent roll rows already have an onboarding (so the

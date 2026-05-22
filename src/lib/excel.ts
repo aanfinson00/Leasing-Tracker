@@ -526,6 +526,72 @@ export interface LoadResult {
   onboardings: OnboardingChecklist[];
 }
 
+// Workbook → entities. Pure function — no browser APIs — so the seed
+// script can reuse it Node-side. `loadFromFile` is the browser-facing
+// wrapper that handles the FileReader → ArrayBuffer step.
+export function loadFromWorkbook(workbook: XLSX.WorkBook): LoadResult {
+  let deals: Deal[] = [];
+  let rentRoll: RentRollRow[] = [];
+  let activities: ActivityEntry[] = [];
+  const onboardingRows: OnboardingRowParsed[] = [];
+
+  for (const name of workbook.SheetNames) {
+    const ws = workbook.Sheets[name];
+    if (!ws) continue;
+    const { rowIdx, type } = findHeaderRow(ws);
+    if (type === 'unknown') continue;
+    const rows = sheetToJsonFromRow(ws, rowIdx);
+
+    if (type === 'rentroll') {
+      rentRoll = rentRoll.concat(
+        rows.map(parseRentRollRow).filter((r): r is RentRollRow => r !== null)
+      );
+    } else if (type === 'prospects') {
+      deals = deals.concat(
+        rows.map(parseProspectsRow).filter((d): d is Deal => d !== null)
+      );
+    } else if (type === 'activity') {
+      activities = activities.concat(
+        rows.map(parseActivityRow).filter((a): a is ActivityEntry => a !== null)
+      );
+    } else if (type === 'onboarding') {
+      for (const raw of rows) {
+        const parsed = parseOnboardingRow(raw);
+        if (parsed) onboardingRows.push(parsed);
+      }
+    }
+  }
+
+  // Group onboarding rows back into checklists by Checklist ID, then
+  // reconcile with the current template (inject missing items, preserve
+  // unknown ones).
+  const byChecklist = new Map<string, OnboardingRowParsed[]>();
+  for (const r of onboardingRows) {
+    const list = byChecklist.get(r.checklistId) ?? [];
+    list.push(r);
+    byChecklist.set(r.checklistId, list);
+  }
+  const onboardings: OnboardingChecklist[] = [];
+  for (const [checklistId, rows] of byChecklist) {
+    const first = rows[0];
+    const candidate = {
+      id: checklistId,
+      rentRollId: first.rentRollId,
+      createdAt: first.createdAt,
+      templateVersion: first.templateVersion,
+      items: rows.map((r) => r.item),
+    };
+    const result = OnboardingChecklistSchema.safeParse(candidate);
+    if (!result.success) {
+      console.warn('Skipping unparsable onboarding checklist:', candidate, result.error.format());
+      continue;
+    }
+    onboardings.push(reconcileWithTemplate(result.data));
+  }
+
+  return { deals, rentRoll, activities, onboardings };
+}
+
 export async function loadFromFile(file: File): Promise<LoadResult> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -533,69 +599,8 @@ export async function loadFromFile(file: File): Promise<LoadResult> {
       try {
         const data = e.target?.result;
         if (!data) throw new Error('Failed to read file');
-
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-
-        let deals: Deal[] = [];
-        let rentRoll: RentRollRow[] = [];
-        let activities: ActivityEntry[] = [];
-        const onboardingRows: OnboardingRowParsed[] = [];
-
-        for (const name of workbook.SheetNames) {
-          const ws = workbook.Sheets[name];
-          if (!ws) continue;
-          const { rowIdx, type } = findHeaderRow(ws);
-          if (type === 'unknown') continue;
-          const rows = sheetToJsonFromRow(ws, rowIdx);
-
-          if (type === 'rentroll') {
-            rentRoll = rentRoll.concat(
-              rows.map(parseRentRollRow).filter((r): r is RentRollRow => r !== null)
-            );
-          } else if (type === 'prospects') {
-            deals = deals.concat(
-              rows.map(parseProspectsRow).filter((d): d is Deal => d !== null)
-            );
-          } else if (type === 'activity') {
-            activities = activities.concat(
-              rows.map(parseActivityRow).filter((a): a is ActivityEntry => a !== null)
-            );
-          } else if (type === 'onboarding') {
-            for (const raw of rows) {
-              const parsed = parseOnboardingRow(raw);
-              if (parsed) onboardingRows.push(parsed);
-            }
-          }
-        }
-
-        // Group onboarding rows back into checklists by Checklist ID, then
-        // reconcile with the current template (inject missing items, preserve
-        // unknown ones).
-        const byChecklist = new Map<string, OnboardingRowParsed[]>();
-        for (const r of onboardingRows) {
-          const list = byChecklist.get(r.checklistId) ?? [];
-          list.push(r);
-          byChecklist.set(r.checklistId, list);
-        }
-        const onboardings: OnboardingChecklist[] = [];
-        for (const [checklistId, rows] of byChecklist) {
-          const first = rows[0];
-          const candidate = {
-            id: checklistId,
-            rentRollId: first.rentRollId,
-            createdAt: first.createdAt,
-            templateVersion: first.templateVersion,
-            items: rows.map((r) => r.item),
-          };
-          const result = OnboardingChecklistSchema.safeParse(candidate);
-          if (!result.success) {
-            console.warn('Skipping unparsable onboarding checklist:', candidate, result.error.format());
-            continue;
-          }
-          onboardings.push(reconcileWithTemplate(result.data));
-        }
-
-        resolve({ deals, rentRoll, activities, onboardings });
+        resolve(loadFromWorkbook(workbook));
       } catch (err) {
         reject(err);
       }
