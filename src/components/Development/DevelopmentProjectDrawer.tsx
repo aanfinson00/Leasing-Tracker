@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   X,
@@ -11,16 +11,37 @@ import {
   NotebookPen,
   Trash2,
   AlertTriangle,
+  Activity as ActivityIcon,
+  UserSquare,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { DevelopmentProject, DevPhase, RiskLevel } from '../../types';
+import type {
+  Contact,
+  DevelopmentProject,
+  DevPhase,
+  DevProjectContact,
+  DevProjectNote,
+  RiskLevel,
+} from '../../types';
 import { DevPhaseEnum, RiskLevelEnum, DEV_PHASE_ORDER } from '../../types';
+import { DevContactsPanel } from './DevContactsPanel';
+import { DevNotesLog } from './DevNotesLog';
 
 interface DevelopmentProjectDrawerProps {
   project: DevelopmentProject | null;
   onClose: () => void;
   onSave: (p: DevelopmentProject) => void;
   onDelete: (id: string) => void;
+  // CRM v1 — passed in from App. Empty arrays + no-op handlers are
+  // safe defaults so the drawer works in isolation/tests.
+  allContacts?: Contact[];
+  contactLinks?: DevProjectContact[];
+  notes?: DevProjectNote[];
+  onSaveContact?: (c: Contact) => void;
+  onLinkContact?: (link: DevProjectContact) => void;
+  onUnlinkContact?: (linkId: string) => void;
+  onSaveNote?: (n: DevProjectNote) => void;
+  onDeleteNote?: (id: string) => void;
 }
 
 type FormValues = {
@@ -129,7 +150,31 @@ export function DevelopmentProjectDrawer({
   onClose,
   onSave,
   onDelete,
+  allContacts = [],
+  contactLinks = [],
+  notes = [],
+  onSaveContact,
+  onLinkContact,
+  onUnlinkContact,
+  onSaveNote,
+  onDeleteNote,
 }: DevelopmentProjectDrawerProps) {
+  // Pre-filter to just this project's CRM data so the panels can be
+  // dumb about ownership.
+  const projectLinks = useMemo(
+    () => contactLinks.filter((l) => project && l.devProjectId === project.id),
+    [contactLinks, project]
+  );
+  const projectNotes = useMemo(
+    () => notes.filter((n) => project && n.devProjectId === project.id),
+    [notes, project]
+  );
+  const crmWired =
+    onSaveContact != null &&
+    onLinkContact != null &&
+    onUnlinkContact != null &&
+    onSaveNote != null &&
+    onDeleteNote != null;
   const {
     register,
     handleSubmit,
@@ -418,6 +463,32 @@ export function DevelopmentProjectDrawer({
                 className={inputClass}
               />
             </Section>
+
+            {/* CRM v1 — contacts panel + activity log. Hidden when the
+                drawer is mounted without CRM handlers wired (e.g. in
+                isolated tests). */}
+            {crmWired && project && (
+              <>
+                <Section icon={UserSquare} title="Contacts">
+                  <DevContactsPanel
+                    allContacts={allContacts}
+                    links={projectLinks}
+                    devProjectId={project.id}
+                    onSaveContact={onSaveContact!}
+                    onLink={onLinkContact!}
+                    onUnlink={onUnlinkContact!}
+                  />
+                </Section>
+                <Section icon={ActivityIcon} title="Activity Log">
+                  <DevNotesLog
+                    devProjectId={project.id}
+                    notes={projectNotes}
+                    onSave={onSaveNote!}
+                    onDelete={onDeleteNote!}
+                  />
+                </Section>
+              </>
+            )}
           </div>
 
           <div className="sticky bottom-0 bg-bg/90 backdrop-blur-md border-t border-border px-7 py-4 flex items-center justify-between">

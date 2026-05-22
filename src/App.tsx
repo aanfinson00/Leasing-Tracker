@@ -17,9 +17,12 @@ import type {
   ActivityEntry,
   AMPendingItem,
   Building,
+  Contact,
   Deal,
   DealStatus,
   DevelopmentProject,
+  DevProjectContact,
+  DevProjectNote,
   LeaseComp,
   OnboardingChecklist,
   OnboardingItem,
@@ -121,6 +124,23 @@ import {
   deleteAMPendingItem as deleteAMPendingItemRow,
   subscribeAMPendingItems,
 } from './lib/repo/amPendingItems';
+import {
+  listContacts,
+  upsertContact,
+  subscribeContacts,
+} from './lib/repo/contacts';
+import {
+  listDevProjectContacts,
+  upsertDevProjectContact,
+  deleteDevProjectContact as deleteDevProjectContactRow,
+  subscribeDevProjectContacts,
+} from './lib/repo/devProjectContacts';
+import {
+  listDevProjectNotes,
+  upsertDevProjectNote,
+  deleteDevProjectNote as deleteDevProjectNoteRow,
+  subscribeDevProjectNotes,
+} from './lib/repo/devProjectNotes';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { DevelopmentView } from './components/Development/DevelopmentView';
 import { CompsView } from './components/Comps/CompsView';
@@ -158,6 +178,10 @@ function App() {
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [propertyTaxAppeals, setPropertyTaxAppeals] = useState<PropertyTaxAppeal[]>([]);
   const [amPendingItems, setAMPendingItems] = useState<AMPendingItem[]>([]);
+  // CRM v1
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [devProjectContacts, setDevProjectContacts] = useState<DevProjectContact[]>([]);
+  const [devProjectNotes, setDevProjectNotes] = useState<DevProjectNote[]>([]);
   const [selectedUwDealId, setSelectedUwDealId] = useState<string | null>(null);
   // A/B/editing are independent: A and B drive the comparison view,
   // editingId drives which scenario the InputsPanel writes to.
@@ -264,7 +288,10 @@ function App() {
     if (SUPABASE_CONFIGURED) {
       (async () => {
         try {
-          const [d, r, a, o, dev, comps, bldgs, appeals, amItems] = await Promise.all([
+          const [
+            d, r, a, o, dev, comps, bldgs, appeals, amItems,
+            crmContacts, crmLinks, crmNotes,
+          ] = await Promise.all([
             listDeals(),
             listRentRoll(),
             listActivities(),
@@ -274,6 +301,9 @@ function App() {
             listAllBuildings(),
             listPropertyTaxAppeals(),
             listAMPendingItems(),
+            listContacts(),
+            listDevProjectContacts(),
+            listDevProjectNotes(),
           ]);
           setDeals(d);
           setFilteredDeals(d);
@@ -286,6 +316,9 @@ function App() {
           setBuildings(bldgs);
           setPropertyTaxAppeals(appeals);
           setAMPendingItems(amItems);
+          setContacts(crmContacts);
+          setDevProjectContacts(crmLinks);
+          setDevProjectNotes(crmNotes);
           setFilename('leasing-tracker.xlsx');
         } catch (err) {
           console.error('Failed to load from Supabase:', err);
@@ -446,6 +479,41 @@ function App() {
       onDelete: (id) =>
         setAMPendingItems((prev) => prev.filter((x) => x.id !== id)),
     });
+    const unsubCrmContacts = subscribeContacts({
+      onUpsert: (c) =>
+        setContacts((prev) => {
+          const idx = prev.findIndex((x) => x.id === c.id);
+          if (idx === -1) return [...prev, c];
+          const next = prev.slice();
+          next[idx] = c;
+          return next;
+        }),
+      onDelete: (id) => setContacts((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubCrmLinks = subscribeDevProjectContacts({
+      onUpsert: (l) =>
+        setDevProjectContacts((prev) => {
+          const idx = prev.findIndex((x) => x.id === l.id);
+          if (idx === -1) return [...prev, l];
+          const next = prev.slice();
+          next[idx] = l;
+          return next;
+        }),
+      onDelete: (id) =>
+        setDevProjectContacts((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubCrmNotes = subscribeDevProjectNotes({
+      onUpsert: (n) =>
+        setDevProjectNotes((prev) => {
+          const idx = prev.findIndex((x) => x.id === n.id);
+          if (idx === -1) return [...prev, n];
+          const next = prev.slice();
+          next[idx] = n;
+          return next;
+        }),
+      onDelete: (id) =>
+        setDevProjectNotes((prev) => prev.filter((x) => x.id !== id)),
+    });
     return () => {
       unsubDeals();
       unsubRr();
@@ -457,6 +525,9 @@ function App() {
       unsubBldgs();
       unsubAppeals();
       unsubAMItems();
+      unsubCrmContacts();
+      unsubCrmLinks();
+      unsubCrmNotes();
     };
   }, []);
 
@@ -1024,6 +1095,50 @@ function App() {
     writeThrough('delete AM item', deleteAMPendingItemRow(id));
   };
 
+  // ── CRM v1 handlers ─────────────────────────────────────────────
+  const handleSaveContact = (updated: Contact) => {
+    setContacts((prev) => {
+      const idx = prev.findIndex((c) => c.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save contact', upsertContact(updated));
+  };
+
+  const handleLinkDevProjectContact = (link: DevProjectContact) => {
+    setDevProjectContacts((prev) => {
+      const idx = prev.findIndex((l) => l.id === link.id);
+      if (idx === -1) return [...prev, link];
+      const next = prev.slice();
+      next[idx] = link;
+      return next;
+    });
+    writeThrough('link contact to dev project', upsertDevProjectContact(link));
+  };
+
+  const handleUnlinkDevProjectContact = (linkId: string) => {
+    setDevProjectContacts((prev) => prev.filter((l) => l.id !== linkId));
+    writeThrough('unlink contact', deleteDevProjectContactRow(linkId));
+  };
+
+  const handleSaveDevProjectNote = (note: DevProjectNote) => {
+    setDevProjectNotes((prev) => {
+      const idx = prev.findIndex((n) => n.id === note.id);
+      if (idx === -1) return [...prev, note];
+      const next = prev.slice();
+      next[idx] = note;
+      return next;
+    });
+    writeThrough('save dev note', upsertDevProjectNote(note));
+  };
+
+  const handleDeleteDevProjectNote = (id: string) => {
+    setDevProjectNotes((prev) => prev.filter((n) => n.id !== id));
+    writeThrough('delete dev note', deleteDevProjectNoteRow(id));
+  };
+
   // Lookup: which rent roll rows already have an onboarding (so the
   // RentRollTable can hide the "+ Onboarding" button for them).
   const onboardingsByRentRollId = useMemo(
@@ -1326,6 +1441,14 @@ function App() {
               projects={devProjects}
               onSave={handleSaveDevProject}
               onDelete={handleDeleteDevProject}
+              contacts={contacts}
+              contactLinks={devProjectContacts}
+              notes={devProjectNotes}
+              onSaveContact={handleSaveContact}
+              onLinkContact={handleLinkDevProjectContact}
+              onUnlinkContact={handleUnlinkDevProjectContact}
+              onSaveNote={handleSaveDevProjectNote}
+              onDeleteNote={handleDeleteDevProjectNote}
             />
           ) : view === 'asset-mgmt' ? (
             <AssetMgmtView
