@@ -16,7 +16,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { Feature, Polygon } from 'geojson';
 import { MapPin, Satellite, Map as MapIcon, X } from 'lucide-react';
-import type { Building, Deal } from '../../types';
+import type { Building, Deal, DevelopmentProject, DevPhase } from '../../types';
 import { ProjectDrawer } from './ProjectDrawer';
 import {
   listAllBuildings,
@@ -120,14 +120,34 @@ export interface PlacementParams {
   bayCount: number;
 }
 
+// `mode` controls which entity set the map renders.
+// - 'all'      → deals (Prospects) + dev projects, both clickable.
+// - 'dev-only' → dev projects only. Hides the deal-side placement picker
+//                and skips ProjectDrawer; expected to be embedded in
+//                DevelopmentView where its own drawer handles edits.
+export type MapMode = 'all' | 'dev-only';
+
 interface Props {
   deals: Deal[];
   onSelectDeal: (deal: Deal) => void;
   onUpdateProjectCoords: (projectId: string, lat: number, lng: number) => void;
   onToast?: (msg: string) => void;
+  devProjects?: DevelopmentProject[];
+  onSelectDevProject?: (p: DevelopmentProject) => void;
+  onUpdateDevProjectCoords?: (id: string, lat: number, lng: number) => void;
+  mode?: MapMode;
 }
 
-export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }: Props) {
+export function MapView({
+  deals,
+  onSelectDeal,
+  onUpdateProjectCoords,
+  onToast,
+  devProjects = [],
+  onSelectDevProject,
+  onUpdateDevProjectCoords,
+  mode = 'all',
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
@@ -146,7 +166,10 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
   // next map click drops a rectangle at that point with these dims.
   const [placement, setPlacement] = useState<PlacementParams | null>(null);
 
-  const projects = useMemo(() => buildProjects(deals), [deals]);
+  const projects = useMemo(
+    () => (mode === 'dev-only' ? [] : buildProjects(deals)),
+    [deals, mode]
+  );
   const projectsById = useMemo(() => {
     const m = new Map<string, Project>();
     for (const p of projects) m.set(p.id, p);
@@ -159,6 +182,14 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
           p.lat != null && p.lng != null
       ),
     [projects]
+  );
+  const pinnedDevProjects = useMemo(
+    () =>
+      devProjects.filter(
+        (p): p is DevelopmentProject & { lat: number; lng: number } =>
+          typeof p.lat === 'number' && typeof p.lng === 'number'
+      ),
+    [devProjects]
   );
   const activeProject = activeProjectId ? projectsById.get(activeProjectId) ?? null : null;
   const placingProject = placingProjectId ? projectsById.get(placingProjectId) ?? null : null;
@@ -176,6 +207,10 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
   placementRef.current = placement;
   const buildingsRef = useRef<Building[]>([]);
   buildingsRef.current = buildings;
+  const onSelectDevRef = useRef(onSelectDevProject);
+  onSelectDevRef.current = onSelectDevProject;
+  const onUpdateDevRef = useRef(onUpdateDevProjectCoords);
+  onUpdateDevRef.current = onUpdateDevProjectCoords;
 
   const handleSelectProject = (id: string) => {
     setActiveProjectId(id);
@@ -380,6 +415,9 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
   }, [placement, activeProjectId]);
 
   // ── Sync project markers (draggable + click to drill in) ────────
+  // Markers are keyed `deal:<id>` and `dev:<id>` so deal-project and
+  // dev-project pins coexist without collision and each branch can
+  // wire its own click + dragend handlers.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -387,8 +425,9 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
     const next = new Set<string>();
 
     for (const p of pinnedProjects) {
-      next.add(p.id);
-      const m = existing.get(p.id);
+      const key = `deal:${p.id}`;
+      next.add(key);
+      const m = existing.get(key);
       if (m) {
         m.setLngLat([p.lng, p.lat]);
         const el = m.getElement();
@@ -422,27 +461,65 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
         }
         handleSelectProject(p.id);
       });
-      existing.set(p.id, marker);
+      existing.set(key, marker);
     }
 
-    for (const [id, marker] of existing) {
-      if (!next.has(id)) {
+    for (const p of pinnedDevProjects) {
+      const key = `dev:${p.id}`;
+      next.add(key);
+      const m = existing.get(key);
+      if (m) {
+        m.setLngLat([p.lng, p.lat]);
+        const el = m.getElement();
+        applyDevProjectMarker(el, p);
+        m.setDraggable(!placementRef.current);
+        continue;
+      }
+      const el = createDevProjectMarkerEl(p);
+      const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom', draggable: true })
+        .setLngLat([p.lng, p.lat])
+        .addTo(map);
+      let wasDragged = false;
+      marker.on('dragstart', () => { wasDragged = false; });
+      marker.on('drag', () => { wasDragged = true; });
+      marker.on('dragend', () => {
+        const ll = marker.getLngLat();
+        const updater = onUpdateDevRef.current;
+        if (!updater) return;
+        updater(p.id, ll.lat, ll.lng);
+      });
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (wasDragged) {
+          wasDragged = false;
+          return;
+        }
+        onSelectDevRef.current?.(p);
+      });
+      existing.set(key, marker);
+    }
+
+    for (const [key, marker] of existing) {
+      if (!next.has(key)) {
         marker.remove();
-        existing.delete(id);
+        existing.delete(key);
       }
     }
 
-    if (pinnedProjects.length > 0 && !hasFitted.current && !activeProjectIdRef.current) {
+    const totalPinned = pinnedProjects.length + pinnedDevProjects.length;
+    if (totalPinned > 0 && !hasFitted.current && !activeProjectIdRef.current) {
       const bounds = new mapboxgl.LngLatBounds();
       for (const p of pinnedProjects) bounds.extend([p.lng, p.lat]);
+      for (const p of pinnedDevProjects) bounds.extend([p.lng, p.lat]);
       map.fitBounds(bounds, {
         padding: 80,
-        maxZoom: pinnedProjects.length === 1 ? 12 : 8,
+        maxZoom: totalPinned === 1 ? 12 : 8,
         duration: 800,
       });
       hasFitted.current = true;
     }
-  }, [pinnedProjects, placement]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pinnedProjects, pinnedDevProjects, placement]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasFitted = useRef(false);
 
@@ -679,23 +756,47 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
 
   if (!MAPBOX_TOKEN) return <MissingTokenState />;
 
+  const devOnly = mode === 'dev-only';
   const totalProjects = projects.length;
   const totalUnpinned = projects.length - pinnedProjects.length;
-  const orphanDealCount = deals.filter((d) => !d.dealId?.trim()).length;
+  const orphanDealCount = devOnly
+    ? 0
+    : deals.filter((d) => !d.dealId?.trim()).length;
+  const totalDevProjects = devProjects.length;
+  const unpinnedDev = totalDevProjects - pinnedDevProjects.length;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 h-full">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 text-sm text-fg-muted flex-wrap">
           <MapPin size={14} strokeWidth={2} className="text-accent" />
-          <span>
-            {pinnedProjects.length} of {totalProjects}{' '}
-            {totalProjects === 1 ? 'project pinned' : 'projects pinned'}
-          </span>
-          {totalUnpinned > 0 && (
+          {!devOnly && (
             <>
-              <span className="text-fg-subtle">·</span>
-              <span className="text-fg-subtle">{totalUnpinned} unpinned</span>
+              <span>
+                {pinnedProjects.length} of {totalProjects}{' '}
+                {totalProjects === 1 ? 'project pinned' : 'projects pinned'}
+              </span>
+              {totalUnpinned > 0 && (
+                <>
+                  <span className="text-fg-subtle">·</span>
+                  <span className="text-fg-subtle">{totalUnpinned} unpinned</span>
+                </>
+              )}
+            </>
+          )}
+          {totalDevProjects > 0 && (
+            <>
+              {!devOnly && <span className="text-fg-subtle">·</span>}
+              <span>
+                {pinnedDevProjects.length} of {totalDevProjects}{' '}
+                {totalDevProjects === 1 ? 'dev project pinned' : 'dev projects pinned'}
+              </span>
+              {unpinnedDev > 0 && (
+                <>
+                  <span className="text-fg-subtle">·</span>
+                  <span className="text-fg-subtle">{unpinnedDev} unpinned</span>
+                </>
+              )}
             </>
           )}
           {orphanDealCount > 0 && (
@@ -711,36 +812,50 @@ export function MapView({ deals, onSelectDeal, onUpdateProjectCoords, onToast }:
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <PlacePinPicker
-            projects={projects}
-            placingProjectId={placingProjectId}
-            onPick={setPlacingProjectId}
-          />
+          {!devOnly && (
+            <PlacePinPicker
+              projects={projects}
+              placingProjectId={placingProjectId}
+              onPick={setPlacingProjectId}
+            />
+          )}
           <StyleToggle style={mapStyle} onChange={setMapStyle} />
         </div>
       </div>
 
-      {placingProject && (
+      {!devOnly && placingProject && (
         <PlacementBanner
           project={placingProject}
           onCancel={() => setPlacingProjectId(null)}
         />
       )}
 
-      {placement && (
+      {!devOnly && placement && (
         <BuildingPlacementBanner params={placement} onCancel={handleCancelPlacement} />
       )}
 
       {/* Map + drawer sit in a horizontal flex so the drawer pushes
           the map to the left rather than overlaying it. ResizeObserver
           calls map.resize() whenever the container changes width so
-          Mapbox repaints to the new dimensions cleanly. */}
-      <div className="flex gap-3 h-[calc(100vh-280px)] min-h-[460px]">
+          Mapbox repaints to the new dimensions cleanly.
+          In dev-only mode the container takes the parent's full height
+          (the DevelopmentView embed constrains it externally). */}
+      <div
+        className={
+          devOnly
+            ? 'flex-1 min-h-[320px]'
+            : 'flex gap-3 h-[calc(100vh-280px)] min-h-[460px]'
+        }
+      >
         <div
           ref={containerRef}
-          className="flex-1 min-w-0 rounded-2xl shadow-soft overflow-hidden bg-bg-subtle"
+          className={
+            devOnly
+              ? 'h-full w-full rounded-2xl shadow-soft overflow-hidden bg-bg-subtle'
+              : 'flex-1 min-w-0 rounded-2xl shadow-soft overflow-hidden bg-bg-subtle'
+          }
         />
-        {activeProject && (
+        {!devOnly && activeProject && (
           <div className="w-full max-w-md shrink-0">
             <ProjectDrawer
               project={activeProject}
@@ -892,6 +1007,91 @@ function createProjectMarkerEl(p: Project): HTMLElement {
   wrap.appendChild(sub);
 
   return wrap;
+}
+
+// Lucide hard-hat SVG path. Inline because the marker DOM is hand-built
+// (no React) for performance and to mirror createProjectMarkerEl.
+const HARD_HAT_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1Z"/><path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/><path d="M4 15v-3a6 6 0 0 1 6-6"/><path d="M14 6a6 6 0 0 1 6 6v3"/></svg>';
+
+// Phase → Tailwind class triplet for the dev-project pin badge.
+// Mirrors the visual idiom of DevelopmentView's PhasePill, scaled up
+// to badge size.
+function devPhaseTint(phase: DevPhase): { bg: string; text: string; ring: string } {
+  switch (phase) {
+    case 'Construction':
+      return { bg: 'bg-warning', text: 'text-white', ring: 'border-white' };
+    case 'Lease-Up':
+      return { bg: 'bg-success', text: 'text-white', ring: 'border-white' };
+    case 'Delivered':
+      return { bg: 'bg-success', text: 'text-white', ring: 'border-white' };
+    case 'On Hold':
+    case 'Cancelled':
+      return {
+        bg: 'bg-fg-subtle/40',
+        text: 'text-fg-muted',
+        ring: 'border-bg-elevated',
+      };
+    case 'Site Selection':
+    case 'Entitlement':
+    case 'Design':
+    default:
+      return { bg: 'bg-accent', text: 'text-accent-fg', ring: 'border-white' };
+  }
+}
+
+function devPinTitle(p: DevelopmentProject): string {
+  return `${p.projectName} — ${p.phase}${p.address ? ' · ' + p.address : ''}`;
+}
+
+function createDevProjectMarkerEl(p: DevelopmentProject): HTMLElement {
+  const wrap = document.createElement('button');
+  wrap.type = 'button';
+  wrap.className =
+    'group relative flex flex-col items-center focus:outline-none focus:ring-2 focus:ring-warning rounded-md';
+  wrap.title = devPinTitle(p);
+  wrap.setAttribute('aria-label', `Open dev project ${p.projectName}`);
+
+  const tint = devPhaseTint(p.phase);
+  const pin = document.createElement('div');
+  pin.dataset.pinBadge = '';
+  pin.className =
+    `flex h-10 w-10 items-center justify-center rounded-full border-2 ${tint.ring} ` +
+    `${tint.bg} ${tint.text} shadow-lift transition ` +
+    'group-hover:scale-110';
+  pin.innerHTML = HARD_HAT_SVG;
+  wrap.appendChild(pin);
+
+  const sub = document.createElement('div');
+  sub.dataset.pinSublabel = '';
+  sub.className =
+    'mt-1 px-1.5 py-0.5 rounded-md bg-bg-elevated/90 text-[10px] font-medium text-fg shadow-soft pointer-events-none whitespace-nowrap';
+  sub.textContent = devPinSublabel(p);
+  wrap.appendChild(sub);
+
+  return wrap;
+}
+
+function devPinSublabel(p: DevelopmentProject): string {
+  if (p.riskLevel === 'High') return `${p.phase} · High risk`;
+  return p.phase;
+}
+
+// Update an existing dev-project marker in place. Mirrors the inline
+// label/sub update branch in the marker sync effect for deal pins.
+function applyDevProjectMarker(el: HTMLElement, p: DevelopmentProject): void {
+  el.title = devPinTitle(p);
+  el.setAttribute('aria-label', `Open dev project ${p.projectName}`);
+  const sub = el.querySelector('[data-pin-sublabel]');
+  if (sub) sub.textContent = devPinSublabel(p);
+  const badge = el.querySelector<HTMLElement>('[data-pin-badge]');
+  if (badge) {
+    const tint = devPhaseTint(p.phase);
+    badge.className =
+      `flex h-10 w-10 items-center justify-center rounded-full border-2 ${tint.ring} ` +
+      `${tint.bg} ${tint.text} shadow-lift transition ` +
+      'group-hover:scale-110';
+  }
 }
 
 // ── Toolbar bits ──────────────────────────────────────────────────

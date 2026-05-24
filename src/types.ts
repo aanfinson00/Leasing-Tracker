@@ -504,6 +504,9 @@ export const DevelopmentProjectSchema = z.object({
   riskLevel: RiskLevelEnum,
   statusSummary: z.string().nullable().optional(),
 
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -524,6 +527,8 @@ export const DevelopmentProjectSchema = z.object({
   gcContact: p.gcContact ?? null,
   architect: p.architect ?? null,
   statusSummary: p.statusSummary ?? null,
+  lat: p.lat ?? null,
+  lng: p.lng ?? null,
   notes: p.notes ?? null,
 }));
 

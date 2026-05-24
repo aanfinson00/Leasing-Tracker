@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, HardHat, CalendarClock, AlertTriangle } from 'lucide-react';
+import { Plus, HardHat, CalendarClock, AlertTriangle, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
 import type {
   Contact,
   DevelopmentProject,
@@ -10,11 +10,14 @@ import type {
 } from '../../types';
 import { DEV_PHASE_ORDER, DevPhaseEnum } from '../../types';
 import { DevelopmentProjectDrawer } from './DevelopmentProjectDrawer';
+import { MapView } from '../Map/MapView';
 
 interface DevelopmentViewProps {
   projects: DevelopmentProject[];
   onSave: (p: DevelopmentProject) => void;
   onDelete: (id: string) => void;
+  onUpdateProjectCoords: (id: string, lat: number, lng: number) => void;
+  onToast?: (msg: string) => void;
   // CRM v1
   contacts: Contact[];
   contactLinks: DevProjectContact[];
@@ -50,6 +53,8 @@ function newProjectTemplate(): DevelopmentProject {
     architect: null,
     riskLevel: 'Medium',
     statusSummary: null,
+    lat: null,
+    lng: null,
     notes: null,
     createdAt: now,
     updatedAt: now,
@@ -110,6 +115,8 @@ export function DevelopmentView({
   projects,
   onSave,
   onDelete,
+  onUpdateProjectCoords,
+  onToast,
   contacts,
   contactLinks,
   notes,
@@ -121,6 +128,7 @@ export function DevelopmentView({
 }: DevelopmentViewProps) {
   const [editing, setEditing] = useState<DevelopmentProject | null>(null);
   const [phaseFilter, setPhaseFilter] = useState<DevPhase | 'all' | 'active'>('active');
+  const [mapOpen, setMapOpen] = useState(true);
 
   const filtered = useMemo(() => {
     if (phaseFilter === 'all') return projects;
@@ -251,6 +259,44 @@ export function DevelopmentView({
           </select>
         </div>
       </header>
+
+      {projects.length > 0 && (
+        <section className="rounded-2xl bg-bg-elevated shadow-soft overflow-hidden">
+          <header className="px-5 py-3 border-b border-border flex items-center justify-between bg-bg/60">
+            <div className="flex items-center gap-2">
+              <MapPin size={14} strokeWidth={2} className="text-accent" />
+              <span className="text-sm font-medium text-fg">Map</span>
+              <span className="text-xs text-fg-muted">
+                · scoped to {filtered.length} {phaseFilter === 'active' ? 'active' : phaseFilter === 'all' ? '' : phaseFilter.toLowerCase()}{' '}
+                {filtered.length === 1 ? 'project' : 'projects'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMapOpen((v) => !v)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-fg-muted hover:text-fg hover:bg-bg-hover transition-colors"
+              aria-expanded={mapOpen}
+            >
+              {mapOpen ? <ChevronUp size={13} strokeWidth={2} /> : <ChevronDown size={13} strokeWidth={2} />}
+              {mapOpen ? 'Collapse' : 'Expand'}
+            </button>
+          </header>
+          {mapOpen && (
+            <div className="h-[420px] p-3">
+              <MapView
+                mode="dev-only"
+                deals={[]}
+                devProjects={filtered}
+                onSelectDeal={() => {}}
+                onUpdateProjectCoords={() => {}}
+                onSelectDevProject={(p) => setEditing(p)}
+                onUpdateDevProjectCoords={onUpdateProjectCoords}
+                onToast={onToast}
+              />
+            </div>
+          )}
+        </section>
+      )}
 
       {projects.length === 0 ? (
         <div className="py-16 text-center border border-dashed border-border rounded-2xl bg-bg-elevated">
