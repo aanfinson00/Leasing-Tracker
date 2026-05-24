@@ -967,6 +967,9 @@ export const AcquisitionTargetSchema = z.object({
   riskLevel: RiskLevelEnum,
   statusSummary: z.string().nullable().optional(),
 
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -991,6 +994,8 @@ export const AcquisitionTargetSchema = z.object({
   expectedClosingDate: a.expectedClosingDate ?? null,
   actualClosingDate: a.actualClosingDate ?? null,
   statusSummary: a.statusSummary ?? null,
+  lat: a.lat ?? null,
+  lng: a.lng ?? null,
   notes: a.notes ?? null,
 }));
 
@@ -1094,6 +1099,9 @@ export const DispositionListingSchema = z.object({
   riskLevel: RiskLevelEnum,
   statusSummary: z.string().nullable().optional(),
 
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -1121,6 +1129,8 @@ export const DispositionListingSchema = z.object({
   expectedClosingDate: d.expectedClosingDate ?? null,
   actualClosingDate: d.actualClosingDate ?? null,
   statusSummary: d.statusSummary ?? null,
+  lat: d.lat ?? null,
+  lng: d.lng ?? null,
   notes: d.notes ?? null,
 }));
 

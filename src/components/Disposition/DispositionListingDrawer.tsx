@@ -260,6 +260,8 @@ export function DispositionListingDrawer({
       actualClosingDate: parseStr(v.actualClosingDate),
       riskLevel: v.riskLevel,
       statusSummary: parseStr(v.statusSummary),
+      lat: listing.lat ?? null,
+      lng: listing.lng ?? null,
       notes: parseStr(v.notes),
       createdAt: listing.createdAt,
       updatedAt: new Date().toISOString(),

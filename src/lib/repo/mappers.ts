@@ -910,6 +910,8 @@ export interface AcquisitionTargetRow {
   diligence_status: Record<string, unknown>;
   risk_level: AcquisitionTarget['riskLevel'];
   status_summary: string | null;
+  lat: number | string | null;
+  lng: number | string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -945,6 +947,8 @@ export const acquisitionTargetToRow = (
   diligence_status: a.diligenceStatus,
   risk_level: a.riskLevel,
   status_summary: a.statusSummary,
+  lat: a.lat,
+  lng: a.lng,
   notes: a.notes,
   created_at: a.createdAt,
   updated_at: a.updatedAt,
@@ -975,6 +979,8 @@ export const rowToAcquisitionTarget = (r: AcquisitionTargetRow): AcquisitionTarg
   diligenceStatus: (r.diligence_status ?? {}) as Record<string, unknown>,
   riskLevel: r.risk_level,
   statusSummary: r.status_summary,
+  lat: numOrNull(r.lat),
+  lng: numOrNull(r.lng),
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -1094,6 +1100,8 @@ export interface DispositionListingRow {
   actual_closing_date: string | null;
   risk_level: DispositionListing['riskLevel'];
   status_summary: string | null;
+  lat: number | string | null;
+  lng: number | string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -1131,6 +1139,8 @@ export const dispositionListingToRow = (
   actual_closing_date: d.actualClosingDate,
   risk_level: d.riskLevel,
   status_summary: d.statusSummary,
+  lat: d.lat,
+  lng: d.lng,
   notes: d.notes,
   created_at: d.createdAt,
   updated_at: d.updatedAt,
@@ -1163,6 +1173,8 @@ export const rowToDispositionListing = (r: DispositionListingRow): DispositionLi
   actualClosingDate: r.actual_closing_date,
   riskLevel: r.risk_level,
   statusSummary: r.status_summary,
+  lat: numOrNull(r.lat),
+  lng: numOrNull(r.lng),
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
