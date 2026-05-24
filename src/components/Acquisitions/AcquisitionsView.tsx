@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Crosshair, CalendarClock, AlertTriangle } from 'lucide-react';
+import { Plus, Crosshair, CalendarClock, AlertTriangle, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
 import type {
   AcquisitionStatus,
   AcquisitionTarget,
@@ -10,11 +10,14 @@ import type {
 } from '../../types';
 import { ACQ_PIPELINE_ORDER, AcquisitionStatusEnum } from '../../types';
 import { AcquisitionTargetDrawer } from './AcquisitionTargetDrawer';
+import { MapView } from '../Map/MapView';
 
 interface AcquisitionsViewProps {
   targets: AcquisitionTarget[];
   onSave: (a: AcquisitionTarget) => void;
   onDelete: (id: string) => void;
+  onUpdateTargetCoords: (id: string, lat: number, lng: number) => void;
+  onToast?: (msg: string) => void;
   // CRM
   contacts: Contact[];
   contactLinks: AcquisitionTargetContact[];
@@ -55,6 +58,8 @@ function newTargetTemplate(): AcquisitionTarget {
     diligenceStatus: {},
     riskLevel: 'Medium',
     statusSummary: null,
+    lat: null,
+    lng: null,
     notes: null,
     createdAt: now,
     updatedAt: now,
@@ -113,6 +118,8 @@ export function AcquisitionsView({
   targets,
   onSave,
   onDelete,
+  onUpdateTargetCoords,
+  onToast,
   contacts,
   contactLinks,
   notes,
@@ -126,6 +133,7 @@ export function AcquisitionsView({
   const [statusFilter, setStatusFilter] = useState<
     AcquisitionStatus | 'all' | 'active'
   >('active');
+  const [mapOpen, setMapOpen] = useState(true);
 
   const filtered = useMemo(() => {
     if (statusFilter === 'all') return targets;
@@ -252,6 +260,44 @@ export function AcquisitionsView({
           </select>
         </div>
       </header>
+
+      {targets.length > 0 && (
+        <section className="rounded-2xl bg-bg-elevated shadow-soft overflow-hidden">
+          <header className="px-5 py-3 border-b border-border flex items-center justify-between bg-bg/60">
+            <div className="flex items-center gap-2">
+              <MapPin size={14} strokeWidth={2} className="text-accent" />
+              <span className="text-sm font-medium text-fg">Map</span>
+              <span className="text-xs text-fg-muted">
+                · scoped to {filtered.length}{' '}
+                {filtered.length === 1 ? 'target' : 'targets'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMapOpen((v) => !v)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-fg-muted hover:text-fg hover:bg-bg-hover transition-colors"
+              aria-expanded={mapOpen}
+            >
+              {mapOpen ? <ChevronUp size={13} strokeWidth={2} /> : <ChevronDown size={13} strokeWidth={2} />}
+              {mapOpen ? 'Collapse' : 'Expand'}
+            </button>
+          </header>
+          {mapOpen && (
+            <div className="h-[420px] p-3">
+              <MapView
+                mode="acq-only"
+                deals={[]}
+                acqTargets={filtered}
+                onSelectDeal={() => {}}
+                onUpdateProjectCoords={() => {}}
+                onSelectAcqTarget={(a) => setEditing(a)}
+                onUpdateAcqTargetCoords={onUpdateTargetCoords}
+                onToast={onToast}
+              />
+            </div>
+          )}
+        </section>
+      )}
 
       {targets.length === 0 ? (
         <div className="py-16 text-center border border-dashed border-border rounded-2xl bg-bg-elevated">

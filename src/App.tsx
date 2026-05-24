@@ -179,6 +179,8 @@ import {
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { DevelopmentView } from './components/Development/DevelopmentView';
 import { DevelopmentProjectDrawer } from './components/Development/DevelopmentProjectDrawer';
+import { AcquisitionTargetDrawer } from './components/Acquisitions/AcquisitionTargetDrawer';
+import { DispositionListingDrawer } from './components/Disposition/DispositionListingDrawer';
 import { geocodeAddress } from './lib/geocode';
 import { CompsView } from './components/Comps/CompsView';
 import { ContactsView } from './components/Contacts/ContactsView';
@@ -204,6 +206,10 @@ function App() {
   // the in-page drawer.
   const [editingDevProject, setEditingDevProject] =
     useState<DevelopmentProject | null>(null);
+  const [editingAcqTarget, setEditingAcqTarget] =
+    useState<AcquisitionTarget | null>(null);
+  const [editingDispoListing, setEditingDispoListing] =
+    useState<DispositionListing | null>(null);
   const [editingRow, setEditingRow] = useState<RentRollRow | null>(null);
   const [promotingDeal, setPromotingDeal] = useState<Deal | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -1345,6 +1351,35 @@ function App() {
       return next;
     });
     writeThrough('save acquisition target', upsertAcquisitionTarget(updated));
+
+    if (updated.address && updated.lat == null && updated.lng == null) {
+      geocodeAddress(updated.address).then((coords) => {
+        if (!coords) {
+          showToast('Could not geocode address — drag the pin to place manually');
+          return;
+        }
+        handleUpdateAcqTargetCoords(updated.id, coords.lat, coords.lng);
+      });
+    }
+  };
+
+  const handleUpdateAcqTargetCoords = (id: string, lat: number, lng: number) => {
+    const now = new Date().toISOString();
+    let saved: AcquisitionTarget | null = null;
+    setAcquisitionTargets((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t;
+        const next = { ...t, lat, lng, updatedAt: now };
+        saved = next;
+        return next;
+      })
+    );
+    if (saved) {
+      writeThrough('place acq target pin', upsertAcquisitionTarget(saved));
+      showToast(
+        `Pinned ${(saved as AcquisitionTarget).targetName || 'target'} · ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      );
+    }
   };
 
   const handleDeleteAcquisitionTarget = (id: string) => {
@@ -1394,6 +1429,35 @@ function App() {
       return next;
     });
     writeThrough('save disposition listing', upsertDispositionListing(updated));
+
+    if (updated.address && updated.lat == null && updated.lng == null) {
+      geocodeAddress(updated.address).then((coords) => {
+        if (!coords) {
+          showToast('Could not geocode address — drag the pin to place manually');
+          return;
+        }
+        handleUpdateDispoListingCoords(updated.id, coords.lat, coords.lng);
+      });
+    }
+  };
+
+  const handleUpdateDispoListingCoords = (id: string, lat: number, lng: number) => {
+    const now = new Date().toISOString();
+    let saved: DispositionListing | null = null;
+    setDispositionListings((prev) =>
+      prev.map((d) => {
+        if (d.id !== id) return d;
+        const next = { ...d, lat, lng, updatedAt: now };
+        saved = next;
+        return next;
+      })
+    );
+    if (saved) {
+      writeThrough('place dispo listing pin', upsertDispositionListing(saved));
+      showToast(
+        `Pinned ${(saved as DispositionListing).assetName || 'listing'} · ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      );
+    }
   };
 
   const handleDeleteDispositionListing = (id: string) => {
@@ -1710,9 +1774,15 @@ function App() {
             <MapView
               deals={deals}
               devProjects={devProjects}
+              acqTargets={acquisitionTargets}
+              dispoListings={dispositionListings}
               onSelectDeal={(d) => setEditingDeal(d)}
               onSelectDevProject={(p) => setEditingDevProject(p)}
               onUpdateDevProjectCoords={handleUpdateDevProjectCoords}
+              onSelectAcqTarget={(a) => setEditingAcqTarget(a)}
+              onUpdateAcqTargetCoords={handleUpdateAcqTargetCoords}
+              onSelectDispoListing={(d) => setEditingDispoListing(d)}
+              onUpdateDispoListingCoords={handleUpdateDispoListingCoords}
               onToast={showToast}
               onUpdateProjectCoords={(projectId, lat, lng) => {
                 // Project = group of deals sharing the same dealId.
@@ -1750,6 +1820,8 @@ function App() {
               targets={acquisitionTargets}
               onSave={handleSaveAcquisitionTarget}
               onDelete={handleDeleteAcquisitionTarget}
+              onUpdateTargetCoords={handleUpdateAcqTargetCoords}
+              onToast={showToast}
               contacts={contacts}
               contactLinks={acquisitionTargetContacts}
               notes={acquisitionTargetNotes}
@@ -1789,6 +1861,8 @@ function App() {
               listings={dispositionListings}
               onSave={handleSaveDispositionListing}
               onDelete={handleDeleteDispositionListing}
+              onUpdateListingCoords={handleUpdateDispoListingCoords}
+              onToast={showToast}
               contacts={contacts}
               contactLinks={dispositionListingContacts}
               notes={dispositionListingNotes}
@@ -1888,6 +1962,38 @@ function App() {
           onUnlinkContact={handleUnlinkDevProjectContact}
           onSaveNote={handleSaveDevProjectNote}
           onDeleteNote={handleDeleteDevProjectNote}
+        />
+      )}
+      {editingAcqTarget && (
+        <AcquisitionTargetDrawer
+          target={editingAcqTarget}
+          onClose={() => setEditingAcqTarget(null)}
+          onSave={handleSaveAcquisitionTarget}
+          onDelete={handleDeleteAcquisitionTarget}
+          allContacts={contacts}
+          contactLinks={acquisitionTargetContacts}
+          notes={acquisitionTargetNotes}
+          onSaveContact={handleSaveContact}
+          onLinkContact={handleLinkAcquisitionTargetContact}
+          onUnlinkContact={handleUnlinkAcquisitionTargetContact}
+          onSaveNote={handleSaveAcquisitionTargetNote}
+          onDeleteNote={handleDeleteAcquisitionTargetNote}
+        />
+      )}
+      {editingDispoListing && (
+        <DispositionListingDrawer
+          listing={editingDispoListing}
+          onClose={() => setEditingDispoListing(null)}
+          onSave={handleSaveDispositionListing}
+          onDelete={handleDeleteDispositionListing}
+          allContacts={contacts}
+          contactLinks={dispositionListingContacts}
+          notes={dispositionListingNotes}
+          onSaveContact={handleSaveContact}
+          onLinkContact={handleLinkDispositionListingContact}
+          onUnlinkContact={handleUnlinkDispositionListingContact}
+          onSaveNote={handleSaveDispositionListingNote}
+          onDeleteNote={handleDeleteDispositionListingNote}
         />
       )}
     </div>
