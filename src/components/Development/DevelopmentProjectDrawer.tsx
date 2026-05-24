@@ -236,6 +236,8 @@ export function DevelopmentProjectDrawer({
       architect: parseStr(v.architect),
       riskLevel: v.riskLevel,
       statusSummary: parseStr(v.statusSummary),
+      lat: project.lat ?? null,
+      lng: project.lng ?? null,
       notes: parseStr(v.notes),
       createdAt: project.createdAt,
       updatedAt: new Date().toISOString(),

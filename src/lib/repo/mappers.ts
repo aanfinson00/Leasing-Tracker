@@ -433,6 +433,8 @@ export interface DevelopmentProjectRow {
   architect: string | null;
   risk_level: DevelopmentProject['riskLevel'];
   status_summary: string | null;
+  lat: number | string | null;
+  lng: number | string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -463,6 +465,8 @@ export const developmentProjectToRow = (
   architect: p.architect,
   risk_level: p.riskLevel,
   status_summary: p.statusSummary,
+  lat: p.lat,
+  lng: p.lng,
   notes: p.notes,
   created_at: p.createdAt,
   updated_at: p.updatedAt,
@@ -490,6 +494,8 @@ export const rowToDevelopmentProject = (
   architect: r.architect,
   riskLevel: r.risk_level,
   statusSummary: r.status_summary,
+  lat: numOrNull(r.lat),
+  lng: numOrNull(r.lng),
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,

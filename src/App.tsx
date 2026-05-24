@@ -178,6 +178,8 @@ import {
 } from './lib/repo/dispositionListings';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { DevelopmentView } from './components/Development/DevelopmentView';
+import { DevelopmentProjectDrawer } from './components/Development/DevelopmentProjectDrawer';
+import { geocodeAddress } from './lib/geocode';
 import { CompsView } from './components/Comps/CompsView';
 import { ContactsView } from './components/Contacts/ContactsView';
 import { AcquisitionsView } from './components/Acquisitions/AcquisitionsView';
@@ -197,6 +199,11 @@ function App() {
   const [onboardings, setOnboardings] = useState<OnboardingChecklist[]>([]);
   const [filename, setFilename] = useState<string>('');
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  // App-level dev-project edit state, only opened when the Global Map pin
+  // is clicked. DevelopmentView keeps its own internal `editing` state for
+  // the in-page drawer.
+  const [editingDevProject, setEditingDevProject] =
+    useState<DevelopmentProject | null>(null);
   const [editingRow, setEditingRow] = useState<RentRollRow | null>(null);
   const [promotingDeal, setPromotingDeal] = useState<Deal | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -1176,6 +1183,37 @@ function App() {
       return next;
     });
     writeThrough('save dev project', upsertDevelopmentProject(updated));
+
+    // One-shot geocode fallback: address present + no pin yet.
+    // Drag-to-move on the map is the authoritative override after this.
+    if (updated.address && updated.lat == null && updated.lng == null) {
+      geocodeAddress(updated.address).then((coords) => {
+        if (!coords) {
+          showToast('Could not geocode address — drag the pin to place manually');
+          return;
+        }
+        handleUpdateDevProjectCoords(updated.id, coords.lat, coords.lng);
+      });
+    }
+  };
+
+  const handleUpdateDevProjectCoords = (id: string, lat: number, lng: number) => {
+    const now = new Date().toISOString();
+    let saved: DevelopmentProject | null = null;
+    setDevProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p;
+        const next = { ...p, lat, lng, updatedAt: now };
+        saved = next;
+        return next;
+      })
+    );
+    if (saved) {
+      writeThrough('place dev project pin', upsertDevelopmentProject(saved));
+      showToast(
+        `Pinned ${(saved as DevelopmentProject).projectName || 'dev project'} · ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      );
+    }
   };
 
   const handleDeleteDevProject = (id: string) => {
@@ -1671,7 +1709,10 @@ function App() {
           ) : view === 'map' ? (
             <MapView
               deals={deals}
+              devProjects={devProjects}
               onSelectDeal={(d) => setEditingDeal(d)}
+              onSelectDevProject={(p) => setEditingDevProject(p)}
+              onUpdateDevProjectCoords={handleUpdateDevProjectCoords}
               onToast={showToast}
               onUpdateProjectCoords={(projectId, lat, lng) => {
                 // Project = group of deals sharing the same dealId.
@@ -1723,6 +1764,8 @@ function App() {
               projects={devProjects}
               onSave={handleSaveDevProject}
               onDelete={handleDeleteDevProject}
+              onUpdateProjectCoords={handleUpdateDevProjectCoords}
+              onToast={showToast}
               contacts={contacts}
               contactLinks={devProjectContacts}
               notes={devProjectNotes}
@@ -1831,6 +1874,22 @@ function App() {
         onClose={() => setPromotingDeal(null)}
         onConfirm={handleConfirmPromote}
       />
+      {editingDevProject && (
+        <DevelopmentProjectDrawer
+          project={editingDevProject}
+          onClose={() => setEditingDevProject(null)}
+          onSave={handleSaveDevProject}
+          onDelete={handleDeleteDevProject}
+          allContacts={contacts}
+          contactLinks={devProjectContacts}
+          notes={devProjectNotes}
+          onSaveContact={handleSaveContact}
+          onLinkContact={handleLinkDevProjectContact}
+          onUnlinkContact={handleUnlinkDevProjectContact}
+          onSaveNote={handleSaveDevProjectNote}
+          onDeleteNote={handleDeleteDevProjectNote}
+        />
+      )}
     </div>
   );
 }
