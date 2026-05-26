@@ -12,9 +12,10 @@ import {
   ListChecks,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ActivityEntry, Building, RentRollRow, UWBasis } from '../types';
+import type { ActivityEntry, Building, RentRollRow, TenantRating, UWBasis } from '../types';
 import {
   UWBasisEnum,
+  TenantRatingEnum,
   SPACE_ID_REGEX,
   SPACE_ID_FORMAT_HINT,
 } from '../types';
@@ -44,7 +45,7 @@ type FormValues = {
   propertyType: string;
   buildingType: string;
   tenantName: string;
-  tenantRating: string;
+  tenantRating: TenantRating | '';
   occupied: 'Yes' | 'No';
   uwBasis: UWBasis | '';
   leasableSF: string;
@@ -168,7 +169,7 @@ export function RentRollDrawer({
         propertyType: toFormString(row.propertyType),
         buildingType: toFormString(row.buildingType),
         tenantName: toFormString(row.tenantName),
-        tenantRating: toFormString(row.tenantRating),
+        tenantRating: row.tenantRating ?? '',
         occupied: row.occupied ? 'Yes' : 'No',
         uwBasis: row.uwBasis ?? '',
         leasableSF: toFormString(row.leasableSF),
@@ -206,7 +207,7 @@ export function RentRollDrawer({
       propertyType: parseStr(v.propertyType),
       buildingType: parseStr(v.buildingType),
       tenantName: parseStr(v.tenantName),
-      tenantRating: parseNum(v.tenantRating),
+      tenantRating: v.tenantRating === '' ? null : v.tenantRating,
       occupied: v.occupied === 'Yes',
       uwBasis: v.uwBasis === '' ? null : v.uwBasis,
       leasableSF: parseNum(v.leasableSF),
@@ -397,8 +398,15 @@ export function RentRollDrawer({
                   <input {...register('tenantName')} className={inputClass} />
                 </div>
                 <div>
-                  <label className={labelClass}>Rating (1-5)</label>
-                  <input {...register('tenantRating')} type="number" min="0" max="5" className={`${inputClass} tabular-nums`} />
+                  <label className={labelClass}>Credit Rating</label>
+                  <select {...register('tenantRating')} className={inputClass}>
+                    <option value="">—</option>
+                    {TenantRatingEnum.options.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className={labelClass}>Occupied</label>
