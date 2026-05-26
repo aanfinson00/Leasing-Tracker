@@ -261,7 +261,10 @@ export function DevelopmentProjectDrawer({
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-fg/30 backdrop-blur-[2px]" onClick={onClose} />
       <div className="w-full max-w-2xl bg-bg shadow-lift overflow-y-auto">
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
+        <form onSubmit={handleSubmit(onSubmit, () => {
+          const firstError = document.querySelector('[name="projectName"]');
+          firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        })} className="flex flex-col h-full">
           <div className="sticky top-0 bg-bg/90 backdrop-blur-md border-b border-border px-7 py-5 z-10">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex items-center gap-3 flex-wrap">
@@ -325,7 +328,7 @@ export function DevelopmentProjectDrawer({
                   <label className={labelClass}>Project Name *</label>
                   <input
                     {...register('projectName', { required: 'Required' })}
-                    className={inputClass}
+                    className={`${inputClass}${errors.projectName ? ' border-danger ring-1 ring-danger/30' : ''}`}
                   />
                   {errors.projectName && (
                     <p className="text-danger text-xs mt-1.5">
