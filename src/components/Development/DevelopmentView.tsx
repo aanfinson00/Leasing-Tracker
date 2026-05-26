@@ -10,6 +10,7 @@ import type {
 } from '../../types';
 import { DEV_PHASE_ORDER, DevPhaseEnum } from '../../types';
 import { DevelopmentProjectDrawer } from './DevelopmentProjectDrawer';
+import { ExcelToolbar } from '../ExcelToolbar';
 import { MapView } from '../Map/MapView';
 
 interface DevelopmentViewProps {
@@ -27,6 +28,8 @@ interface DevelopmentViewProps {
   onUnlinkContact: (linkId: string) => void;
   onSaveNote: (n: DevProjectNote) => void;
   onDeleteNote: (id: string) => void;
+  onExcelExport?: () => void;
+  onExcelImport?: (file: File) => void;
 }
 
 const SIDE_PHASES: DevPhase[] = ['On Hold', 'Cancelled'];
@@ -125,6 +128,8 @@ export function DevelopmentView({
   onUnlinkContact,
   onSaveNote,
   onDeleteNote,
+  onExcelExport,
+  onExcelImport,
 }: DevelopmentViewProps) {
   const [editing, setEditing] = useState<DevelopmentProject | null>(null);
   const [phaseFilter, setPhaseFilter] = useState<DevPhase | 'all' | 'active'>('active');
@@ -189,14 +194,19 @@ export function DevelopmentView({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setEditing(newProjectTemplate())}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
-          >
-            <Plus size={15} strokeWidth={2} />
-            New project
-          </button>
+          <div className="flex items-center gap-2">
+            {onExcelExport && onExcelImport && (
+              <ExcelToolbar onExport={onExcelExport} onImport={onExcelImport} itemCount={projects.length} />
+            )}
+            <button
+              type="button"
+              onClick={() => setEditing(newProjectTemplate())}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
+            >
+              <Plus size={15} strokeWidth={2} />
+              New project
+            </button>
+          </div>
         </div>
 
         {/* Alert strip — flags before the user has to read the board. */}

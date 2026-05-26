@@ -10,6 +10,7 @@ import type {
 } from '../../types';
 import { DISPO_PIPELINE_ORDER, DispositionStatusEnum } from '../../types';
 import { DispositionListingDrawer } from './DispositionListingDrawer';
+import { ExcelToolbar } from '../ExcelToolbar';
 import { MapView } from '../Map/MapView';
 
 interface DispositionViewProps {
@@ -27,6 +28,8 @@ interface DispositionViewProps {
   onUnlinkContact: (linkId: string) => void;
   onSaveNote: (n: DispositionListingNote) => void;
   onDeleteNote: (id: string) => void;
+  onExcelExport?: () => void;
+  onExcelImport?: (file: File) => void;
 }
 
 const SIDE_STATUSES: DispositionStatus[] = ['Pulled', 'On Hold'];
@@ -130,6 +133,8 @@ export function DispositionView({
   onUnlinkContact,
   onSaveNote,
   onDeleteNote,
+  onExcelExport,
+  onExcelImport,
 }: DispositionViewProps) {
   const [editing, setEditing] = useState<DispositionListing | null>(null);
   const [statusFilter, setStatusFilter] = useState<
@@ -197,14 +202,19 @@ export function DispositionView({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setEditing(newListingTemplate())}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
-          >
-            <Plus size={15} strokeWidth={2} />
-            New listing
-          </button>
+          <div className="flex items-center gap-2">
+            {onExcelExport && onExcelImport && (
+              <ExcelToolbar onExport={onExcelExport} onImport={onExcelImport} itemCount={listings.length} />
+            )}
+            <button
+              type="button"
+              onClick={() => setEditing(newListingTemplate())}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
+            >
+              <Plus size={15} strokeWidth={2} />
+              New listing
+            </button>
+          </div>
         </div>
 
         {(stats.closingSoonCount > 0 || stats.highRiskCount > 0) && (

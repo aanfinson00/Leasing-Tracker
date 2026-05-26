@@ -1,10 +1,13 @@
-import { X, Download, Eye, Cpu, Search, FileText, Bell } from 'lucide-react';
+import { X, Download, Eye, Cpu, Search, FileText, Bell, Table2 } from 'lucide-react';
+import type { FullDataSet } from '../lib/excel';
 
 interface Skill {
   name: string;
   type: 'Watcher' | 'Intake' | 'Composer';
   description: string;
   triggers: string[];
+  dataEntities: (keyof FullDataSet)[];
+  hasReport: boolean;
 }
 
 const SKILLS: Skill[] = [
@@ -13,60 +16,80 @@ const SKILLS: Skill[] = [
     type: 'Intake',
     description: 'Extracts a structured Deal record from free-form text — forwarded emails, broker call notes, or a pasted tenant inquiry.',
     triggers: ['"new prospect"', '"log this prospect"', '"add this tenant"', '"I just got off a call with X"'],
+    dataEntities: ['deals'],
+    hasReport: false,
   },
   {
     name: 'lease-abstract-from-pdf',
     type: 'Intake',
     description: 'Reads a lease PDF, LOI, or proposal and extracts rent, term, escalations, TI, free rent, options, and key dates into structured data.',
     triggers: ['"abstract this lease"', '"pull terms from this"', '"extract the rent schedule"'],
+    dataEntities: ['rentRoll', 'scenarios'],
+    hasReport: false,
   },
   {
     name: 'property-tax-appeal-intake',
     type: 'Intake',
     description: 'Logs a new property tax appeal — captures parcel, jurisdiction, tax year, assessed vs proposed value, key dates, and consultant terms.',
     triggers: ['"log an appeal"', '"new tax appeal"', '"got the assessment for X — let\'s contest"'],
+    dataEntities: ['propertyTaxAppeals'],
+    hasReport: false,
   },
   {
     name: 'get-status-update',
     type: 'Composer',
     description: 'Searches Gmail for recent threads with the prospect or broker, then drafts an activity entry summarizing the latest status.',
     triggers: ['"status on X"', '"what\'s the latest with X"', '"any update from X?"'],
+    dataEntities: ['deals', 'activities'],
+    hasReport: false,
   },
   {
     name: 'weekly-portfolio-digest',
     type: 'Composer',
     description: 'Runs all watcher skills and synthesizes a Monday-morning portfolio brief — one page covering stale prospects, expiring leases, and drifted scenarios.',
     triggers: ['"weekly digest"', '"Monday digest"', '"portfolio pulse"', '"what should I focus on this week"'],
+    dataEntities: ['deals', 'activities', 'rentRoll', 'scenarios', 'propertyTaxAppeals', 'amPendingItems'],
+    hasReport: true,
   },
   {
     name: 'stale-prospect-flagger',
     type: 'Watcher',
     description: 'Scans deals + activities and flags prospects with no recent activity for their current pipeline stage.',
     triggers: ['"what\'s going stale?"', '"any deals slipping?"', '"what needs follow-up?"'],
+    dataEntities: ['deals', 'activities'],
+    hasReport: true,
   },
   {
     name: 'lease-expiration-watcher',
     type: 'Watcher',
     description: 'Scans the rent roll for leases expiring in the next N months and flags them for renewal action.',
     triggers: ['"what\'s expiring?"', '"show me renewals coming up"', '"lease expiration pulse"'],
+    dataEntities: ['rentRoll'],
+    hasReport: true,
   },
   {
     name: 'scenario-drift-watcher',
     type: 'Watcher',
     description: 'Compares saved underwriting scenarios against current deal inputs and flags where cached results are out of sync.',
     triggers: ['"any stale scenarios?"', '"scenarios out of sync"', '"underwrite drift"'],
+    dataEntities: ['scenarios', 'deals'],
+    hasReport: true,
   },
   {
     name: 'property-tax-appeal-watcher',
     type: 'Watcher',
     description: 'Flags property tax appeals with upcoming hearings, stale "Considering" status, or missing valuation data.',
     triggers: ['"what tax appeals are coming up?"', '"tax hearing schedule"', '"any appeals slipping?"'],
+    dataEntities: ['propertyTaxAppeals'],
+    hasReport: true,
   },
   {
     name: 'construction-followup-watcher',
     type: 'Watcher',
     description: 'Scans AM pending items for construction follow-ups that are overdue, due this week, or stalled.',
     triggers: ['"what construction items are open?"', '"punch list status"', '"GC chase list"'],
+    dataEntities: ['amPendingItems'],
+    hasReport: true,
   },
 ];
 
@@ -81,9 +104,10 @@ const REPO_URL = 'https://github.com/aanfinson00/Leasing-Tracker';
 interface SkillsModalProps {
   open: boolean;
   onClose: () => void;
+  onDownloadSkillData?: (skillName: string) => void;
 }
 
-export function SkillsModal({ open, onClose }: SkillsModalProps) {
+export function SkillsModal({ open, onClose, onDownloadSkillData }: SkillsModalProps) {
   if (!open) return null;
 
   return (
@@ -166,16 +190,29 @@ export function SkillsModal({ open, onClose }: SkillsModalProps) {
                       {skill.type}
                     </span>
                     <span className="font-mono text-sm font-medium text-fg">{skill.name}</span>
-                    <a
-                      href={`${REPO_URL}/blob/main/.claude/skills/${skill.name}/SKILL.md`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-auto inline-flex items-center gap-1 text-xs text-fg-muted hover:text-accent transition-colors"
-                      title="View source"
-                    >
-                      <Eye size={13} />
-                      Source
-                    </a>
+                    <div className="ml-auto flex items-center gap-2.5">
+                      {onDownloadSkillData && (
+                        <button
+                          type="button"
+                          onClick={() => onDownloadSkillData(skill.name)}
+                          className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-accent transition-colors"
+                          title={skill.hasReport ? 'Download report + data' : 'Download data'}
+                        >
+                          <Table2 size={13} />
+                          {skill.hasReport ? 'Report' : 'Data'}
+                        </button>
+                      )}
+                      <a
+                        href={`${REPO_URL}/blob/main/.claude/skills/${skill.name}/SKILL.md`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-accent transition-colors"
+                        title="View source"
+                      >
+                        <Eye size={13} />
+                        Source
+                      </a>
+                    </div>
                   </div>
                   <p className="text-sm text-fg-muted leading-relaxed">{skill.description}</p>
                   <div className="flex flex-wrap gap-1.5">

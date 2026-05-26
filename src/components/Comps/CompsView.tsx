@@ -2,11 +2,14 @@ import { useMemo, useState } from 'react';
 import { Plus, Database, Search, ShieldCheck, ExternalLink } from 'lucide-react';
 import type { LeaseComp } from '../../types';
 import { CompDrawer } from './CompDrawer';
+import { ExcelToolbar } from '../ExcelToolbar';
 
 interface CompsViewProps {
   comps: LeaseComp[];
   onSave: (c: LeaseComp) => void;
   onDelete: (id: string) => void;
+  onExcelExport?: () => void;
+  onExcelImport?: (file: File) => void;
 }
 
 type SortKey =
@@ -65,7 +68,7 @@ const fmtNumber = (v: number | null, digits = 0) =>
     : new Intl.NumberFormat('en-US', { maximumFractionDigits: digits }).format(v);
 const fmtPct = (v: number | null) => (v == null ? '—' : `${(v * 100).toFixed(2)}%`);
 
-export function CompsView({ comps, onSave, onDelete }: CompsViewProps) {
+export function CompsView({ comps, onSave, onDelete, onExcelExport, onExcelImport }: CompsViewProps) {
   const [editing, setEditing] = useState<LeaseComp | null>(null);
   const [search, setSearch] = useState('');
   const [marketFilter, setMarketFilter] = useState<string>('all');
@@ -169,14 +172,19 @@ export function CompsView({ comps, onSave, onDelete }: CompsViewProps) {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setEditing(newCompTemplate())}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
-          >
-            <Plus size={15} strokeWidth={2} />
-            Log comp
-          </button>
+          <div className="flex items-center gap-2">
+            {onExcelExport && onExcelImport && (
+              <ExcelToolbar onExport={onExcelExport} onImport={onExcelImport} itemCount={comps.length} />
+            )}
+            <button
+              type="button"
+              onClick={() => setEditing(newCompTemplate())}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
+            >
+              <Plus size={15} strokeWidth={2} />
+              Log comp
+            </button>
+          </div>
         </div>
 
         <div className="mt-5 flex items-center gap-2 flex-wrap">

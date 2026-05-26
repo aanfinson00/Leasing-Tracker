@@ -40,7 +40,8 @@ import { defaultDeal, defaultOnboardingChecklist, defaultRentRollRow } from './t
 import { DEFAULT_GLOBALS, DEFAULT_INPUTS_BASE } from './lib/lease-math/types';
 import type { ScenarioInputs } from './lib/lease-math/types';
 import { runScenario } from './lib/lease-math/calc';
-import { loadFromFile, saveToFile, buildWorkbookBlob } from './lib/excel';
+import { loadFromFile, saveToFile, buildWorkbookBlob, buildViewWorkbookBlob } from './lib/excel';
+import type { FullDataSet } from './lib/excel';
 import { saveSnapshot, loadSnapshot, clearSnapshot } from './lib/autosave';
 import { encodeShare, decodeShare, readShareFromUrl, clearShareFromUrl } from './lib/share';
 import { makeStatusChangeEntry } from './lib/activity';
@@ -191,6 +192,7 @@ import { MapView } from './components/Map/MapView';
 import { AssetMgmtView } from './components/AssetMgmt/AssetMgmtView';
 import { GridBackground } from './components/GridBackground';
 import { MobileNav } from './components/MobileNav';
+import { ExcelToolbar } from './components/ExcelToolbar';
 
 function App() {
   const [view, setView] = useState<View>('prospects');
@@ -276,23 +278,31 @@ function App() {
   // Push a freshly-parsed workbook into Supabase (bulk upsert by id).
   // Called from the legacy file-handle reconnect path AND the Excel import
   // buttons. Idempotent — re-importing the same workbook is a no-op.
-  const pushWorkbookToSupabase = async (result: {
-    deals: Deal[];
-    rentRoll: RentRollRow[];
-    activities: ActivityEntry[];
-    onboardings: OnboardingChecklist[];
-  }) => {
+  const pushWorkbookToSupabase = async (result: Partial<FullDataSet>) => {
     if (!SUPABASE_CONFIGURED) return;
     try {
-      await Promise.all([
-        bulkUpsertDeals(result.deals),
-        bulkUpsertRentRoll(result.rentRoll),
-        bulkInsertActivities(result.activities),
-        bulkUpsertOnboardings(result.onboardings),
-      ]);
-      showToast(
-        `Imported ${result.deals.length} deals, ${result.rentRoll.length} rent roll rows`
-      );
+      const ops: Promise<void>[] = [];
+      if (result.deals?.length) ops.push(bulkUpsertDeals(result.deals));
+      if (result.rentRoll?.length) ops.push(bulkUpsertRentRoll(result.rentRoll));
+      if (result.activities?.length) ops.push(bulkInsertActivities(result.activities));
+      if (result.onboardings?.length) ops.push(bulkUpsertOnboardings(result.onboardings));
+      if (result.scenarios?.length) ops.push(Promise.all(result.scenarios.map(upsertScenario)).then(() => {}));
+      if (result.devProjects?.length) ops.push(Promise.all(result.devProjects.map(upsertDevelopmentProject)).then(() => {}));
+      if (result.leaseComps?.length) ops.push(Promise.all(result.leaseComps.map(upsertLeaseComp)).then(() => {}));
+      if (result.propertyTaxAppeals?.length) ops.push(Promise.all(result.propertyTaxAppeals.map(upsertPropertyTaxAppeal)).then(() => {}));
+      if (result.amPendingItems?.length) ops.push(Promise.all(result.amPendingItems.map(upsertAMPendingItem)).then(() => {}));
+      if (result.contacts?.length) ops.push(Promise.all(result.contacts.map(upsertContact)).then(() => {}));
+      if (result.devProjectContacts?.length) ops.push(Promise.all(result.devProjectContacts.map(upsertDevProjectContact)).then(() => {}));
+      if (result.devProjectNotes?.length) ops.push(Promise.all(result.devProjectNotes.map(upsertDevProjectNote)).then(() => {}));
+      if (result.acquisitionTargets?.length) ops.push(Promise.all(result.acquisitionTargets.map(upsertAcquisitionTarget)).then(() => {}));
+      if (result.acquisitionTargetContacts?.length) ops.push(Promise.all(result.acquisitionTargetContacts.map(upsertAcquisitionTargetContact)).then(() => {}));
+      if (result.acquisitionTargetNotes?.length) ops.push(Promise.all(result.acquisitionTargetNotes.map(upsertAcquisitionTargetNote)).then(() => {}));
+      if (result.dispositionListings?.length) ops.push(Promise.all(result.dispositionListings.map(upsertDispositionListing)).then(() => {}));
+      if (result.dispositionListingContacts?.length) ops.push(Promise.all(result.dispositionListingContacts.map(upsertDispositionListingContact)).then(() => {}));
+      if (result.dispositionListingNotes?.length) ops.push(Promise.all(result.dispositionListingNotes.map(upsertDispositionListingNote)).then(() => {}));
+      await Promise.all(ops);
+      const total = Object.values(result).reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
+      showToast(`Synced ${total} records to server`);
     } catch (err) {
       console.error('Bulk import to Supabase failed:', err);
       showToast('Server import failed — see console');
@@ -748,6 +758,65 @@ function App() {
     }
   };
 
+  const gatherFullDataSet = (): FullDataSet => ({
+    deals, rentRoll, activities, onboardings, scenarios, buildings,
+    devProjects, propertyTaxAppeals: propertyTaxAppeals, leaseComps, amPendingItems,
+    contacts, devProjectContacts, devProjectNotes,
+    acquisitionTargets, acquisitionTargetContacts, acquisitionTargetNotes,
+    dispositionListings, dispositionListingContacts, dispositionListingNotes,
+  });
+
+  const handleViewExport = (viewName: string) => {
+    const blob = buildViewWorkbookBlob(viewName, gatherFullDataSet());
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `parce-${viewName}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleViewImport = async (_viewName: string, file: File) => {
+    try {
+      const result = await loadFromFile(file);
+      let imported = 0;
+      if (result.deals.length) { setDeals(result.deals); setFilteredDeals(result.deals); imported += result.deals.length; }
+      if (result.rentRoll.length) { setRentRoll(result.rentRoll); setFilteredRentRoll(result.rentRoll); imported += result.rentRoll.length; }
+      if (result.activities.length) { setActivities(result.activities); imported += result.activities.length; }
+      if (result.onboardings.length) { setOnboardings(result.onboardings); imported += result.onboardings.length; }
+      if (result.scenarios.length) { setScenarios(result.scenarios); imported += result.scenarios.length; }
+      if (result.buildings.length) { setBuildings(result.buildings); imported += result.buildings.length; }
+      if (result.devProjects.length) { setDevProjects(result.devProjects); imported += result.devProjects.length; }
+      if (result.propertyTaxAppeals.length) { setPropertyTaxAppeals(result.propertyTaxAppeals); imported += result.propertyTaxAppeals.length; }
+      if (result.leaseComps.length) { setLeaseComps(result.leaseComps); imported += result.leaseComps.length; }
+      if (result.amPendingItems.length) { setAMPendingItems(result.amPendingItems); imported += result.amPendingItems.length; }
+      if (result.contacts.length) { setContacts(result.contacts); imported += result.contacts.length; }
+      if (result.devProjectContacts.length) { setDevProjectContacts(result.devProjectContacts); imported += result.devProjectContacts.length; }
+      if (result.devProjectNotes.length) { setDevProjectNotes(result.devProjectNotes); imported += result.devProjectNotes.length; }
+      if (result.acquisitionTargets.length) { setAcquisitionTargets(result.acquisitionTargets); imported += result.acquisitionTargets.length; }
+      if (result.acquisitionTargetContacts.length) { setAcquisitionTargetContacts(result.acquisitionTargetContacts); imported += result.acquisitionTargetContacts.length; }
+      if (result.acquisitionTargetNotes.length) { setAcquisitionTargetNotes(result.acquisitionTargetNotes); imported += result.acquisitionTargetNotes.length; }
+      if (result.dispositionListings.length) { setDispositionListings(result.dispositionListings); imported += result.dispositionListings.length; }
+      if (result.dispositionListingContacts.length) { setDispositionListingContacts(result.dispositionListingContacts); imported += result.dispositionListingContacts.length; }
+      if (result.dispositionListingNotes.length) { setDispositionListingNotes(result.dispositionListingNotes); imported += result.dispositionListingNotes.length; }
+      showToast(`Imported ${imported} records`);
+      void pushWorkbookToSupabase(result);
+    } catch (err) {
+      alert(`Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleSkillDataDownload = (skillName: string) => {
+    const data = gatherFullDataSet();
+    const blob = buildWorkbookBlob(data);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `parce-${skillName}-data.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleSaveFile = async () => {
     if (fileHandle) {
       try {
@@ -774,7 +843,7 @@ function App() {
             return;
           }
         }
-        const blob = buildWorkbookBlob(deals, rentRoll, activities, onboardings);
+        const blob = buildWorkbookBlob(gatherFullDataSet());
         await writeToHandle(fileHandle, blob);
         // Re-read to grab the new mtime (after the write)
         const after = await readFromHandle(fileHandle);
@@ -788,7 +857,7 @@ function App() {
       return;
     }
     const name = filename || 'leases.xlsx';
-    saveToFile(deals, rentRoll, activities, onboardings, name);
+    saveToFile(gatherFullDataSet(), undefined, undefined, undefined, name);
   };
 
   const handleReconnect = async () => {
@@ -1561,7 +1630,7 @@ function App() {
           it under the sidebar (z-20) and main content (default stacking). */}
       <GridBackground />
       <Sidebar view={view} onChangeView={setView} onOpenSkills={() => setSkillsOpen(true)} />
-      <SkillsModal open={skillsOpen} onClose={() => setSkillsOpen(false)} />
+      <SkillsModal open={skillsOpen} onClose={() => setSkillsOpen(false)} onDownloadSkillData={handleSkillDataDownload} />
       {/* Mobile bottom nav — visible only on narrow viewports where
           the desktop sidebar is hidden. pb-16 above leaves clearance
           so content doesn't sit under it. */}
@@ -1705,13 +1774,20 @@ function App() {
                 </button>
 
                 {showsCounts && (
-                  <button
-                    onClick={view === 'prospects' ? handleNewDeal : handleNewRow}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
-                  >
-                    <Plus size={15} strokeWidth={2.25} />
-                    {view === 'prospects' ? 'New Deal' : 'New Row'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <ExcelToolbar
+                      onExport={() => handleViewExport(view === 'prospects' ? 'prospects' : 'rentroll')}
+                      onImport={(f) => handleViewImport(view === 'prospects' ? 'prospects' : 'rentroll', f)}
+                      itemCount={view === 'prospects' ? deals.length : rentRoll.length}
+                    />
+                    <button
+                      onClick={view === 'prospects' ? handleNewDeal : handleNewRow}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
+                    >
+                      <Plus size={15} strokeWidth={2.25} />
+                      {view === 'prospects' ? 'New Deal' : 'New Row'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -1770,6 +1846,8 @@ function App() {
               comps={leaseComps}
               onSave={handleSaveLeaseComp}
               onDelete={handleDeleteLeaseComp}
+              onExcelExport={() => handleViewExport('comps')}
+              onExcelImport={(f) => handleViewImport('comps', f)}
             />
           ) : view === 'contacts' ? (
             <ContactsView
@@ -1782,6 +1860,8 @@ function App() {
               dispositionListings={dispositionListings}
               onSave={handleSaveContact}
               onDelete={handleDeleteContact}
+              onExcelExport={() => handleViewExport('contacts')}
+              onExcelImport={(f) => handleViewImport('contacts', f)}
             />
           ) : view === 'map' ? (
             <MapView
@@ -1827,6 +1907,8 @@ function App() {
               rentRoll={rentRoll}
               onUpdateItem={handleUpdateOnboardingItem}
               onDelete={handleDeleteOnboarding}
+              onExcelExport={() => handleViewExport('onboarding')}
+              onExcelImport={(f) => handleViewImport('onboarding', f)}
             />
           ) : view === 'acquisitions' ? (
             <AcquisitionsView
@@ -1843,6 +1925,8 @@ function App() {
               onUnlinkContact={handleUnlinkAcquisitionTargetContact}
               onSaveNote={handleSaveAcquisitionTargetNote}
               onDeleteNote={handleDeleteAcquisitionTargetNote}
+              onExcelExport={() => handleViewExport('acquisitions')}
+              onExcelImport={(f) => handleViewImport('acquisitions', f)}
             />
           ) : view === 'development' ? (
             <DevelopmentView
@@ -1859,6 +1943,8 @@ function App() {
               onUnlinkContact={handleUnlinkDevProjectContact}
               onSaveNote={handleSaveDevProjectNote}
               onDeleteNote={handleDeleteDevProjectNote}
+              onExcelExport={() => handleViewExport('development')}
+              onExcelImport={(f) => handleViewImport('development', f)}
             />
           ) : view === 'asset-mgmt' ? (
             <AssetMgmtView
@@ -1869,6 +1955,8 @@ function App() {
               onSaveAMItem={handleSaveAMPendingItem}
               onDeleteAMItem={handleDeleteAMPendingItem}
               onSendTo={handleAMSendTo}
+              onExcelExport={() => handleViewExport('asset-mgmt')}
+              onExcelImport={(f) => handleViewImport('asset-mgmt', f)}
             />
           ) : view === 'disposition' ? (
             <DispositionView
@@ -1885,6 +1973,8 @@ function App() {
               onUnlinkContact={handleUnlinkDispositionListingContact}
               onSaveNote={handleSaveDispositionListingNote}
               onDeleteNote={handleDeleteDispositionListingNote}
+              onExcelExport={() => handleViewExport('disposition')}
+              onExcelImport={(f) => handleViewImport('disposition', f)}
             />
           ) : view === 'prospects' ? (
             deals.length === 0 ? (

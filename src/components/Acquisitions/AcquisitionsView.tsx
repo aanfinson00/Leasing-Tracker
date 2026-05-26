@@ -10,6 +10,7 @@ import type {
 } from '../../types';
 import { ACQ_PIPELINE_ORDER, AcquisitionStatusEnum } from '../../types';
 import { AcquisitionTargetDrawer } from './AcquisitionTargetDrawer';
+import { ExcelToolbar } from '../ExcelToolbar';
 import { MapView } from '../Map/MapView';
 
 interface AcquisitionsViewProps {
@@ -27,6 +28,8 @@ interface AcquisitionsViewProps {
   onUnlinkContact: (linkId: string) => void;
   onSaveNote: (n: AcquisitionTargetNote) => void;
   onDeleteNote: (id: string) => void;
+  onExcelExport?: () => void;
+  onExcelImport?: (file: File) => void;
 }
 
 const SIDE_STATUSES: AcquisitionStatus[] = ['On Hold', 'Lost'];
@@ -128,6 +131,8 @@ export function AcquisitionsView({
   onUnlinkContact,
   onSaveNote,
   onDeleteNote,
+  onExcelExport,
+  onExcelImport,
 }: AcquisitionsViewProps) {
   const [editing, setEditing] = useState<AcquisitionTarget | null>(null);
   const [statusFilter, setStatusFilter] = useState<
@@ -191,14 +196,19 @@ export function AcquisitionsView({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setEditing(newTargetTemplate())}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
-          >
-            <Plus size={15} strokeWidth={2} />
-            New target
-          </button>
+          <div className="flex items-center gap-2">
+            {onExcelExport && onExcelImport && (
+              <ExcelToolbar onExport={onExcelExport} onImport={onExcelImport} itemCount={targets.length} />
+            )}
+            <button
+              type="button"
+              onClick={() => setEditing(newTargetTemplate())}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
+            >
+              <Plus size={15} strokeWidth={2} />
+              New target
+            </button>
+          </div>
         </div>
 
         {(stats.closingSoonCount > 0 || stats.highRiskCount > 0) && (
