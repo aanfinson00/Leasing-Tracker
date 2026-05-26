@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { BarChart3 } from 'lucide-react';
-import type { Deal, RentRollRow } from '../types';
+import type { Building, Deal, RentRollRow } from '../types';
 import {
   type ReportFilters,
   applyFilters,
@@ -14,13 +14,15 @@ import { MarketBreakdownChart } from './charts/MarketBreakdownChart';
 import { UWvsActualRentChart } from './charts/UWvsActualRentChart';
 import { UWvsActualTIChart } from './charts/UWvsActualTIChart';
 import { PipelineForecastChart } from './charts/PipelineForecastChart';
+import { DataIntegrityAudits } from './DataIntegrityAudits';
 
 interface ReportsViewProps {
   deals: Deal[];
   rentRoll: RentRollRow[];
+  buildings: Building[];
 }
 
-export function ReportsView({ deals, rentRoll }: ReportsViewProps) {
+export function ReportsView({ deals, rentRoll, buildings }: ReportsViewProps) {
   const [filters, setFilters] = useState<ReportFilters>(emptyFilters);
 
   const filtered = useMemo(() => applyFilters(rentRoll, filters), [rentRoll, filters]);
@@ -78,6 +80,8 @@ export function ReportsView({ deals, rentRoll }: ReportsViewProps) {
       </div>
 
       <PipelineForecastChart deals={deals} />
+
+      <DataIntegrityAudits rentRoll={rentRoll} buildings={buildings} />
     </div>
   );
 }
