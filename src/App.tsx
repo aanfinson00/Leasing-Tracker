@@ -1231,6 +1231,16 @@ function App() {
     writeThrough('delete AM item', deleteAMPendingItemRow(id));
   };
 
+  const handleAMSendTo = (item: AMPendingItem, targetView: View) => {
+    const updated: AMPendingItem = {
+      ...item,
+      sentToTab: targetView,
+      updatedAt: new Date().toISOString(),
+    };
+    handleSaveAMPendingItem(updated);
+    setView(targetView);
+  };
+
   // ── CRM v1 handlers ─────────────────────────────────────────────
   const handleSaveContact = (updated: Contact) => {
     setContacts((prev) => {
@@ -1740,6 +1750,7 @@ function App() {
               amItems={amPendingItems}
               onSaveAMItem={handleSaveAMPendingItem}
               onDeleteAMItem={handleDeleteAMPendingItem}
+              onSendTo={handleAMSendTo}
             />
           ) : view === 'disposition' ? (
             <DispositionView

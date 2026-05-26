@@ -715,8 +715,25 @@ export const AMItemTypeEnum = z.enum([
   'Tenant Request',
   'Building Monitoring',
   'Capital Vendor',
+  'Insurance',
+  'Operating Budget',
+  'CAM Reconciliation',
+  'Valuation',
+  'Cash Management',
+  'Reporting',
+  'LP Approval',
+  'Lease Renewal',
 ]);
 export type AMItemType = z.infer<typeof AMItemTypeEnum>;
+
+export const AMCadenceEnum = z.enum([
+  'One-Time',
+  'Monthly',
+  'Quarterly',
+  'Bi-Annual',
+  'Annual',
+]);
+export type AMCadence = z.infer<typeof AMCadenceEnum>;
 
 export const AMStatusEnum = z.enum([
   'Open',
@@ -751,6 +768,10 @@ export const AMPendingItemSchema = z.object({
   source: z.string().nullable().optional(),
   link: z.string().nullable().optional(),
 
+  cadence: AMCadenceEnum.default('One-Time'),
+  sentToTab: z.string().nullable().optional(),
+  sentToId: z.string().nullable().optional(),
+
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -766,6 +787,8 @@ export const AMPendingItemSchema = z.object({
   completedDate: i.completedDate ?? null,
   source: i.source ?? null,
   link: i.link ?? null,
+  sentToTab: i.sentToTab ?? null,
+  sentToId: i.sentToId ?? null,
   notes: i.notes ?? null,
 }));
 
