@@ -30,6 +30,7 @@ import type {
   DispositionListingContact,
   DispositionListingNote,
   LeaseComp,
+  SalesComp,
   OnboardingChecklist,
   OnboardingItem,
   PropertyTaxAppeal,
@@ -119,6 +120,12 @@ import {
   deleteLeaseComp as deleteLeaseCompRow,
   subscribeLeaseComps,
 } from './lib/repo/leaseComps';
+import {
+  listSalesComps,
+  upsertSalesComp,
+  deleteSalesComp as deleteSalesCompRow,
+  subscribeSalesComps,
+} from './lib/repo/salesComps';
 import { listAllBuildings, subscribeBuildings } from './lib/repo/buildings';
 import {
   listPropertyTaxAppeals,
@@ -227,6 +234,7 @@ function App() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [devProjects, setDevProjects] = useState<DevelopmentProject[]>([]);
   const [leaseComps, setLeaseComps] = useState<LeaseComp[]>([]);
+  const [salesComps, setSalesComps] = useState<SalesComp[]>([]);
   // All buildings, eagerly loaded so the rent-roll/deal drawers can offer
   // a space picker. MapView keeps its own state for now (its render path
   // already drives off it); these two subscriptions co-exist fine.
@@ -358,7 +366,7 @@ function App() {
       (async () => {
         try {
           const [
-            d, r, a, o, dev, comps, bldgs, appeals, amItems,
+            d, r, a, o, dev, comps, sComps, bldgs, appeals, amItems,
             crmContacts, crmLinks, crmNotes,
             acqTargets, acqLinks, acqNotes,
             dispoListings, dispoLinks, dispoNotes,
@@ -369,6 +377,7 @@ function App() {
             listOnboardings(),
             listDevelopmentProjects(),
             listLeaseComps(),
+            listSalesComps(),
             listAllBuildings(),
             listPropertyTaxAppeals(),
             listAMPendingItems(),
@@ -390,6 +399,7 @@ function App() {
           setOnboardings(o.map(reconcileWithTemplate));
           setDevProjects(dev);
           setLeaseComps(comps);
+          setSalesComps(sComps);
           setBuildings(bldgs);
           setPropertyTaxAppeals(appeals);
           setAMPendingItems(amItems);
@@ -523,6 +533,17 @@ function App() {
           return next;
         }),
       onDelete: (id) => setLeaseComps((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubSalesComps = subscribeSalesComps({
+      onUpsert: (c) =>
+        setSalesComps((prev) => {
+          const idx = prev.findIndex((x) => x.id === c.id);
+          if (idx === -1) return [...prev, c];
+          const next = prev.slice();
+          next[idx] = c;
+          return next;
+        }),
+      onDelete: (id) => setSalesComps((prev) => prev.filter((x) => x.id !== id)),
     });
     // Note: MapView also subscribes to buildings — duplicate subscriptions
     // are fine, channels are isolated. If we want to dedupe later, lift
@@ -677,6 +698,7 @@ function App() {
       unsubScenarios();
       unsubDev();
       unsubComps();
+      unsubSalesComps();
       unsubBldgs();
       unsubAppeals();
       unsubAMItems();
@@ -1314,6 +1336,22 @@ function App() {
     writeThrough('delete comp', deleteLeaseCompRow(id));
   };
 
+  const handleSaveSalesComp = (updated: SalesComp) => {
+    setSalesComps((prev) => {
+      const idx = prev.findIndex((c) => c.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save sales comp', upsertSalesComp(updated));
+  };
+
+  const handleDeleteSalesComp = (id: string) => {
+    setSalesComps((prev) => prev.filter((c) => c.id !== id));
+    writeThrough('delete sales comp', deleteSalesCompRow(id));
+  };
+
   const handleSavePropertyTaxAppeal = (updated: PropertyTaxAppeal) => {
     setPropertyTaxAppeals((prev) => {
       const idx = prev.findIndex((a) => a.id === updated.id);
@@ -1846,6 +1884,9 @@ function App() {
               comps={leaseComps}
               onSave={handleSaveLeaseComp}
               onDelete={handleDeleteLeaseComp}
+              salesComps={salesComps}
+              onSaveSalesComp={handleSaveSalesComp}
+              onDeleteSalesComp={handleDeleteSalesComp}
               onExcelExport={() => handleViewExport('comps')}
               onExcelImport={(f) => handleViewImport('comps', f)}
             />

@@ -21,6 +21,7 @@ import type {
   DispositionListingContact,
   DispositionListingNote,
   LeaseComp,
+  SalesComp,
   OnboardingChecklist,
   PropertyTaxAppeal,
   PropertyTaxAppealStatus,
@@ -674,6 +675,94 @@ export const rowToLeaseComp = (r: LeaseCompRow): LeaseComp => ({
   tiPSF: numOrNull(r.ti_psf),
   escalationPct: numOrNull(r.escalation_pct),
   options: r.options,
+  source: r.source,
+  sourceUrl: r.source_url,
+  confidence: r.confidence,
+  confidential: r.confidential,
+  notes: r.notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── SalesComp ────────────────────────────────────────────────────
+
+export interface SalesCompRow {
+  id: string;
+  property_name: string | null;
+  building_address: string | null;
+  market: string | null;
+  property_type: string | null;
+  building_type: string | null;
+  sale_date: string | null;
+  sale_price: number | string | null;
+  price_psf: number | string | null;
+  cap_rate: number | string | null;
+  noi: number | string | null;
+  building_sf: number | string | null;
+  land_acres: number | string | null;
+  year_built: number | null;
+  occupancy_pct: number | string | null;
+  buyer: string | null;
+  seller: string | null;
+  source: string | null;
+  source_url: string | null;
+  confidence: SalesComp['confidence'];
+  confidential: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const salesCompToRow = (
+  c: SalesComp
+): Omit<SalesCompRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: c.id,
+  property_name: c.propertyName,
+  building_address: c.buildingAddress,
+  market: c.market,
+  property_type: c.propertyType,
+  building_type: c.buildingType,
+  sale_date: c.saleDate,
+  sale_price: c.salePrice,
+  price_psf: c.pricePSF,
+  cap_rate: c.capRate,
+  noi: c.noi,
+  building_sf: c.buildingSF,
+  land_acres: c.landAcres,
+  year_built: c.yearBuilt,
+  occupancy_pct: c.occupancyPct,
+  buyer: c.buyer,
+  seller: c.seller,
+  source: c.source,
+  source_url: c.sourceUrl,
+  confidence: c.confidence,
+  confidential: c.confidential,
+  notes: c.notes,
+  created_at: c.createdAt,
+  updated_at: c.updatedAt,
+});
+
+export const rowToSalesComp = (r: SalesCompRow): SalesComp => ({
+  id: r.id,
+  propertyName: r.property_name,
+  buildingAddress: r.building_address,
+  market: r.market,
+  propertyType: r.property_type,
+  buildingType: r.building_type,
+  saleDate: r.sale_date,
+  salePrice: numOrNull(r.sale_price),
+  pricePSF: numOrNull(r.price_psf),
+  capRate: numOrNull(r.cap_rate),
+  noi: numOrNull(r.noi),
+  buildingSF: numOrNull(r.building_sf),
+  landAcres: numOrNull(r.land_acres),
+  yearBuilt: r.year_built,
+  occupancyPct: numOrNull(r.occupancy_pct),
+  buyer: r.buyer,
+  seller: r.seller,
   source: r.source,
   sourceUrl: r.source_url,
   confidence: r.confidence,
