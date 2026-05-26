@@ -130,7 +130,7 @@ export interface RentRollDbRow {
   property_type: string | null;
   building_type: string | null;
   tenant_name: string | null;
-  tenant_rating: number | null;
+  tenant_rating: string | null;
   occupied: boolean;
   uw_basis: RentRollRow['uwBasis'];
   leasable_sf: number | null;
@@ -198,7 +198,7 @@ export const rowToRentRoll = (r: RentRollDbRow): RentRollRow => ({
   propertyType: r.property_type,
   buildingType: r.building_type,
   tenantName: r.tenant_name,
-  tenantRating: r.tenant_rating,
+  tenantRating: r.tenant_rating as RentRollRow['tenantRating'],
   occupied: r.occupied,
   uwBasis: r.uw_basis,
   leasableSF: r.leasable_sf,

@@ -26,6 +26,7 @@ import type {
   PropertyTaxAppeal,
   RentRollRow,
   Scenario,
+  TenantRating,
   UWBasis,
 } from '../types';
 import {
@@ -65,6 +66,7 @@ import {
   RentTypeEnum,
   RiskLevelEnum,
   ScenarioSchema,
+  TenantRatingEnum,
   TransactionTypeEnum,
   UWBasisEnum,
 } from '../types';
@@ -148,13 +150,18 @@ const parseBool = (v: unknown): boolean => {
   return s === 'yes' || s === 'y' || s === 'true' || s === '1';
 };
 
-const parseStars = (v: unknown): number | null => {
+// Credit-rating parse. Accepts the new enum values directly; legacy
+// 1-5 numeric / star inputs map to 'Unrated / Private' rather than
+// fabricate a credit grade from a quality score.
+const parseTenantRating = (v: unknown): TenantRating | null => {
   if (isMissing(v)) return null;
   const s = String(v).trim();
+  const match = TenantRatingEnum.options.find((r) => r.toLowerCase() === s.toLowerCase());
+  if (match) return match;
   const filled = (s.match(/★/g) ?? []).length;
-  if (filled > 0) return Math.min(filled, 5);
+  if (filled > 0) return 'Unrated / Private';
   const asNum = parseNumber(v);
-  if (asNum !== null && asNum >= 0 && asNum <= 5) return Math.round(asNum);
+  if (asNum !== null && asNum >= 0 && asNum <= 5) return 'Unrated / Private';
   return null;
 };
 
@@ -523,7 +530,7 @@ const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
     propertyType: cleanString(get('Property Type')),
     buildingType: cleanString(get('Building Type')),
     tenantName: tenant,
-    tenantRating: parseStars(get('Tenant Rating (1-5)', 'Tenant Rating', 'Rating')),
+    tenantRating: parseTenantRating(get('Tenant Rating', 'Tenant Rating (1-5)', 'Rating')),
     occupied: parseBool(get('Occupied?', 'Occupied')),
     uwBasis: parseUWBasis(get('Actual or Prospective UW', 'UW Basis', 'Basis')),
     leasableSF: parseNumber(get('Leasable SF', 'SF', 'Square Feet')),
@@ -1473,8 +1480,7 @@ const formatPercent = (n: number | null | undefined): string =>
   n == null ? '' : `${n}%`;
 const formatFractionAsPercent = (n: number | null | undefined): string =>
   n == null ? '' : `${(n * 100).toFixed(2)}%`;
-const formatStars = (n: number | null | undefined): string =>
-  n == null ? '' : '★'.repeat(n);
+const formatTenantRating = (r: TenantRating | null | undefined): string => r ?? '';
 
 const DATA_DICTIONARY: { Sheet: string; Column: string; 'Data Type': string; Description: string; Example: string }[] = [
   { Sheet: 'Prospects', Column: 'Deal Name', 'Data Type': 'string', Description: 'Name of the deal / property', Example: 'Central Logistics Hub' },
@@ -1616,7 +1622,7 @@ function buildWorkbook(
       'Market': r.market ?? '',
       'Property Type': r.propertyType ?? '',
       'Tenant Name': r.tenantName ?? '',
-      'Tenant Rating (1-5)': formatStars(r.tenantRating),
+      'Tenant Rating': formatTenantRating(r.tenantRating),
       'Building ID': r.buildingId ?? '',
       'Space ID': r.spaceId ?? '',
       'Building': r.building ?? '',
