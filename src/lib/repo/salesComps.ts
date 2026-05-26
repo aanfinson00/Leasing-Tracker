@@ -10,7 +10,10 @@ export async function listSalesComps(): Promise<SalesComp[]> {
     .from(TABLE)
     .select('*')
     .order('sale_date', { ascending: false, nullsFirst: false });
-  if (error) throw error;
+  if (error) {
+    console.warn('sales_comps query failed (table may not exist):', error.message);
+    return [];
+  }
   return (data as SalesCompRow[])
     .map((r) => {
       const parsed = SalesCompSchema.safeParse(rowToSalesComp(r));
