@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+// Format constraints from parce-data-dictionary.xlsx ("Identifiers" sheet).
+// Enforced at the form layer (react-hook-form `pattern`), NOT in the zod
+// schema — older rows may pre-date these formats and should still parse.
+export const DEAL_ID_REGEX = /^\d{4}$/;
+export const SPACE_ID_REGEX = /^\d{4}-B\d{2}-S\d{2}$/;
+export const DEAL_ID_FORMAT_HINT = '4-digit project code (e.g. 5001)';
+export const SPACE_ID_FORMAT_HINT = '{project}-B{nn}-S{nn} (e.g. 5001-B01-S03)';
+
 export const DealStatusEnum = z.enum([
   'New Prospect',
   'RFP Requested',

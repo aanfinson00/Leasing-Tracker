@@ -969,10 +969,23 @@ function App() {
   };
   const handleSelectDeal = (deal: Deal) => setEditingDeal(deal);
   const handleSaveDeal = (updated: Deal) => {
+    const prev = deals.find((d) => d.id === updated.id);
     const newDeals = deals.map((d) => (d.id === updated.id ? updated : d));
     setDeals(newDeals);
-    setFilteredDeals((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+    setFilteredDeals((p) => p.map((d) => (d.id === updated.id ? updated : d)));
     writeThrough('save deal', upsertDeal(updated));
+
+    // Auto-trigger Promote-to-Portfolio when a deal flips to Executed
+    // and no rent_roll row references it yet. Parce dict integrity rule #3.
+    if (
+      prev &&
+      prev.status !== 'Executed' &&
+      updated.status === 'Executed' &&
+      !rentRoll.some((r) => r.dealId === updated.id)
+    ) {
+      setPromotingDeal(updated);
+      showToast('Deal executed — promoting to Rent Roll');
+    }
   };
   const handleDeleteDeal = (id: string) => {
     const newDeals = deals.filter((d) => d.id !== id);
