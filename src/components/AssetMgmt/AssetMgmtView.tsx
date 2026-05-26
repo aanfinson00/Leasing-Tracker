@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { AMPendingItem, PropertyTaxAppeal } from '../../types';
+import type { View } from '../Sidebar';
 import { TaxAppealsSection } from './TaxAppealsSection';
 import { TaxAppealDrawer } from './TaxAppealDrawer';
 import { AMPendingSection } from './AMPendingSection';
@@ -12,6 +13,7 @@ interface AssetMgmtViewProps {
   amItems: AMPendingItem[];
   onSaveAMItem: (i: AMPendingItem) => void;
   onDeleteAMItem: (id: string) => void;
+  onSendTo?: (item: AMPendingItem, targetView: View) => void;
 }
 
 function today(): string {
@@ -56,6 +58,7 @@ function defaultAMItem(): AMPendingItem {
     itemType: 'Deliverable',
     title: '',
     description: null,
+    cadence: 'One-Time',
     buildingId: null,
     buildingName: null,
     dealId: null,
@@ -67,6 +70,8 @@ function defaultAMItem(): AMPendingItem {
     completedDate: null,
     source: null,
     link: null,
+    sentToTab: null,
+    sentToId: null,
     notes: null,
     createdAt: now,
     updatedAt: now,
@@ -80,6 +85,7 @@ export function AssetMgmtView({
   amItems,
   onSaveAMItem,
   onDeleteAMItem,
+  onSendTo,
 }: AssetMgmtViewProps) {
   const [editingAppeal, setEditingAppeal] = useState<PropertyTaxAppeal | null>(null);
   const [editingItem, setEditingItem] = useState<AMPendingItem | null>(null);
@@ -120,6 +126,10 @@ export function AssetMgmtView({
           onClose={() => setEditingItem(null)}
           onSave={onSaveAMItem}
           onDelete={onDeleteAMItem}
+          onSendTo={onSendTo ? (item, view) => {
+            setEditingItem(null);
+            onSendTo(item, view);
+          } : undefined}
         />
       )}
     </div>

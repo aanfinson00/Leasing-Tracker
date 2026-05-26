@@ -701,6 +701,9 @@ export interface AMPendingItemRow {
   completed_date: string | null;
   source: string | null;
   link: string | null;
+  cadence: string;
+  sent_to_tab: string | null;
+  sent_to_id: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -727,6 +730,9 @@ export const amPendingItemToRow = (
   completed_date: i.completedDate,
   source: i.source,
   link: i.link,
+  cadence: i.cadence,
+  sent_to_tab: i.sentToTab,
+  sent_to_id: i.sentToId,
   notes: i.notes,
   created_at: i.createdAt,
   updated_at: i.updatedAt,
@@ -748,6 +754,9 @@ export const rowToAMPendingItem = (r: AMPendingItemRow): AMPendingItem => ({
   completedDate: r.completed_date,
   source: r.source,
   link: r.link,
+  cadence: (r.cadence as AMPendingItem['cadence']) ?? 'One-Time',
+  sentToTab: r.sent_to_tab,
+  sentToId: r.sent_to_id,
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,

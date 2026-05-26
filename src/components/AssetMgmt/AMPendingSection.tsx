@@ -8,15 +8,26 @@ import {
   Users,
   Building,
   Truck,
+  Shield,
+  FileSpreadsheet,
+  Receipt,
+  TrendingUp,
+  DollarSign,
+  FileText,
+  Stamp,
+  RefreshCw,
+  CheckCircle2,
 } from 'lucide-react';
 import type {
   AMPendingItem,
   AMItemType,
+  AMCadence,
   AMStatus,
   Priority,
 } from '../../types';
 import {
   AMItemTypeEnum,
+  AMCadenceEnum,
   AM_OPEN_STATUSES,
 } from '../../types';
 
@@ -34,6 +45,14 @@ const TYPE_ICON: Record<AMItemType, typeof ListChecks> = {
   'Tenant Request': Users,
   'Building Monitoring': Building,
   'Capital Vendor': Truck,
+  Insurance: Shield,
+  'Operating Budget': FileSpreadsheet,
+  'CAM Reconciliation': Receipt,
+  Valuation: TrendingUp,
+  'Cash Management': DollarSign,
+  Reporting: FileText,
+  'LP Approval': Stamp,
+  'Lease Renewal': RefreshCw,
 };
 
 function daysUntil(iso: string | null): number | null {
@@ -85,6 +104,7 @@ export function AMPendingSection({
 }: AMPendingSectionProps) {
   const [filter, setFilter] = useState<FilterMode>('open');
   const [typeFilter, setTypeFilter] = useState<AMItemType | 'all'>('all');
+  const [cadenceFilter, setCadenceFilter] = useState<AMCadence | 'all'>('all');
 
   const filtered = useMemo(() => {
     let list = items;
@@ -96,6 +116,9 @@ export function AMPendingSection({
     if (typeFilter !== 'all') {
       list = list.filter((i) => i.itemType === typeFilter);
     }
+    if (cadenceFilter !== 'all') {
+      list = list.filter((i) => i.cadence === cadenceFilter);
+    }
     return [...list].sort((a, b) => {
       // Overdue first, then by due date, then high priority first
       const aDays = daysUntil(a.dueDate) ?? Infinity;
@@ -104,7 +127,7 @@ export function AMPendingSection({
       const order: Priority[] = ['High', 'Medium', 'Low'];
       return order.indexOf(a.priority) - order.indexOf(b.priority);
     });
-  }, [items, filter, typeFilter]);
+  }, [items, filter, typeFilter, cadenceFilter]);
 
   const grouped = useMemo(() => {
     const m = new Map<AMItemType, AMPendingItem[]>();
@@ -201,6 +224,18 @@ export function AMPendingSection({
             </option>
           ))}
         </select>
+        <select
+          value={cadenceFilter}
+          onChange={(e) => setCadenceFilter(e.target.value as AMCadence | 'all')}
+          className="px-2.5 py-1.5 text-xs rounded-lg bg-bg border border-border text-fg-muted hover:text-fg transition-colors"
+        >
+          <option value="all">All cadences</option>
+          {AMCadenceEnum.options.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
       </div>
 
       {filtered.length === 0 ? (
@@ -248,6 +283,17 @@ export function AMPendingSection({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium text-fg">{i.title}</span>
                             <StatusPill status={i.status} />
+                            {i.cadence !== 'One-Time' && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-bg border border-border text-fg-subtle">
+                                {i.cadence}
+                              </span>
+                            )}
+                            {i.sentToTab && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-success/10 text-success border border-success/30">
+                                <CheckCircle2 size={10} strokeWidth={2} />
+                                Sent
+                              </span>
+                            )}
                             {i.buildingName && (
                               <span className="text-xs text-fg-subtle">{i.buildingName}</span>
                             )}

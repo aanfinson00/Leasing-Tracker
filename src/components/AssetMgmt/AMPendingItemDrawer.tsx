@@ -13,26 +13,41 @@ import type { LucideIcon } from 'lucide-react';
 import type {
   AMPendingItem,
   AMItemType,
+  AMCadence,
   AMStatus,
   Priority,
 } from '../../types';
 import {
   AMItemTypeEnum,
+  AMCadenceEnum,
   AMStatusEnum,
   PriorityEnum,
 } from '../../types';
+import type { View } from '../Sidebar';
+
+const SEND_TO_MAP: Partial<Record<AMItemType, { view: View; label: string }[]>> = {
+  'Lease Renewal':         [{ view: 'rentroll', label: 'Update Rent Roll' },
+                            { view: 'prospects', label: 'Create Prospect' }],
+  'Valuation':             [{ view: 'underwrite', label: 'Create Scenario' }],
+  'CAM Reconciliation':    [{ view: 'rentroll', label: 'Open Tenant in Rent Roll' }],
+  'Construction Followup': [{ view: 'development', label: 'Open Dev Project' }],
+  'Capital Vendor':        [{ view: 'development', label: 'Open Dev Project' }],
+  'Deliverable':           [{ view: 'rentroll', label: 'Update Rent Roll' }],
+};
 
 interface AMPendingItemDrawerProps {
   item: AMPendingItem | null;
   onClose: () => void;
   onSave: (i: AMPendingItem) => void;
   onDelete: (id: string) => void;
+  onSendTo?: (item: AMPendingItem, targetView: View) => void;
 }
 
 type FormValues = {
   itemType: AMItemType;
   title: string;
   description: string;
+  cadence: AMCadence;
   buildingId: string;
   buildingName: string;
   dealId: string;
@@ -82,6 +97,7 @@ export function AMPendingItemDrawer({
   onClose,
   onSave,
   onDelete,
+  onSendTo,
 }: AMPendingItemDrawerProps) {
   const {
     register,
@@ -97,6 +113,7 @@ export function AMPendingItemDrawer({
         itemType: item.itemType,
         title: item.title,
         description: toStr(item.description),
+        cadence: item.cadence,
         buildingId: toStr(item.buildingId),
         buildingName: toStr(item.buildingName),
         dealId: toStr(item.dealId),
@@ -121,6 +138,7 @@ export function AMPendingItemDrawer({
       itemType: v.itemType,
       title: v.title.trim(),
       description: parseStr(v.description),
+      cadence: v.cadence,
       buildingId: parseStr(v.buildingId),
       buildingName: parseStr(v.buildingName),
       dealId: parseStr(v.dealId),
@@ -132,6 +150,8 @@ export function AMPendingItemDrawer({
       completedDate: parseStr(v.completedDate),
       source: parseStr(v.source),
       link: parseStr(v.link),
+      sentToTab: item.sentToTab,
+      sentToId: item.sentToId,
       notes: parseStr(v.notes),
       createdAt: item.createdAt,
       updatedAt: new Date().toISOString(),
@@ -180,6 +200,35 @@ export function AMPendingItemDrawer({
             </div>
           </div>
 
+          {currentStatus === 'Done' && !item.sentToTab && SEND_TO_MAP[currentType] && onSendTo && (
+            <div className="mx-7 mt-4 px-4 py-3 rounded-xl bg-success/10 border border-success/30">
+              <p className="text-sm font-medium text-success mb-2">
+                Item complete — send the result to another tab?
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {SEND_TO_MAP[currentType]!.map((dest) => (
+                  <button
+                    key={dest.view}
+                    type="button"
+                    onClick={() => onSendTo(item, dest.view)}
+                    className="px-3 py-1.5 text-xs font-semibold text-accent-fg bg-accent rounded-lg hover:bg-accent-hover transition-colors"
+                  >
+                    {dest.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {item.sentToTab && (
+            <div className="mx-7 mt-4 px-4 py-3 rounded-xl bg-bg border border-border">
+              <p className="text-xs text-fg-muted">
+                Sent to <span className="font-medium text-fg">{item.sentToTab}</span>
+                {item.sentToId && <span className="text-fg-subtle"> ({item.sentToId})</span>}
+              </p>
+            </div>
+          )}
+
           <div className="flex-1 px-7 py-6">
             <Section icon={Tag} title="Item">
               <div className="grid grid-cols-2 gap-3.5">
@@ -221,6 +270,16 @@ export function AMPendingItemDrawer({
                     {PriorityEnum.options.map((p) => (
                       <option key={p} value={p}>
                         {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Cadence</label>
+                  <select {...register('cadence')} className={inputClass}>
+                    {AMCadenceEnum.options.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
                       </option>
                     ))}
                   </select>
