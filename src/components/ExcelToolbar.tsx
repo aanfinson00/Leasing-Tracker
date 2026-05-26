@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { Download, Upload } from 'lucide-react';
 
 interface ExcelToolbarProps {
-  onExport: () => void;
+  onExport: () => void | Promise<void>;
   onImport: (file: File) => void;
   itemCount: number;
   className?: string;
