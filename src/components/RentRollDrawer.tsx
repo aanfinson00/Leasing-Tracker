@@ -13,8 +13,14 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ActivityEntry, Building, RentRollRow, UWBasis } from '../types';
-import { UWBasisEnum } from '../types';
+import {
+  UWBasisEnum,
+  SPACE_ID_REGEX,
+  SPACE_ID_FORMAT_HINT,
+} from '../types';
 import { listSpaceOptions, findSpaceOption } from '../lib/spaces';
+import { MARKETS, PROPERTY_TYPES, BUILDING_TYPES } from '../lib/enums';
+import { EnumDropdown } from './EnumDropdown';
 import { ActivityLog } from './ActivityLog';
 
 interface RentRollDrawerProps {
@@ -115,7 +121,14 @@ export function RentRollDrawer({
   onAddActivity,
   onDeleteActivity,
 }: RentRollDrawerProps) {
-  const { register, handleSubmit, reset, watch, setValue } = useForm<FormValues>();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<FormValues>();
 
   const spaceOptions = useMemo(() => listSpaceOptions(buildings), [buildings]);
   const currentBuildingId = watch('buildingId') ?? row?.buildingId ?? '';
@@ -318,11 +331,21 @@ export function RentRollDrawer({
                 </div>
                 <div>
                   <label className={labelClass}>Market</label>
-                  <input {...register('market')} className={inputClass} />
+                  <EnumDropdown
+                    options={MARKETS}
+                    value={watch('market') ?? ''}
+                    onChange={(v) => setValue('market', v, { shouldDirty: true })}
+                    className={inputClass}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Property Type</label>
-                  <input {...register('propertyType')} className={inputClass} />
+                  <EnumDropdown
+                    options={PROPERTY_TYPES}
+                    value={watch('propertyType') ?? ''}
+                    onChange={(v) => setValue('propertyType', v, { shouldDirty: true })}
+                    className={inputClass}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Deal ID</label>
@@ -334,7 +357,17 @@ export function RentRollDrawer({
                 </div>
                 <div>
                   <label className={labelClass}>Space ID</label>
-                  <input {...register('spaceId')} className={`${inputClass} tabular-nums`} />
+                  <input
+                    {...register('spaceId', {
+                      validate: (v) =>
+                        !v || SPACE_ID_REGEX.test(v.trim()) || SPACE_ID_FORMAT_HINT,
+                    })}
+                    placeholder="5001-B01-S03"
+                    className={`${inputClass} tabular-nums`}
+                  />
+                  {errors.spaceId && (
+                    <p className="text-danger text-xs mt-1.5">{errors.spaceId.message}</p>
+                  )}
                 </div>
                 <div>
                   <label className={labelClass}>Building</label>
@@ -342,7 +375,13 @@ export function RentRollDrawer({
                 </div>
                 <div>
                   <label className={labelClass}>Building Type</label>
-                  <input {...register('buildingType')} placeholder="Rear Load, Front Load, Cross Dock" className={inputClass} />
+                  <EnumDropdown
+                    options={BUILDING_TYPES}
+                    value={watch('buildingType') ?? ''}
+                    onChange={(v) => setValue('buildingType', v, { shouldDirty: true })}
+                    placeholder="Class A bulk, Last-mile, Cold storage…"
+                    className={inputClass}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Leasable SF</label>

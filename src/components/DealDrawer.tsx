@@ -18,8 +18,16 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ActivityEntry, Building, Deal, DealStatus, Priority } from '../types';
-import { PriorityEnum } from '../types';
+import {
+  PriorityEnum,
+  DEAL_ID_REGEX,
+  SPACE_ID_REGEX,
+  DEAL_ID_FORMAT_HINT,
+  SPACE_ID_FORMAT_HINT,
+} from '../types';
 import { listSpaceOptions, findSpaceOption } from '../lib/spaces';
+import { TRANSACTION_TYPES } from '../lib/enums';
+import { EnumDropdown } from './EnumDropdown';
 import { StatusBadge } from './StatusBadge';
 import { PipelineStepper } from './PipelineStepper';
 import { ActivityLog } from './ActivityLog';
@@ -375,7 +383,17 @@ export function DealDrawer({
                 </div>
                 <div>
                   <label className={labelClass}>Deal ID</label>
-                  <input {...register('dealId')} className={`${inputClass} tabular-nums`} />
+                  <input
+                    {...register('dealId', {
+                      validate: (v) =>
+                        !v || DEAL_ID_REGEX.test(v.trim()) || DEAL_ID_FORMAT_HINT,
+                    })}
+                    placeholder="5001"
+                    className={`${inputClass} tabular-nums`}
+                  />
+                  {errors.dealId && (
+                    <p className="text-danger text-xs mt-1.5">{errors.dealId.message}</p>
+                  )}
                 </div>
                 <div>
                   <label className={labelClass}>Building</label>
@@ -383,7 +401,17 @@ export function DealDrawer({
                 </div>
                 <div className="col-span-2">
                   <label className={labelClass}>Space ID</label>
-                  <input {...register('spaceId')} className={`${inputClass} tabular-nums`} />
+                  <input
+                    {...register('spaceId', {
+                      validate: (v) =>
+                        !v || SPACE_ID_REGEX.test(v.trim()) || SPACE_ID_FORMAT_HINT,
+                    })}
+                    placeholder="5001-B01-S03"
+                    className={`${inputClass} tabular-nums`}
+                  />
+                  {errors.spaceId && (
+                    <p className="text-danger text-xs mt-1.5">{errors.spaceId.message}</p>
+                  )}
                 </div>
                 <div>
                   <label className={labelClass}>Min SF</label>
@@ -437,8 +465,12 @@ export function DealDrawer({
                 </div>
                 <div>
                   <label className={labelClass}>Transaction Type</label>
-                  <input
-                    {...register('transaction')}
+                  <EnumDropdown
+                    options={TRANSACTION_TYPES}
+                    value={watch('transaction') ?? ''}
+                    onChange={(v) =>
+                      setValue('transaction', v, { shouldDirty: true })
+                    }
                     placeholder="New Lease, Expansion, BTS…"
                     className={inputClass}
                   />
