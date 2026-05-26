@@ -1,4 +1,4 @@
-import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database, Users, Lock } from 'lucide-react';
+import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database, Users, Lock, Cpu } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { ParceIcon } from './ParceIcon';
@@ -48,9 +48,10 @@ const NAV_ITEMS: NavItem[] = [
 interface SidebarProps {
   view: View;
   onChangeView: (v: View) => void;
+  onOpenSkills: () => void;
 }
 
-export function Sidebar({ view, onChangeView }: SidebarProps) {
+export function Sidebar({ view, onChangeView, onOpenSkills }: SidebarProps) {
   return (
     <aside className="hidden sm:flex flex-col items-center w-[68px] shrink-0 bg-bg-subtle/60 h-screen sticky top-0 py-5 z-20">
       {/* Parce mark — 3x3 copper grid with the playbook tilt. */}
@@ -86,6 +87,15 @@ export function Sidebar({ view, onChangeView }: SidebarProps) {
       </nav>
 
       <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={onOpenSkills}
+          title="AI Skills"
+          aria-label="AI Skills"
+          className="inline-flex items-center justify-center w-11 h-11 rounded-xl text-fg-muted hover:text-fg hover:bg-bg-elevated/70 transition-all"
+        >
+          <Cpu size={19} strokeWidth={1.75} />
+        </button>
         <ThemeToggle />
         {PASSWORD_HASH_CONFIGURED && (
           <button

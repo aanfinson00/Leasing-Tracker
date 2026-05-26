@@ -69,6 +69,7 @@ import { PromoteDrawer } from './components/PromoteDrawer';
 import { ReportsView } from './components/ReportsView';
 import { OnboardingView } from './components/Onboarding/OnboardingView';
 import { Sidebar, type View } from './components/Sidebar';
+import { SkillsModal } from './components/SkillsModal';
 import { SUPABASE_CONFIGURED } from './lib/supabase';
 import {
   listDeals,
@@ -193,6 +194,7 @@ import { MobileNav } from './components/MobileNav';
 
 function App() {
   const [view, setView] = useState<View>('prospects');
+  const [skillsOpen, setSkillsOpen] = useState(false);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([]);
   const [rentRoll, setRentRoll] = useState<RentRollRow[]>([]);
@@ -1558,11 +1560,12 @@ function App() {
       {/* Parce-style animated copper grid behind everything. z-0 keeps
           it under the sidebar (z-20) and main content (default stacking). */}
       <GridBackground />
-      <Sidebar view={view} onChangeView={setView} />
+      <Sidebar view={view} onChangeView={setView} onOpenSkills={() => setSkillsOpen(true)} />
+      <SkillsModal open={skillsOpen} onClose={() => setSkillsOpen(false)} />
       {/* Mobile bottom nav — visible only on narrow viewports where
           the desktop sidebar is hidden. pb-16 above leaves clearance
           so content doesn't sit under it. */}
-      <MobileNav view={view} onChangeView={setView} />
+      <MobileNav view={view} onChangeView={setView} onOpenSkills={() => setSkillsOpen(true)} />
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Header is OPAQUE (so scrolled content doesn't bleed through

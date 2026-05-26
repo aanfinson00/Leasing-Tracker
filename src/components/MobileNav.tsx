@@ -3,7 +3,7 @@
 // horizontally-scrollable strip of icon + label buttons pinned to
 // the bottom of the screen.
 
-import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database, Users } from 'lucide-react';
+import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database, Users, Cpu } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { View } from './Sidebar';
 
@@ -32,9 +32,10 @@ const NAV_ITEMS: NavItem[] = [
 interface Props {
   view: View;
   onChangeView: (v: View) => void;
+  onOpenSkills: () => void;
 }
 
-export function MobileNav({ view, onChangeView }: Props) {
+export function MobileNav({ view, onChangeView, onOpenSkills }: Props) {
   return (
     <nav
       className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-bg-elevated border-t border-border shadow-lift"
@@ -62,6 +63,15 @@ export function MobileNav({ view, onChangeView }: Props) {
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={onOpenSkills}
+          className="flex flex-col items-center justify-center gap-0.5 px-2 py-2 min-w-[56px] flex-1 transition-colors text-fg-muted hover:text-fg"
+          aria-label="AI Skills"
+        >
+          <Cpu size={18} strokeWidth={1.75} />
+          <span className="text-[9px] font-medium leading-none mt-0.5">AI Skills</span>
+        </button>
       </div>
     </nav>
   );
