@@ -41,8 +41,9 @@ import { defaultDeal, defaultOnboardingChecklist, defaultRentRollRow } from './t
 import { DEFAULT_GLOBALS, DEFAULT_INPUTS_BASE } from './lib/lease-math/types';
 import type { ScenarioInputs } from './lib/lease-math/types';
 import { runScenario } from './lib/lease-math/calc';
-import { loadFromFile, saveToFile, buildWorkbookBlob, buildViewWorkbookBlob } from './lib/excel';
+import { loadFromFile } from './lib/excel';
 import type { FullDataSet } from './lib/excel';
+import { buildStyledWorkbookBlob, buildStyledViewWorkbookBlob } from './lib/excel-styled';
 import { saveSnapshot, loadSnapshot, clearSnapshot } from './lib/autosave';
 import { encodeShare, decodeShare, readShareFromUrl, clearShareFromUrl } from './lib/share';
 import { makeStatusChangeEntry } from './lib/activity';
@@ -297,6 +298,7 @@ function App() {
       if (result.scenarios?.length) ops.push(Promise.all(result.scenarios.map(upsertScenario)).then(() => {}));
       if (result.devProjects?.length) ops.push(Promise.all(result.devProjects.map(upsertDevelopmentProject)).then(() => {}));
       if (result.leaseComps?.length) ops.push(Promise.all(result.leaseComps.map(upsertLeaseComp)).then(() => {}));
+      if (result.salesComps?.length) ops.push(Promise.all(result.salesComps.map(upsertSalesComp)).then(() => {}));
       if (result.propertyTaxAppeals?.length) ops.push(Promise.all(result.propertyTaxAppeals.map(upsertPropertyTaxAppeal)).then(() => {}));
       if (result.amPendingItems?.length) ops.push(Promise.all(result.amPendingItems.map(upsertAMPendingItem)).then(() => {}));
       if (result.contacts?.length) ops.push(Promise.all(result.contacts.map(upsertContact)).then(() => {}));
@@ -782,14 +784,14 @@ function App() {
 
   const gatherFullDataSet = (): FullDataSet => ({
     deals, rentRoll, activities, onboardings, scenarios, buildings,
-    devProjects, propertyTaxAppeals: propertyTaxAppeals, leaseComps, amPendingItems,
+    devProjects, propertyTaxAppeals: propertyTaxAppeals, leaseComps, salesComps, amPendingItems,
     contacts, devProjectContacts, devProjectNotes,
     acquisitionTargets, acquisitionTargetContacts, acquisitionTargetNotes,
     dispositionListings, dispositionListingContacts, dispositionListingNotes,
   });
 
-  const handleViewExport = (viewName: string) => {
-    const blob = buildViewWorkbookBlob(viewName, gatherFullDataSet());
+  const handleViewExport = async (viewName: string) => {
+    const blob = await buildStyledViewWorkbookBlob(viewName, gatherFullDataSet());
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -811,6 +813,7 @@ function App() {
       if (result.devProjects.length) { setDevProjects(result.devProjects); imported += result.devProjects.length; }
       if (result.propertyTaxAppeals.length) { setPropertyTaxAppeals(result.propertyTaxAppeals); imported += result.propertyTaxAppeals.length; }
       if (result.leaseComps.length) { setLeaseComps(result.leaseComps); imported += result.leaseComps.length; }
+      if (result.salesComps.length) { setSalesComps(result.salesComps); imported += result.salesComps.length; }
       if (result.amPendingItems.length) { setAMPendingItems(result.amPendingItems); imported += result.amPendingItems.length; }
       if (result.contacts.length) { setContacts(result.contacts); imported += result.contacts.length; }
       if (result.devProjectContacts.length) { setDevProjectContacts(result.devProjectContacts); imported += result.devProjectContacts.length; }
@@ -828,9 +831,9 @@ function App() {
     }
   };
 
-  const handleSkillDataDownload = (skillName: string) => {
+  const handleSkillDataDownload = async (skillName: string) => {
     const data = gatherFullDataSet();
-    const blob = buildWorkbookBlob(data);
+    const blob = await buildStyledWorkbookBlob(data);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -865,9 +868,8 @@ function App() {
             return;
           }
         }
-        const blob = buildWorkbookBlob(gatherFullDataSet());
+        const blob = await buildStyledWorkbookBlob(gatherFullDataSet());
         await writeToHandle(fileHandle, blob);
-        // Re-read to grab the new mtime (after the write)
         const after = await readFromHandle(fileHandle);
         setLastSeenModified(after.lastModified);
         await updateLastSeenModified(after.lastModified);
@@ -879,7 +881,13 @@ function App() {
       return;
     }
     const name = filename || 'leases.xlsx';
-    saveToFile(gatherFullDataSet(), undefined, undefined, undefined, name);
+    const blob = await buildStyledWorkbookBlob(gatherFullDataSet());
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleReconnect = async () => {
