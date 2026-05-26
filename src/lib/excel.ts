@@ -19,6 +19,7 @@ import type {
   DispositionListingContact,
   DispositionListingNote,
   LeaseComp,
+  SalesComp,
   OnboardingChecklist,
   OnboardingItem,
   Priority,
@@ -56,6 +57,7 @@ import {
   DispositionStatusEnum,
   FrontageSideEnum,
   LeaseCompSchema,
+  SalesCompSchema,
   OnboardingChecklistSchema,
   PropertyTaxAppealSchema,
   PropertyTaxAppealStatusEnum,
@@ -288,6 +290,7 @@ const BUILDING_HEADER_HINTS = ['projectid', 'heightft', 'baycount'];
 const DEV_PROJECT_HEADER_HINTS = ['projectname', 'phase', 'gcname'];
 const TAX_APPEAL_HEADER_HINTS = ['parcelnumber', 'taxyear', 'assessedvalue'];
 const LEASE_COMP_HEADER_HINTS = ['baserentpsf', 'effectiverentpsf', 'transactiontype'];
+const SALES_COMP_HEADER_HINTS = ['saleprice', 'pricepsf', 'caprate'];
 const AM_ITEM_HEADER_HINTS = ['itemtype', 'duedate', 'cadence'];
 const CONTACT_HEADER_HINTS = ['contacttype', 'firstname', 'lastname'];
 const DEV_PROJECT_CONTACT_HINTS = ['devprojectid', 'contactid', 'roleoverride'];
@@ -314,7 +317,7 @@ const readRow = (sheet: XLSX.WorkSheet, rowIdx: number): string[] => {
 // Returns the row index of the header row, or 0 if none found.
 type SheetType =
   | 'rentroll' | 'prospects' | 'activity' | 'onboarding'
-  | 'scenario' | 'building' | 'devproject' | 'taxappeal' | 'leasecomp'
+  | 'scenario' | 'building' | 'devproject' | 'taxappeal' | 'leasecomp' | 'salescomp'
   | 'ampending' | 'contact'
   | 'devprojectcontact' | 'devprojectnote'
   | 'acqtarget' | 'acqcontact' | 'acqnote'
@@ -350,6 +353,7 @@ const findHeaderRow = (sheet: XLSX.WorkSheet): { rowIdx: number; type: SheetType
     if (hintCheck(BUILDING_HEADER_HINTS, norm) >= 2) return { rowIdx: r, type: 'building' };
     if (hintCheck(DEV_PROJECT_HEADER_HINTS, norm) >= 2) return { rowIdx: r, type: 'devproject' };
     if (hintCheck(TAX_APPEAL_HEADER_HINTS, norm) >= 2) return { rowIdx: r, type: 'taxappeal' };
+    if (hintCheck(SALES_COMP_HEADER_HINTS, norm) >= 2) return { rowIdx: r, type: 'salescomp' };
     if (hintCheck(LEASE_COMP_HEADER_HINTS, norm) >= 2) return { rowIdx: r, type: 'leasecomp' };
     if (hintCheck(AM_ITEM_HEADER_HINTS, norm) >= 2) return { rowIdx: r, type: 'ampending' };
     if (hintCheck(CONTACT_HEADER_HINTS, norm) >= 2) return { rowIdx: r, type: 'contact' };
@@ -816,6 +820,49 @@ const parseLeaseCompRow = (rawRow: RawRow): LeaseComp | null => {
   return result.data;
 };
 
+const parseSalesCompRow = (rawRow: RawRow): SalesComp | null => {
+  const get = buildGetter(rawRow);
+  const id = cleanString(get('ID')) ?? crypto.randomUUID();
+  const confidence = parseEnumCI(get('Confidence'), CompConfidenceEnum.options) ?? 'Medium';
+  const capRateRaw = parsePercent(get('Cap Rate', 'Cap Rate %', 'CapRate'));
+  const capRate = capRateRaw !== null ? capRateRaw / 100 : null;
+  const occRaw = parsePercent(get('Occupancy %', 'Occupancy', 'OccupancyPct'));
+  const occupancyPct = occRaw !== null ? occRaw / 100 : null;
+  const now = new Date().toISOString();
+  const parsed = {
+    id,
+    propertyName: cleanString(get('Property Name', 'PropertyName')),
+    buildingAddress: cleanString(get('Address', 'Building Address', 'BuildingAddress')),
+    market: cleanString(get('Market')),
+    propertyType: cleanString(get('Property Type', 'PropertyType')),
+    buildingType: cleanString(get('Building Type', 'BuildingType')),
+    saleDate: parseDate(get('Sale Date', 'SaleDate')),
+    salePrice: parseNumber(get('Sale Price', 'SalePrice')),
+    pricePSF: parseNumber(get('Price ($/SF)', 'Price PSF', 'PricePSF')),
+    capRate,
+    noi: parseNumber(get('NOI')),
+    buildingSF: parseNumber(get('Building SF', 'BuildingSF')),
+    landAcres: parseNumber(get('Land (Acres)', 'Land Acres', 'LandAcres')),
+    yearBuilt: parseNumber(get('Year Built', 'YearBuilt')),
+    occupancyPct,
+    buyer: cleanString(get('Buyer')),
+    seller: cleanString(get('Seller')),
+    source: cleanString(get('Source')),
+    sourceUrl: cleanString(get('Source URL', 'SourceUrl', 'SourceURL')),
+    confidence,
+    confidential: parseBool(get('Confidential')),
+    notes: cleanString(get('Notes')),
+    createdAt: cleanString(get('Created At', 'CreatedAt')) ?? now,
+    updatedAt: cleanString(get('Updated At', 'UpdatedAt')) ?? now,
+  };
+  const result = SalesCompSchema.safeParse(parsed);
+  if (!result.success) {
+    console.warn('Skipping unparsable sales comp row:', parsed, result.error.format());
+    return null;
+  }
+  return result.data;
+};
+
 const parseAMPendingItemRow = (rawRow: RawRow): AMPendingItem | null => {
   const get = buildGetter(rawRow);
   const id = cleanString(get('ID')) ?? crypto.randomUUID();
@@ -1185,6 +1232,7 @@ export interface LoadResult {
   devProjects: DevelopmentProject[];
   propertyTaxAppeals: PropertyTaxAppeal[];
   leaseComps: LeaseComp[];
+  salesComps: SalesComp[];
   amPendingItems: AMPendingItem[];
   contacts: Contact[];
   devProjectContacts: DevProjectContact[];
@@ -1210,6 +1258,7 @@ export function emptyDataSet(): FullDataSet {
     devProjects: [],
     propertyTaxAppeals: [],
     leaseComps: [],
+    salesComps: [],
     amPendingItems: [],
     contacts: [],
     devProjectContacts: [],
@@ -1236,6 +1285,7 @@ export function loadFromWorkbook(workbook: XLSX.WorkBook): LoadResult {
   let devProjects: DevelopmentProject[] = [];
   let propertyTaxAppeals: PropertyTaxAppeal[] = [];
   let leaseComps: LeaseComp[] = [];
+  let salesComps: SalesComp[] = [];
   let amPendingItems: AMPendingItem[] = [];
   let contacts: Contact[] = [];
   let devProjectContacts: DevProjectContact[] = [];
@@ -1290,6 +1340,10 @@ export function loadFromWorkbook(workbook: XLSX.WorkBook): LoadResult {
     } else if (type === 'leasecomp') {
       leaseComps = leaseComps.concat(
         rows.map(parseLeaseCompRow).filter((r): r is LeaseComp => r !== null)
+      );
+    } else if (type === 'salescomp') {
+      salesComps = salesComps.concat(
+        rows.map(parseSalesCompRow).filter((r): r is SalesComp => r !== null)
       );
     } else if (type === 'ampending') {
       amPendingItems = amPendingItems.concat(
@@ -1371,6 +1425,7 @@ export function loadFromWorkbook(workbook: XLSX.WorkBook): LoadResult {
     devProjects,
     propertyTaxAppeals,
     leaseComps,
+    salesComps,
     amPendingItems,
     contacts,
     devProjectContacts,
@@ -1456,6 +1511,12 @@ const DATA_DICTIONARY: { Sheet: string; Column: string; 'Data Type': string; Des
   { Sheet: 'Lease Comps', Column: 'Transaction Type', 'Data Type': 'enum', Description: 'New Lease / Renewal / Sublease / Expansion / Other', Example: 'New Lease' },
   { Sheet: 'Lease Comps', Column: 'Escalation %', 'Data Type': 'percent', Description: 'Annual escalation (displayed %; stored as fraction)', Example: '3%' },
   { Sheet: 'Lease Comps', Column: 'Confidence', 'Data Type': 'enum', Description: 'High / Medium / Low', Example: 'High' },
+  { Sheet: 'Sales Comps', Column: 'Sale Price', 'Data Type': 'currency', Description: 'Total sale price', Example: '15000000' },
+  { Sheet: 'Sales Comps', Column: 'Price ($/SF)', 'Data Type': 'currency', Description: 'Sale price per SF', Example: '$125.00' },
+  { Sheet: 'Sales Comps', Column: 'Cap Rate %', 'Data Type': 'percent', Description: 'Cap rate (displayed %; stored as fraction)', Example: '6.50%' },
+  { Sheet: 'Sales Comps', Column: 'NOI', 'Data Type': 'currency', Description: 'Net operating income at time of sale', Example: '975000' },
+  { Sheet: 'Sales Comps', Column: 'Occupancy %', 'Data Type': 'percent', Description: 'Occupancy at sale (displayed %; stored as fraction)', Example: '95%' },
+  { Sheet: 'Sales Comps', Column: 'Confidence', 'Data Type': 'enum', Description: 'High / Medium / Low', Example: 'High' },
   { Sheet: 'AM Pending', Column: 'Item Type', 'Data Type': 'enum', Description: 'Deliverable / Construction Followup / Tenant Request / etc.', Example: 'Deliverable' },
   { Sheet: 'AM Pending', Column: 'Status', 'Data Type': 'enum', Description: 'Open / In Progress / Waiting / Done / Cancelled', Example: 'Open' },
   { Sheet: 'AM Pending', Column: 'Cadence', 'Data Type': 'enum', Description: 'One-Time / Monthly / Quarterly / Bi-Annual / Annual', Example: 'Quarterly' },
@@ -1497,6 +1558,7 @@ function buildWorkbook(
         devProjects: [],
         propertyTaxAppeals: [],
         leaseComps: [],
+        salesComps: [],
         amPendingItems: [],
         contacts: [],
         devProjectContacts: [],
@@ -1821,6 +1883,44 @@ function buildWorkbook(
     XLSX.utils.book_append_sheet(wb, wsLc, 'Lease Comps');
   }
 
+  if (data.salesComps.length > 0) {
+    const scData = data.salesComps.map((c) => ({
+      'ID': c.id,
+      'Property Name': c.propertyName ?? '',
+      'Address': c.buildingAddress ?? '',
+      'Market': c.market ?? '',
+      'Property Type': c.propertyType ?? '',
+      'Building Type': c.buildingType ?? '',
+      'Sale Date': c.saleDate ?? '',
+      'Sale Price': c.salePrice ?? '',
+      'Price ($/SF)': formatCurrency(c.pricePSF),
+      'Cap Rate %': formatFractionAsPercent(c.capRate),
+      'NOI': c.noi ?? '',
+      'Building SF': c.buildingSF ?? '',
+      'Land (Acres)': c.landAcres ?? '',
+      'Year Built': c.yearBuilt ?? '',
+      'Occupancy %': formatFractionAsPercent(c.occupancyPct),
+      'Buyer': c.buyer ?? '',
+      'Seller': c.seller ?? '',
+      'Source': c.source ?? '',
+      'Source URL': c.sourceUrl ?? '',
+      'Confidence': c.confidence,
+      'Confidential': c.confidential ? 'Yes' : 'No',
+      'Notes': c.notes ?? '',
+      'Created At': c.createdAt,
+      'Updated At': c.updatedAt,
+    }));
+    const wsSc = XLSX.utils.json_to_sheet(scData);
+    wsSc['!cols'] = [
+      { wch: 38 }, { wch: 22 }, { wch: 30 }, { wch: 16 }, { wch: 14 },
+      { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 12 },
+      { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
+      { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 30 }, { wch: 10 },
+      { wch: 12 }, { wch: 40 }, { wch: 22 }, { wch: 22 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsSc, 'Sales Comps');
+  }
+
   if (data.amPendingItems.length > 0) {
     const amData = data.amPendingItems.map((i) => ({
       'ID': i.id,
@@ -2141,7 +2241,7 @@ const VIEW_ENTITY_MAP: Record<string, (keyof FullDataSet)[]> = {
   prospects: ['deals', 'activities'],
   rentroll: ['rentRoll', 'activities'],
   underwrite: ['scenarios'],
-  comps: ['leaseComps'],
+  comps: ['leaseComps', 'salesComps'],
   contacts: ['contacts'],
   development: ['devProjects', 'devProjectContacts', 'devProjectNotes', 'buildings'],
   'asset-mgmt': ['amPendingItems', 'propertyTaxAppeals'],

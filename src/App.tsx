@@ -30,6 +30,7 @@ import type {
   DispositionListingContact,
   DispositionListingNote,
   LeaseComp,
+  SalesComp,
   OnboardingChecklist,
   OnboardingItem,
   PropertyTaxAppeal,
@@ -40,8 +41,9 @@ import { defaultDeal, defaultOnboardingChecklist, defaultRentRollRow } from './t
 import { DEFAULT_GLOBALS, DEFAULT_INPUTS_BASE } from './lib/lease-math/types';
 import type { ScenarioInputs } from './lib/lease-math/types';
 import { runScenario } from './lib/lease-math/calc';
-import { loadFromFile, saveToFile, buildWorkbookBlob, buildViewWorkbookBlob } from './lib/excel';
+import { loadFromFile } from './lib/excel';
 import type { FullDataSet } from './lib/excel';
+import { buildStyledWorkbookBlob, buildStyledViewWorkbookBlob } from './lib/excel-styled';
 import { saveSnapshot, loadSnapshot, clearSnapshot } from './lib/autosave';
 import { encodeShare, decodeShare, readShareFromUrl, clearShareFromUrl } from './lib/share';
 import { makeStatusChangeEntry } from './lib/activity';
@@ -119,6 +121,12 @@ import {
   deleteLeaseComp as deleteLeaseCompRow,
   subscribeLeaseComps,
 } from './lib/repo/leaseComps';
+import {
+  listSalesComps,
+  upsertSalesComp,
+  deleteSalesComp as deleteSalesCompRow,
+  subscribeSalesComps,
+} from './lib/repo/salesComps';
 import { listAllBuildings, subscribeBuildings } from './lib/repo/buildings';
 import {
   listPropertyTaxAppeals,
@@ -227,6 +235,7 @@ function App() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [devProjects, setDevProjects] = useState<DevelopmentProject[]>([]);
   const [leaseComps, setLeaseComps] = useState<LeaseComp[]>([]);
+  const [salesComps, setSalesComps] = useState<SalesComp[]>([]);
   // All buildings, eagerly loaded so the rent-roll/deal drawers can offer
   // a space picker. MapView keeps its own state for now (its render path
   // already drives off it); these two subscriptions co-exist fine.
@@ -289,6 +298,7 @@ function App() {
       if (result.scenarios?.length) ops.push(Promise.all(result.scenarios.map(upsertScenario)).then(() => {}));
       if (result.devProjects?.length) ops.push(Promise.all(result.devProjects.map(upsertDevelopmentProject)).then(() => {}));
       if (result.leaseComps?.length) ops.push(Promise.all(result.leaseComps.map(upsertLeaseComp)).then(() => {}));
+      if (result.salesComps?.length) ops.push(Promise.all(result.salesComps.map(upsertSalesComp)).then(() => {}));
       if (result.propertyTaxAppeals?.length) ops.push(Promise.all(result.propertyTaxAppeals.map(upsertPropertyTaxAppeal)).then(() => {}));
       if (result.amPendingItems?.length) ops.push(Promise.all(result.amPendingItems.map(upsertAMPendingItem)).then(() => {}));
       if (result.contacts?.length) ops.push(Promise.all(result.contacts.map(upsertContact)).then(() => {}));
@@ -358,7 +368,7 @@ function App() {
       (async () => {
         try {
           const [
-            d, r, a, o, dev, comps, bldgs, appeals, amItems,
+            d, r, a, o, dev, comps, sComps, bldgs, appeals, amItems,
             crmContacts, crmLinks, crmNotes,
             acqTargets, acqLinks, acqNotes,
             dispoListings, dispoLinks, dispoNotes,
@@ -369,6 +379,7 @@ function App() {
             listOnboardings(),
             listDevelopmentProjects(),
             listLeaseComps(),
+            listSalesComps(),
             listAllBuildings(),
             listPropertyTaxAppeals(),
             listAMPendingItems(),
@@ -390,6 +401,7 @@ function App() {
           setOnboardings(o.map(reconcileWithTemplate));
           setDevProjects(dev);
           setLeaseComps(comps);
+          setSalesComps(sComps);
           setBuildings(bldgs);
           setPropertyTaxAppeals(appeals);
           setAMPendingItems(amItems);
@@ -523,6 +535,17 @@ function App() {
           return next;
         }),
       onDelete: (id) => setLeaseComps((prev) => prev.filter((x) => x.id !== id)),
+    });
+    const unsubSalesComps = subscribeSalesComps({
+      onUpsert: (c) =>
+        setSalesComps((prev) => {
+          const idx = prev.findIndex((x) => x.id === c.id);
+          if (idx === -1) return [...prev, c];
+          const next = prev.slice();
+          next[idx] = c;
+          return next;
+        }),
+      onDelete: (id) => setSalesComps((prev) => prev.filter((x) => x.id !== id)),
     });
     // Note: MapView also subscribes to buildings — duplicate subscriptions
     // are fine, channels are isolated. If we want to dedupe later, lift
@@ -677,6 +700,7 @@ function App() {
       unsubScenarios();
       unsubDev();
       unsubComps();
+      unsubSalesComps();
       unsubBldgs();
       unsubAppeals();
       unsubAMItems();
@@ -760,14 +784,14 @@ function App() {
 
   const gatherFullDataSet = (): FullDataSet => ({
     deals, rentRoll, activities, onboardings, scenarios, buildings,
-    devProjects, propertyTaxAppeals: propertyTaxAppeals, leaseComps, amPendingItems,
+    devProjects, propertyTaxAppeals: propertyTaxAppeals, leaseComps, salesComps, amPendingItems,
     contacts, devProjectContacts, devProjectNotes,
     acquisitionTargets, acquisitionTargetContacts, acquisitionTargetNotes,
     dispositionListings, dispositionListingContacts, dispositionListingNotes,
   });
 
-  const handleViewExport = (viewName: string) => {
-    const blob = buildViewWorkbookBlob(viewName, gatherFullDataSet());
+  const handleViewExport = async (viewName: string) => {
+    const blob = await buildStyledViewWorkbookBlob(viewName, gatherFullDataSet());
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -789,6 +813,7 @@ function App() {
       if (result.devProjects.length) { setDevProjects(result.devProjects); imported += result.devProjects.length; }
       if (result.propertyTaxAppeals.length) { setPropertyTaxAppeals(result.propertyTaxAppeals); imported += result.propertyTaxAppeals.length; }
       if (result.leaseComps.length) { setLeaseComps(result.leaseComps); imported += result.leaseComps.length; }
+      if (result.salesComps.length) { setSalesComps(result.salesComps); imported += result.salesComps.length; }
       if (result.amPendingItems.length) { setAMPendingItems(result.amPendingItems); imported += result.amPendingItems.length; }
       if (result.contacts.length) { setContacts(result.contacts); imported += result.contacts.length; }
       if (result.devProjectContacts.length) { setDevProjectContacts(result.devProjectContacts); imported += result.devProjectContacts.length; }
@@ -806,9 +831,9 @@ function App() {
     }
   };
 
-  const handleSkillDataDownload = (skillName: string) => {
+  const handleSkillDataDownload = async (skillName: string) => {
     const data = gatherFullDataSet();
-    const blob = buildWorkbookBlob(data);
+    const blob = await buildStyledWorkbookBlob(data);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -843,9 +868,8 @@ function App() {
             return;
           }
         }
-        const blob = buildWorkbookBlob(gatherFullDataSet());
+        const blob = await buildStyledWorkbookBlob(gatherFullDataSet());
         await writeToHandle(fileHandle, blob);
-        // Re-read to grab the new mtime (after the write)
         const after = await readFromHandle(fileHandle);
         setLastSeenModified(after.lastModified);
         await updateLastSeenModified(after.lastModified);
@@ -857,7 +881,13 @@ function App() {
       return;
     }
     const name = filename || 'leases.xlsx';
-    saveToFile(gatherFullDataSet(), undefined, undefined, undefined, name);
+    const blob = await buildStyledWorkbookBlob(gatherFullDataSet());
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleReconnect = async () => {
@@ -1312,6 +1342,22 @@ function App() {
   const handleDeleteLeaseComp = (id: string) => {
     setLeaseComps((prev) => prev.filter((c) => c.id !== id));
     writeThrough('delete comp', deleteLeaseCompRow(id));
+  };
+
+  const handleSaveSalesComp = (updated: SalesComp) => {
+    setSalesComps((prev) => {
+      const idx = prev.findIndex((c) => c.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save sales comp', upsertSalesComp(updated));
+  };
+
+  const handleDeleteSalesComp = (id: string) => {
+    setSalesComps((prev) => prev.filter((c) => c.id !== id));
+    writeThrough('delete sales comp', deleteSalesCompRow(id));
   };
 
   const handleSavePropertyTaxAppeal = (updated: PropertyTaxAppeal) => {
@@ -1846,6 +1892,9 @@ function App() {
               comps={leaseComps}
               onSave={handleSaveLeaseComp}
               onDelete={handleDeleteLeaseComp}
+              salesComps={salesComps}
+              onSaveSalesComp={handleSaveSalesComp}
+              onDeleteSalesComp={handleDeleteSalesComp}
               onExcelExport={() => handleViewExport('comps')}
               onExcelImport={(f) => handleViewImport('comps', f)}
             />

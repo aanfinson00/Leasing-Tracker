@@ -710,6 +710,68 @@ export const LeaseCompSchema = z.object({
 export type LeaseComp = z.infer<typeof LeaseCompSchema>;
 
 // ──────────────────────────────────────────────────────────────────
+// Sales Comps — closed sale transactions used as reference data for
+// acquisitions, dispositions, and underwriting. Separate from lease
+// comps because the fields are fundamentally different (price vs rent).
+// ──────────────────────────────────────────────────────────────────
+
+export const SalesCompSchema = z.object({
+  id: z.string().uuid(),
+
+  propertyName: z.string().nullable().optional(),
+  buildingAddress: z.string().nullable().optional(),
+  market: z.string().nullable().optional(),
+  propertyType: z.string().nullable().optional(),
+  buildingType: z.string().nullable().optional(),
+
+  saleDate: z.string().nullable().optional(),
+  salePrice: z.number().min(0).nullable().optional(),
+  pricePSF: z.number().min(0).nullable().optional(),
+  capRate: z.number().nullable().optional(),
+  noi: z.number().nullable().optional(),
+
+  buildingSF: z.number().positive().nullable().optional(),
+  landAcres: z.number().positive().nullable().optional(),
+  yearBuilt: z.number().int().nullable().optional(),
+  occupancyPct: z.number().nullable().optional(),
+
+  buyer: z.string().nullable().optional(),
+  seller: z.string().nullable().optional(),
+
+  source: z.string().nullable().optional(),
+  sourceUrl: z.string().nullable().optional(),
+  confidence: CompConfidenceEnum,
+  confidential: z.boolean(),
+
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((c) => ({
+  ...c,
+  propertyName: c.propertyName ?? null,
+  buildingAddress: c.buildingAddress ?? null,
+  market: c.market ?? null,
+  propertyType: c.propertyType ?? null,
+  buildingType: c.buildingType ?? null,
+  saleDate: c.saleDate ?? null,
+  salePrice: c.salePrice ?? null,
+  pricePSF: c.pricePSF ?? null,
+  capRate: c.capRate ?? null,
+  noi: c.noi ?? null,
+  buildingSF: c.buildingSF ?? null,
+  landAcres: c.landAcres ?? null,
+  yearBuilt: c.yearBuilt ?? null,
+  occupancyPct: c.occupancyPct ?? null,
+  buyer: c.buyer ?? null,
+  seller: c.seller ?? null,
+  source: c.source ?? null,
+  sourceUrl: c.sourceUrl ?? null,
+  notes: c.notes ?? null,
+}));
+
+export type SalesComp = z.infer<typeof SalesCompSchema>;
+
+// ──────────────────────────────────────────────────────────────────
 // Asset Management Pending Items — operating to-do list across the
 // portfolio. One table covers all 5 playbook categories.
 // ──────────────────────────────────────────────────────────────────
