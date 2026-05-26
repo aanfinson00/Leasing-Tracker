@@ -1881,7 +1881,7 @@ function App() {
 
         <main className="flex-1 px-6 sm:px-10 lg:px-12 pb-12 w-full space-y-8">
           {view === 'reports' ? (
-            <ReportsView deals={deals} rentRoll={rentRoll} />
+            <ReportsView deals={deals} rentRoll={rentRoll} buildings={buildings} />
           ) : view === 'underwrite' ? (
             <UnderwriteView
               deals={deals}
