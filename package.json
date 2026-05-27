@@ -13,6 +13,7 @@
     "@react-pdf/renderer": "^4.5.1",
     "@supabase/supabase-js": "^2.106.1",
     "@tanstack/react-table": "^8.21.3",
+    "@turf/turf": "^7.3.5",
     "buffer": "^6.0.3",
     "date-fns": "^4.2.1",
     "dexie": "^4.4.2",

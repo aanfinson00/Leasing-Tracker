@@ -506,6 +506,9 @@ export const DevelopmentProjectSchema = z.object({
 
   projectName: z.string().min(1, 'Project name is required'),
   market: z.string().nullable().optional(),
+  submarket: z.string().nullable().optional(),
+  county: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
   address: z.string().nullable().optional(),
 
   phase: DevPhaseEnum,
@@ -538,6 +541,9 @@ export const DevelopmentProjectSchema = z.object({
 }).transform((p) => ({
   ...p,
   market: p.market ?? null,
+  submarket: p.submarket ?? null,
+  county: p.county ?? null,
+  city: p.city ?? null,
   address: p.address ?? null,
   totalSF: p.totalSF ?? null,
   acres: p.acres ?? null,
@@ -1048,6 +1054,9 @@ export const AcquisitionTargetSchema = z.object({
 
   targetName: z.string().min(1, 'Target name is required'),
   market: z.string().nullable().optional(),
+  submarket: z.string().nullable().optional(),
+  county: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
   address: z.string().nullable().optional(),
   propertyType: z.string().nullable().optional(),
 
@@ -1086,6 +1095,9 @@ export const AcquisitionTargetSchema = z.object({
 }).transform((a) => ({
   ...a,
   market: a.market ?? null,
+  submarket: a.submarket ?? null,
+  county: a.county ?? null,
+  city: a.city ?? null,
   address: a.address ?? null,
   propertyType: a.propertyType ?? null,
   acres: a.acres ?? null,
@@ -1179,6 +1191,9 @@ export const DispositionListingSchema = z.object({
   assetName: z.string().min(1, 'Asset name is required'),
   buildingId: z.string().nullable().optional(),
   market: z.string().nullable().optional(),
+  submarket: z.string().nullable().optional(),
+  county: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
   address: z.string().nullable().optional(),
   propertyType: z.string().nullable().optional(),
 
@@ -1219,6 +1234,9 @@ export const DispositionListingSchema = z.object({
   ...d,
   buildingId: d.buildingId ?? null,
   market: d.market ?? null,
+  submarket: d.submarket ?? null,
+  county: d.county ?? null,
+  city: d.city ?? null,
   address: d.address ?? null,
   propertyType: d.propertyType ?? null,
   totalSF: d.totalSF ?? null,

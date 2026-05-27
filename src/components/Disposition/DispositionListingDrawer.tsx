@@ -238,6 +238,10 @@ export function DispositionListingDrawer({
       assetName: v.assetName.trim(),
       buildingId: listing.buildingId,
       market: parseStr(v.market),
+      // submarket / county / city auto-derived at App-level save (applyGeoTags).
+      submarket: listing.submarket ?? null,
+      county: listing.county ?? null,
+      city: listing.city ?? null,
       address: parseStr(v.address),
       propertyType: parseStr(v.propertyType),
       status: v.status,

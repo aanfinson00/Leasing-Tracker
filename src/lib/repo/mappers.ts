@@ -418,6 +418,9 @@ export interface DevelopmentProjectRow {
   id: string;
   project_name: string;
   market: string | null;
+  submarket: string | null;
+  county: string | null;
+  city: string | null;
   address: string | null;
   phase: DevelopmentProject['phase'];
   total_sf: number | string | null;
@@ -450,6 +453,9 @@ export const developmentProjectToRow = (
   id: p.id,
   project_name: p.projectName,
   market: p.market,
+  submarket: p.submarket,
+  county: p.county,
+  city: p.city,
   address: p.address,
   phase: p.phase,
   total_sf: p.totalSF,
@@ -479,6 +485,9 @@ export const rowToDevelopmentProject = (
   id: r.id,
   projectName: r.project_name,
   market: r.market,
+  submarket: r.submarket,
+  county: r.county,
+  city: r.city,
   address: r.address,
   phase: r.phase,
   totalSF: numOrNull(r.total_sf),
@@ -987,6 +996,9 @@ export interface AcquisitionTargetRow {
   id: string;
   target_name: string;
   market: string | null;
+  submarket: string | null;
+  county: string | null;
+  city: string | null;
   address: string | null;
   property_type: string | null;
   status: AcquisitionTarget['status'];
@@ -1024,6 +1036,9 @@ export const acquisitionTargetToRow = (
   id: a.id,
   target_name: a.targetName,
   market: a.market,
+  submarket: a.submarket,
+  county: a.county,
+  city: a.city,
   address: a.address,
   property_type: a.propertyType,
   status: a.status,
@@ -1056,6 +1071,9 @@ export const rowToAcquisitionTarget = (r: AcquisitionTargetRow): AcquisitionTarg
   id: r.id,
   targetName: r.target_name,
   market: r.market,
+  submarket: r.submarket,
+  county: r.county,
+  city: r.city,
   address: r.address,
   propertyType: r.property_type,
   status: r.status,
@@ -1176,6 +1194,9 @@ export interface DispositionListingRow {
   asset_name: string;
   building_id: string | null;
   market: string | null;
+  submarket: string | null;
+  county: string | null;
+  city: string | null;
   address: string | null;
   property_type: string | null;
   status: DispositionListing['status'];
@@ -1215,6 +1236,9 @@ export const dispositionListingToRow = (
   asset_name: d.assetName,
   building_id: d.buildingId,
   market: d.market,
+  submarket: d.submarket,
+  county: d.county,
+  city: d.city,
   address: d.address,
   property_type: d.propertyType,
   status: d.status,
@@ -1249,6 +1273,9 @@ export const rowToDispositionListing = (r: DispositionListingRow): DispositionLi
   assetName: r.asset_name,
   buildingId: r.building_id,
   market: r.market,
+  submarket: r.submarket,
+  county: r.county,
+  city: r.city,
   address: r.address,
   propertyType: r.property_type,
   status: r.status,
