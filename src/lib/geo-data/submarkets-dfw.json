@@ -1,0 +1,160 @@
+{
+  "type": "FeatureCollection",
+  "_note": "Hand-drawn approximations of CoStar DFW industrial submarkets. Polygons are loose bounding shapes aligned to freeway corridors / known industrial concentrations, NOT CoStar's exact boundaries. Refine using a CoStar export when available.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "DFW Airport", "market": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-97.10, 32.82],
+          [-96.92, 32.82],
+          [-96.92, 32.98],
+          [-97.10, 32.98],
+          [-97.10, 32.82]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Great Southwest (GSW)", "market": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-97.15, 32.65],
+          [-96.92, 32.65],
+          [-96.92, 32.82],
+          [-97.15, 32.82],
+          [-97.15, 32.65]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "North Stemmons", "market": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-96.92, 32.82],
+          [-96.78, 32.82],
+          [-96.78, 32.95],
+          [-96.92, 32.95],
+          [-96.92, 32.82]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Northwest Dallas", "market": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-96.92, 32.95],
+          [-96.78, 32.95],
+          [-96.78, 33.07],
+          [-96.92, 33.07],
+          [-96.92, 32.95]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "South Dallas", "market": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-96.92, 32.55],
+          [-96.65, 32.55],
+          [-96.65, 32.78],
+          [-96.92, 32.78],
+          [-96.92, 32.55]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "East Dallas / Mesquite-Garland", "market": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-96.78, 32.75],
+          [-96.50, 32.75],
+          [-96.50, 32.95],
+          [-96.78, 32.95],
+          [-96.78, 32.75]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Far North Dallas / Plano-Frisco", "market": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-96.92, 33.07],
+          [-96.55, 33.07],
+          [-96.55, 33.30],
+          [-96.92, 33.30],
+          [-96.92, 33.07]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Lewisville / Coppell", "market": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-97.10, 32.98],
+          [-96.92, 32.98],
+          [-96.92, 33.15],
+          [-97.10, 33.15],
+          [-97.10, 32.98]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "North Fort Worth / Alliance", "market": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-97.45, 32.85],
+          [-97.15, 32.85],
+          [-97.15, 33.15],
+          [-97.45, 33.15],
+          [-97.45, 32.85]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "South Fort Worth", "market": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-97.55, 32.55],
+          [-97.20, 32.55],
+          [-97.20, 32.75],
+          [-97.55, 32.75],
+          [-97.55, 32.55]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Central Fort Worth", "market": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-97.45, 32.70],
+          [-97.20, 32.70],
+          [-97.20, 32.85],
+          [-97.45, 32.85],
+          [-97.45, 32.70]
+        ]]
+      }
+    }
+  ]
+}

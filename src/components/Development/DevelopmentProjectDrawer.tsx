@@ -217,6 +217,12 @@ export function DevelopmentProjectDrawer({
       id: project.id,
       projectName: v.projectName.trim(),
       market: parseStr(v.market),
+      // submarket / county / city are derived from lat/lng at the App-level
+      // save handler (applyGeoTags). Initialize null here; the handler
+      // overwrites with the polygon lookup.
+      submarket: project.submarket ?? null,
+      county: project.county ?? null,
+      city: project.city ?? null,
       address: parseStr(v.address),
       phase: v.phase,
       totalSF: parseNum(v.totalSF),

@@ -1,0 +1,5 @@
+{
+  "type": "FeatureCollection",
+  "_note": "SCAFFOLD — empty until you drop in TIGER/Line county polygons. See src/lib/geo-data/README.md.",
+  "features": []
+}

@@ -226,6 +226,10 @@ export function AcquisitionTargetDrawer({
       id: target.id,
       targetName: v.targetName.trim(),
       market: parseStr(v.market),
+      // submarket / county / city auto-derived at App-level save (applyGeoTags).
+      submarket: target.submarket ?? null,
+      county: target.county ?? null,
+      city: target.city ?? null,
       address: parseStr(v.address),
       propertyType: parseStr(v.propertyType),
       status: v.status,
