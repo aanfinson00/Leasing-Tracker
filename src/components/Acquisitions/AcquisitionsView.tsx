@@ -12,6 +12,8 @@ import { ACQ_PIPELINE_ORDER, AcquisitionStatusEnum } from '../../types';
 import { AcquisitionTargetDrawer } from './AcquisitionTargetDrawer';
 import { ExcelToolbar } from '../ExcelToolbar';
 import { MapView } from '../Map/MapView';
+import { GeoFilterBar } from '../GeoFilterBar';
+import { useGeoFilters, applyFilter } from '../../lib/useGeoFilters';
 
 interface AcquisitionsViewProps {
   targets: AcquisitionTarget[];
@@ -142,16 +144,35 @@ export function AcquisitionsView({
     AcquisitionStatus | 'all' | 'active'
   >('active');
   const [mapOpen, setMapOpen] = useState(true);
+  const { filters: geoFilters, setFilters: setGeoFilters, reset: resetGeoFilters } = useGeoFilters('acq');
+
+  const geoFiltered = useMemo(() => applyFilter(targets, geoFilters), [targets, geoFilters]);
 
   const filtered = useMemo(() => {
-    if (statusFilter === 'all') return targets;
+    if (statusFilter === 'all') return geoFiltered;
     if (statusFilter === 'active') {
-      return targets.filter(
+      return geoFiltered.filter(
         (t) => !SIDE_STATUSES.includes(t.status) && t.status !== 'Closed'
       );
     }
-    return targets.filter((t) => t.status === statusFilter);
-  }, [targets, statusFilter]);
+    return geoFiltered.filter((t) => t.status === statusFilter);
+  }, [geoFiltered, statusFilter]);
+
+  const visible = useMemo(() => {
+    const submarkets = new Set<string>();
+    const counties = new Set<string>();
+    const cities = new Set<string>();
+    for (const t of targets) {
+      if (t.submarket) submarkets.add(t.submarket);
+      if (t.county) counties.add(t.county);
+      if (t.city) cities.add(t.city);
+    }
+    return {
+      submarkets: Array.from(submarkets).sort(),
+      counties: Array.from(counties).sort(),
+      cities: Array.from(cities).sort(),
+    };
+  }, [targets]);
 
   const byStatus = useMemo(() => {
     const m = new Map<AcquisitionStatus, AcquisitionTarget[]>();
@@ -231,7 +252,18 @@ export function AcquisitionsView({
           </div>
         )}
 
-        <div className="mt-5 flex items-center gap-2 flex-wrap">
+        <div className="mt-4 border-t border-border pt-3">
+          <GeoFilterBar
+            filters={geoFilters}
+            onChange={setGeoFilters}
+            onReset={resetGeoFilters}
+            visibleSubmarkets={visible.submarkets}
+            visibleCounties={visible.counties}
+            visibleCities={visible.cities}
+          />
+        </div>
+
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => setStatusFilter('active')}
