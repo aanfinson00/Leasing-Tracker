@@ -155,6 +155,9 @@ export interface RentRollDbRow {
   current_summary: string | null;
   notes: string | null;
   sharepoint_url: string | null;
+  security_deposit: number | string | null;
+  rent_commencement_date: string | null;
+  cashflow_json: unknown | null;
 }
 
 export const rentRollToRow = (r: RentRollRow): RentRollDbRow => ({
@@ -190,6 +193,9 @@ export const rentRollToRow = (r: RentRollRow): RentRollDbRow => ({
   current_summary: r.currentSummary ?? null,
   notes: r.notes ?? null,
   sharepoint_url: r.sharepointUrl ?? null,
+  security_deposit: r.securityDeposit ?? null,
+  rent_commencement_date: r.rentCommencementDate ?? null,
+  cashflow_json: r.cashflowJson ?? null,
 });
 
 export const rowToRentRoll = (r: RentRollDbRow): RentRollRow => ({
@@ -225,6 +231,9 @@ export const rowToRentRoll = (r: RentRollDbRow): RentRollRow => ({
   currentSummary: r.current_summary,
   notes: r.notes,
   sharepointUrl: r.sharepoint_url,
+  securityDeposit: numOrNull(r.security_deposit),
+  rentCommencementDate: r.rent_commencement_date,
+  cashflowJson: r.cashflow_json ?? null,
 });
 
 // ── ActivityEntry ──────────────────────────────────────────────────

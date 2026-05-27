@@ -1,0 +1,36 @@
+/promote-deal-to-rent-roll
+
+Deal:       {{deal.dealName}} ({{deal.dealId}})
+Tenant:     {{deal.prospectTenant}}
+Building:   {{deal.building}} · Space {{deal.spaceId}}
+Lease docs: {{deal.sharepointUrl}}
+
+What we already know (from the deal record):
+- Lease start (expected): {{deal.expectedStart}}
+- Term:                   {{deal.proposedTermMonths}} months
+- Starting rent:          ${{deal.targetRent}}/SF
+- Free rent:              {{deal.freeRentMonths}} months
+- TI:                     ${{deal.tiPerSF}}/SF
+- TI note:                {{deal.tiNote}}
+- Notes:                  {{deal.notes}}
+
+Open the executed lease (and LOI/PSA/redline) at the SharePoint folder above. Extract the finalize fields and any rent-stream details that aren't in the deal record yet — specifically:
+
+  security_deposit           (dollars)
+  rent_commencement_date     (YYYY-MM-DD)
+  lease_start                (YYYY-MM-DD)
+  lease_term_months          (integer)
+  starting_annual_rent_psf   (dollars/SF/year, year 1)
+  annual_rent_bumps_pct      (3 for 3% — or 0.03; note which)
+  free_rent_months           (integer)
+  ti_per_sf                  (dollars/SF)
+  commission_structure_pct   (optional)
+  commission_dollar          (optional)
+
+Cite the lease section for every field you extract (in the `notes` column). If a field can't be located, leave it blank — don't guess.
+
+Output: Excel workbook with two sheets:
+  - sheet `rent_roll` — one row, columns as above
+  - sheet `finalize`  — one row, columns: deal_id, security_deposit, rent_commencement_date
+
+Save the workbook and tell me the filename. I'll paste the values into the Promote drawer (or upload the workbook when import is wired up).

@@ -87,5 +87,11 @@ export function previewPromote(
     // Carry the deal's SharePoint URL forward to the tenant if the rent_roll
     // row doesn't already have one; preserve any existing value otherwise.
     sharepointUrl: existing?.sharepointUrl ?? deal.sharepointUrl ?? null,
+
+    // Finalize-at-promote fields — user fills these in inside PromoteDrawer
+    // before confirming. Default null; preserve any existing values.
+    securityDeposit: existing?.securityDeposit ?? null,
+    rentCommencementDate: existing?.rentCommencementDate ?? deal.expectedStart ?? null,
+    cashflowJson: existing?.cashflowJson ?? null,
   };
 }
