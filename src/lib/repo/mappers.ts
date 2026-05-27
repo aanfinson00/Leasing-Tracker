@@ -21,6 +21,7 @@ import type {
   DispositionListingContact,
   DispositionListingNote,
   LeaseComp,
+  SalesComp,
   OnboardingChecklist,
   PropertyTaxAppeal,
   PropertyTaxAppealStatus,
@@ -129,7 +130,7 @@ export interface RentRollDbRow {
   property_type: string | null;
   building_type: string | null;
   tenant_name: string | null;
-  tenant_rating: number | null;
+  tenant_rating: string | null;
   occupied: boolean;
   uw_basis: RentRollRow['uwBasis'];
   leasable_sf: number | null;
@@ -197,7 +198,7 @@ export const rowToRentRoll = (r: RentRollDbRow): RentRollRow => ({
   propertyType: r.property_type,
   buildingType: r.building_type,
   tenantName: r.tenant_name,
-  tenantRating: r.tenant_rating,
+  tenantRating: r.tenant_rating as RentRollRow['tenantRating'],
   occupied: r.occupied,
   uwBasis: r.uw_basis,
   leasableSF: r.leasable_sf,
@@ -433,6 +434,8 @@ export interface DevelopmentProjectRow {
   architect: string | null;
   risk_level: DevelopmentProject['riskLevel'];
   status_summary: string | null;
+  lat: number | string | null;
+  lng: number | string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -463,6 +466,8 @@ export const developmentProjectToRow = (
   architect: p.architect,
   risk_level: p.riskLevel,
   status_summary: p.statusSummary,
+  lat: p.lat,
+  lng: p.lng,
   notes: p.notes,
   created_at: p.createdAt,
   updated_at: p.updatedAt,
@@ -490,6 +495,8 @@ export const rowToDevelopmentProject = (
   architect: r.architect,
   riskLevel: r.risk_level,
   statusSummary: r.status_summary,
+  lat: numOrNull(r.lat),
+  lng: numOrNull(r.lng),
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -677,6 +684,94 @@ export const rowToLeaseComp = (r: LeaseCompRow): LeaseComp => ({
   updatedAt: r.updated_at,
 });
 
+// ── SalesComp ────────────────────────────────────────────────────
+
+export interface SalesCompRow {
+  id: string;
+  property_name: string | null;
+  building_address: string | null;
+  market: string | null;
+  property_type: string | null;
+  building_type: string | null;
+  sale_date: string | null;
+  sale_price: number | string | null;
+  price_psf: number | string | null;
+  cap_rate: number | string | null;
+  noi: number | string | null;
+  building_sf: number | string | null;
+  land_acres: number | string | null;
+  year_built: number | null;
+  occupancy_pct: number | string | null;
+  buyer: string | null;
+  seller: string | null;
+  source: string | null;
+  source_url: string | null;
+  confidence: SalesComp['confidence'];
+  confidential: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const salesCompToRow = (
+  c: SalesComp
+): Omit<SalesCompRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: c.id,
+  property_name: c.propertyName,
+  building_address: c.buildingAddress,
+  market: c.market,
+  property_type: c.propertyType,
+  building_type: c.buildingType,
+  sale_date: c.saleDate,
+  sale_price: c.salePrice,
+  price_psf: c.pricePSF,
+  cap_rate: c.capRate,
+  noi: c.noi,
+  building_sf: c.buildingSF,
+  land_acres: c.landAcres,
+  year_built: c.yearBuilt,
+  occupancy_pct: c.occupancyPct,
+  buyer: c.buyer,
+  seller: c.seller,
+  source: c.source,
+  source_url: c.sourceUrl,
+  confidence: c.confidence,
+  confidential: c.confidential,
+  notes: c.notes,
+  created_at: c.createdAt,
+  updated_at: c.updatedAt,
+});
+
+export const rowToSalesComp = (r: SalesCompRow): SalesComp => ({
+  id: r.id,
+  propertyName: r.property_name,
+  buildingAddress: r.building_address,
+  market: r.market,
+  propertyType: r.property_type,
+  buildingType: r.building_type,
+  saleDate: r.sale_date,
+  salePrice: numOrNull(r.sale_price),
+  pricePSF: numOrNull(r.price_psf),
+  capRate: numOrNull(r.cap_rate),
+  noi: numOrNull(r.noi),
+  buildingSF: numOrNull(r.building_sf),
+  landAcres: numOrNull(r.land_acres),
+  yearBuilt: r.year_built,
+  occupancyPct: numOrNull(r.occupancy_pct),
+  buyer: r.buyer,
+  seller: r.seller,
+  source: r.source,
+  sourceUrl: r.source_url,
+  confidence: r.confidence,
+  confidential: r.confidential,
+  notes: r.notes,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
 // ── AMPendingItem ─────────────────────────────────────────────────
 
 export interface AMPendingItemRow {
@@ -695,6 +790,9 @@ export interface AMPendingItemRow {
   completed_date: string | null;
   source: string | null;
   link: string | null;
+  cadence: string;
+  sent_to_tab: string | null;
+  sent_to_id: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -721,6 +819,9 @@ export const amPendingItemToRow = (
   completed_date: i.completedDate,
   source: i.source,
   link: i.link,
+  cadence: i.cadence,
+  sent_to_tab: i.sentToTab,
+  sent_to_id: i.sentToId,
   notes: i.notes,
   created_at: i.createdAt,
   updated_at: i.updatedAt,
@@ -742,6 +843,9 @@ export const rowToAMPendingItem = (r: AMPendingItemRow): AMPendingItem => ({
   completedDate: r.completed_date,
   source: r.source,
   link: r.link,
+  cadence: (r.cadence as AMPendingItem['cadence']) ?? 'One-Time',
+  sentToTab: r.sent_to_tab,
+  sentToId: r.sent_to_id,
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -904,6 +1008,8 @@ export interface AcquisitionTargetRow {
   diligence_status: Record<string, unknown>;
   risk_level: AcquisitionTarget['riskLevel'];
   status_summary: string | null;
+  lat: number | string | null;
+  lng: number | string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -939,6 +1045,8 @@ export const acquisitionTargetToRow = (
   diligence_status: a.diligenceStatus,
   risk_level: a.riskLevel,
   status_summary: a.statusSummary,
+  lat: a.lat,
+  lng: a.lng,
   notes: a.notes,
   created_at: a.createdAt,
   updated_at: a.updatedAt,
@@ -969,6 +1077,8 @@ export const rowToAcquisitionTarget = (r: AcquisitionTargetRow): AcquisitionTarg
   diligenceStatus: (r.diligence_status ?? {}) as Record<string, unknown>,
   riskLevel: r.risk_level,
   statusSummary: r.status_summary,
+  lat: numOrNull(r.lat),
+  lng: numOrNull(r.lng),
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -1088,6 +1198,8 @@ export interface DispositionListingRow {
   actual_closing_date: string | null;
   risk_level: DispositionListing['riskLevel'];
   status_summary: string | null;
+  lat: number | string | null;
+  lng: number | string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -1125,6 +1237,8 @@ export const dispositionListingToRow = (
   actual_closing_date: d.actualClosingDate,
   risk_level: d.riskLevel,
   status_summary: d.statusSummary,
+  lat: d.lat,
+  lng: d.lng,
   notes: d.notes,
   created_at: d.createdAt,
   updated_at: d.updatedAt,
@@ -1157,6 +1271,8 @@ export const rowToDispositionListing = (r: DispositionListingRow): DispositionLi
   actualClosingDate: r.actual_closing_date,
   riskLevel: r.risk_level,
   statusSummary: r.status_summary,
+  lat: numOrNull(r.lat),
+  lng: numOrNull(r.lng),
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,

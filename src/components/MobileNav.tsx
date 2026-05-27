@@ -3,14 +3,15 @@
 // horizontally-scrollable strip of icon + label buttons pinned to
 // the bottom of the screen.
 
-import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database, Users } from 'lucide-react';
+import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database, Users, Cpu, ExternalLink } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { View } from './Sidebar';
 
 interface NavItem {
-  id: View;
+  id: View | `external:${string}`;
   icon: LucideIcon;
   label: string;
+  href?: string;   // When set, opens the URL in a new tab instead of changing view.
 }
 
 // Short labels — bottom bar real estate is tight on phones.
@@ -27,14 +28,16 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'development', icon: HardHat, label: 'Dev' },
   { id: 'asset-mgmt', icon: ListChecks, label: 'AM Open' },
   { id: 'disposition', icon: HandCoins, label: 'Dispo' },
+  { id: 'external:sitesetter', icon: ExternalLink, label: 'SiteSetter', href: 'https://sitesetter.io' },
 ];
 
 interface Props {
   view: View;
   onChangeView: (v: View) => void;
+  onOpenSkills: () => void;
 }
 
-export function MobileNav({ view, onChangeView }: Props) {
+export function MobileNav({ view, onChangeView, onOpenSkills }: Props) {
   return (
     <nav
       className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-bg-elevated border-t border-border shadow-lift"
@@ -43,13 +46,22 @@ export function MobileNav({ view, onChangeView }: Props) {
       aria-label="Primary navigation"
     >
       <div className="flex items-stretch justify-around overflow-x-auto">
-        {NAV_ITEMS.map(({ id, icon: Icon, label }) => {
-          const active = id === view;
+        {NAV_ITEMS.map(({ id, icon: Icon, label, href }) => {
+          const isExternal = !!href;
+          const active = !isExternal && id === view;
           return (
             <button
               key={id}
               type="button"
-              onClick={() => onChangeView(id)}
+              onClick={() => {
+                if (isExternal && href) {
+                  window.open(href, '_blank', 'noopener,noreferrer');
+                  return;
+                }
+                if (!id.startsWith('external:')) {
+                  onChangeView(id as View);
+                }
+              }}
               className={[
                 'flex flex-col items-center justify-center gap-0.5 px-2 py-2 min-w-[56px] flex-1 transition-colors',
                 active ? 'text-accent' : 'text-fg-muted hover:text-fg',
@@ -62,6 +74,15 @@ export function MobileNav({ view, onChangeView }: Props) {
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={onOpenSkills}
+          className="flex flex-col items-center justify-center gap-0.5 px-2 py-2 min-w-[56px] flex-1 transition-colors text-fg-muted hover:text-fg"
+          aria-label="AI Skills"
+        >
+          <Cpu size={18} strokeWidth={1.75} />
+          <span className="text-[9px] font-medium leading-none mt-0.5">AI Skills</span>
+        </button>
       </div>
     </nav>
   );

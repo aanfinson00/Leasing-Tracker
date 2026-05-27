@@ -30,6 +30,7 @@ import type {
   DispositionListingContact,
   DispositionListingNote,
   LeaseComp,
+  SalesComp,
   OnboardingChecklist,
   OnboardingItem,
   PropertyTaxAppeal,
@@ -40,7 +41,9 @@ import { defaultDeal, defaultOnboardingChecklist, defaultRentRollRow } from './t
 import { DEFAULT_GLOBALS, DEFAULT_INPUTS_BASE } from './lib/lease-math/types';
 import type { ScenarioInputs } from './lib/lease-math/types';
 import { runScenario } from './lib/lease-math/calc';
-import { loadFromFile, saveToFile, buildWorkbookBlob } from './lib/excel';
+import { loadFromFile } from './lib/excel';
+import type { FullDataSet } from './lib/excel';
+import { buildStyledWorkbookBlob, buildStyledViewWorkbookBlob } from './lib/excel-styled';
 import { saveSnapshot, loadSnapshot, clearSnapshot } from './lib/autosave';
 import { encodeShare, decodeShare, readShareFromUrl, clearShareFromUrl } from './lib/share';
 import { makeStatusChangeEntry } from './lib/activity';
@@ -69,6 +72,7 @@ import { PromoteDrawer } from './components/PromoteDrawer';
 import { ReportsView } from './components/ReportsView';
 import { OnboardingView } from './components/Onboarding/OnboardingView';
 import { Sidebar, type View } from './components/Sidebar';
+import { SkillsModal } from './components/SkillsModal';
 import { SUPABASE_CONFIGURED } from './lib/supabase';
 import {
   listDeals,
@@ -117,6 +121,12 @@ import {
   deleteLeaseComp as deleteLeaseCompRow,
   subscribeLeaseComps,
 } from './lib/repo/leaseComps';
+import {
+  listSalesComps,
+  upsertSalesComp,
+  deleteSalesComp as deleteSalesCompRow,
+  subscribeSalesComps,
+} from './lib/repo/salesComps';
 import { listAllBuildings, subscribeBuildings } from './lib/repo/buildings';
 import {
   listPropertyTaxAppeals,
@@ -178,6 +188,10 @@ import {
 } from './lib/repo/dispositionListings';
 import { UnderwriteView } from './components/Underwrite/UnderwriteView';
 import { DevelopmentView } from './components/Development/DevelopmentView';
+import { DevelopmentProjectDrawer } from './components/Development/DevelopmentProjectDrawer';
+import { AcquisitionTargetDrawer } from './components/Acquisitions/AcquisitionTargetDrawer';
+import { DispositionListingDrawer } from './components/Disposition/DispositionListingDrawer';
+import { geocodeAddress } from './lib/geocode';
 import { CompsView } from './components/Comps/CompsView';
 import { ContactsView } from './components/Contacts/ContactsView';
 import { AcquisitionsView } from './components/Acquisitions/AcquisitionsView';
@@ -186,9 +200,11 @@ import { MapView } from './components/Map/MapView';
 import { AssetMgmtView } from './components/AssetMgmt/AssetMgmtView';
 import { GridBackground } from './components/GridBackground';
 import { MobileNav } from './components/MobileNav';
+import { ExcelToolbar } from './components/ExcelToolbar';
 
 function App() {
   const [view, setView] = useState<View>('prospects');
+  const [skillsOpen, setSkillsOpen] = useState(false);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([]);
   const [rentRoll, setRentRoll] = useState<RentRollRow[]>([]);
@@ -197,6 +213,15 @@ function App() {
   const [onboardings, setOnboardings] = useState<OnboardingChecklist[]>([]);
   const [filename, setFilename] = useState<string>('');
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  // App-level dev-project edit state, only opened when the Global Map pin
+  // is clicked. DevelopmentView keeps its own internal `editing` state for
+  // the in-page drawer.
+  const [editingDevProject, setEditingDevProject] =
+    useState<DevelopmentProject | null>(null);
+  const [editingAcqTarget, setEditingAcqTarget] =
+    useState<AcquisitionTarget | null>(null);
+  const [editingDispoListing, setEditingDispoListing] =
+    useState<DispositionListing | null>(null);
   const [editingRow, setEditingRow] = useState<RentRollRow | null>(null);
   const [promotingDeal, setPromotingDeal] = useState<Deal | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -210,6 +235,7 @@ function App() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [devProjects, setDevProjects] = useState<DevelopmentProject[]>([]);
   const [leaseComps, setLeaseComps] = useState<LeaseComp[]>([]);
+  const [salesComps, setSalesComps] = useState<SalesComp[]>([]);
   // All buildings, eagerly loaded so the rent-roll/deal drawers can offer
   // a space picker. MapView keeps its own state for now (its render path
   // already drives off it); these two subscriptions co-exist fine.
@@ -261,23 +287,32 @@ function App() {
   // Push a freshly-parsed workbook into Supabase (bulk upsert by id).
   // Called from the legacy file-handle reconnect path AND the Excel import
   // buttons. Idempotent — re-importing the same workbook is a no-op.
-  const pushWorkbookToSupabase = async (result: {
-    deals: Deal[];
-    rentRoll: RentRollRow[];
-    activities: ActivityEntry[];
-    onboardings: OnboardingChecklist[];
-  }) => {
+  const pushWorkbookToSupabase = async (result: Partial<FullDataSet>) => {
     if (!SUPABASE_CONFIGURED) return;
     try {
-      await Promise.all([
-        bulkUpsertDeals(result.deals),
-        bulkUpsertRentRoll(result.rentRoll),
-        bulkInsertActivities(result.activities),
-        bulkUpsertOnboardings(result.onboardings),
-      ]);
-      showToast(
-        `Imported ${result.deals.length} deals, ${result.rentRoll.length} rent roll rows`
-      );
+      const ops: Promise<void>[] = [];
+      if (result.deals?.length) ops.push(bulkUpsertDeals(result.deals));
+      if (result.rentRoll?.length) ops.push(bulkUpsertRentRoll(result.rentRoll));
+      if (result.activities?.length) ops.push(bulkInsertActivities(result.activities));
+      if (result.onboardings?.length) ops.push(bulkUpsertOnboardings(result.onboardings));
+      if (result.scenarios?.length) ops.push(Promise.all(result.scenarios.map(upsertScenario)).then(() => {}));
+      if (result.devProjects?.length) ops.push(Promise.all(result.devProjects.map(upsertDevelopmentProject)).then(() => {}));
+      if (result.leaseComps?.length) ops.push(Promise.all(result.leaseComps.map(upsertLeaseComp)).then(() => {}));
+      if (result.salesComps?.length) ops.push(Promise.all(result.salesComps.map(upsertSalesComp)).then(() => {}));
+      if (result.propertyTaxAppeals?.length) ops.push(Promise.all(result.propertyTaxAppeals.map(upsertPropertyTaxAppeal)).then(() => {}));
+      if (result.amPendingItems?.length) ops.push(Promise.all(result.amPendingItems.map(upsertAMPendingItem)).then(() => {}));
+      if (result.contacts?.length) ops.push(Promise.all(result.contacts.map(upsertContact)).then(() => {}));
+      if (result.devProjectContacts?.length) ops.push(Promise.all(result.devProjectContacts.map(upsertDevProjectContact)).then(() => {}));
+      if (result.devProjectNotes?.length) ops.push(Promise.all(result.devProjectNotes.map(upsertDevProjectNote)).then(() => {}));
+      if (result.acquisitionTargets?.length) ops.push(Promise.all(result.acquisitionTargets.map(upsertAcquisitionTarget)).then(() => {}));
+      if (result.acquisitionTargetContacts?.length) ops.push(Promise.all(result.acquisitionTargetContacts.map(upsertAcquisitionTargetContact)).then(() => {}));
+      if (result.acquisitionTargetNotes?.length) ops.push(Promise.all(result.acquisitionTargetNotes.map(upsertAcquisitionTargetNote)).then(() => {}));
+      if (result.dispositionListings?.length) ops.push(Promise.all(result.dispositionListings.map(upsertDispositionListing)).then(() => {}));
+      if (result.dispositionListingContacts?.length) ops.push(Promise.all(result.dispositionListingContacts.map(upsertDispositionListingContact)).then(() => {}));
+      if (result.dispositionListingNotes?.length) ops.push(Promise.all(result.dispositionListingNotes.map(upsertDispositionListingNote)).then(() => {}));
+      await Promise.all(ops);
+      const total = Object.values(result).reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
+      showToast(`Synced ${total} records to server`);
     } catch (err) {
       console.error('Bulk import to Supabase failed:', err);
       showToast('Server import failed — see console');
@@ -333,7 +368,7 @@ function App() {
       (async () => {
         try {
           const [
-            d, r, a, o, dev, comps, bldgs, appeals, amItems,
+            d, r, a, o, dev, comps, sComps, bldgs, appeals, amItems,
             crmContacts, crmLinks, crmNotes,
             acqTargets, acqLinks, acqNotes,
             dispoListings, dispoLinks, dispoNotes,
@@ -344,6 +379,7 @@ function App() {
             listOnboardings(),
             listDevelopmentProjects(),
             listLeaseComps(),
+            listSalesComps(),
             listAllBuildings(),
             listPropertyTaxAppeals(),
             listAMPendingItems(),
@@ -365,6 +401,7 @@ function App() {
           setOnboardings(o.map(reconcileWithTemplate));
           setDevProjects(dev);
           setLeaseComps(comps);
+          setSalesComps(sComps);
           setBuildings(bldgs);
           setPropertyTaxAppeals(appeals);
           setAMPendingItems(amItems);
@@ -499,9 +536,22 @@ function App() {
         }),
       onDelete: (id) => setLeaseComps((prev) => prev.filter((x) => x.id !== id)),
     });
-    // Note: MapView also subscribes to buildings — duplicate subscriptions
-    // are fine, channels are isolated. If we want to dedupe later, lift
-    // MapView's state up to here and pass it down.
+    const unsubSalesComps = subscribeSalesComps({
+      onUpsert: (c) =>
+        setSalesComps((prev) => {
+          const idx = prev.findIndex((x) => x.id === c.id);
+          if (idx === -1) return [...prev, c];
+          const next = prev.slice();
+          next[idx] = c;
+          return next;
+        }),
+      onDelete: (id) => setSalesComps((prev) => prev.filter((x) => x.id !== id)),
+    });
+    // Note: MapView also subscribes to buildings. The repo function gives
+    // each call a unique channel name (UUID suffix) so the two
+    // subscriptions don't share an underlying Realtime channel —
+    // otherwise the second `.on()` fires after the first `.subscribe()`
+    // and the Realtime client throws.
     const unsubBldgs = subscribeBuildings({
       onUpsert: (b) =>
         setBuildings((prev) => {
@@ -652,6 +702,7 @@ function App() {
       unsubScenarios();
       unsubDev();
       unsubComps();
+      unsubSalesComps();
       unsubBldgs();
       unsubAppeals();
       unsubAMItems();
@@ -733,6 +784,66 @@ function App() {
     }
   };
 
+  const gatherFullDataSet = (): FullDataSet => ({
+    deals, rentRoll, activities, onboardings, scenarios, buildings,
+    devProjects, propertyTaxAppeals: propertyTaxAppeals, leaseComps, salesComps, amPendingItems,
+    contacts, devProjectContacts, devProjectNotes,
+    acquisitionTargets, acquisitionTargetContacts, acquisitionTargetNotes,
+    dispositionListings, dispositionListingContacts, dispositionListingNotes,
+  });
+
+  const handleViewExport = async (viewName: string) => {
+    const blob = await buildStyledViewWorkbookBlob(viewName, gatherFullDataSet());
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `parce-${viewName}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleViewImport = async (_viewName: string, file: File) => {
+    try {
+      const result = await loadFromFile(file);
+      let imported = 0;
+      if (result.deals.length) { setDeals(result.deals); setFilteredDeals(result.deals); imported += result.deals.length; }
+      if (result.rentRoll.length) { setRentRoll(result.rentRoll); setFilteredRentRoll(result.rentRoll); imported += result.rentRoll.length; }
+      if (result.activities.length) { setActivities(result.activities); imported += result.activities.length; }
+      if (result.onboardings.length) { setOnboardings(result.onboardings); imported += result.onboardings.length; }
+      if (result.scenarios.length) { setScenarios(result.scenarios); imported += result.scenarios.length; }
+      if (result.buildings.length) { setBuildings(result.buildings); imported += result.buildings.length; }
+      if (result.devProjects.length) { setDevProjects(result.devProjects); imported += result.devProjects.length; }
+      if (result.propertyTaxAppeals.length) { setPropertyTaxAppeals(result.propertyTaxAppeals); imported += result.propertyTaxAppeals.length; }
+      if (result.leaseComps.length) { setLeaseComps(result.leaseComps); imported += result.leaseComps.length; }
+      if (result.salesComps.length) { setSalesComps(result.salesComps); imported += result.salesComps.length; }
+      if (result.amPendingItems.length) { setAMPendingItems(result.amPendingItems); imported += result.amPendingItems.length; }
+      if (result.contacts.length) { setContacts(result.contacts); imported += result.contacts.length; }
+      if (result.devProjectContacts.length) { setDevProjectContacts(result.devProjectContacts); imported += result.devProjectContacts.length; }
+      if (result.devProjectNotes.length) { setDevProjectNotes(result.devProjectNotes); imported += result.devProjectNotes.length; }
+      if (result.acquisitionTargets.length) { setAcquisitionTargets(result.acquisitionTargets); imported += result.acquisitionTargets.length; }
+      if (result.acquisitionTargetContacts.length) { setAcquisitionTargetContacts(result.acquisitionTargetContacts); imported += result.acquisitionTargetContacts.length; }
+      if (result.acquisitionTargetNotes.length) { setAcquisitionTargetNotes(result.acquisitionTargetNotes); imported += result.acquisitionTargetNotes.length; }
+      if (result.dispositionListings.length) { setDispositionListings(result.dispositionListings); imported += result.dispositionListings.length; }
+      if (result.dispositionListingContacts.length) { setDispositionListingContacts(result.dispositionListingContacts); imported += result.dispositionListingContacts.length; }
+      if (result.dispositionListingNotes.length) { setDispositionListingNotes(result.dispositionListingNotes); imported += result.dispositionListingNotes.length; }
+      showToast(`Imported ${imported} records`);
+      void pushWorkbookToSupabase(result);
+    } catch (err) {
+      alert(`Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleSkillDataDownload = async (skillName: string) => {
+    const data = gatherFullDataSet();
+    const blob = await buildStyledWorkbookBlob(data);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `parce-${skillName}-data.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleSaveFile = async () => {
     if (fileHandle) {
       try {
@@ -759,9 +870,8 @@ function App() {
             return;
           }
         }
-        const blob = buildWorkbookBlob(deals, rentRoll, activities, onboardings);
+        const blob = await buildStyledWorkbookBlob(gatherFullDataSet());
         await writeToHandle(fileHandle, blob);
-        // Re-read to grab the new mtime (after the write)
         const after = await readFromHandle(fileHandle);
         setLastSeenModified(after.lastModified);
         await updateLastSeenModified(after.lastModified);
@@ -773,7 +883,13 @@ function App() {
       return;
     }
     const name = filename || 'leases.xlsx';
-    saveToFile(deals, rentRoll, activities, onboardings, name);
+    const blob = await buildStyledWorkbookBlob(gatherFullDataSet());
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleReconnect = async () => {
@@ -855,10 +971,23 @@ function App() {
   };
   const handleSelectDeal = (deal: Deal) => setEditingDeal(deal);
   const handleSaveDeal = (updated: Deal) => {
+    const prev = deals.find((d) => d.id === updated.id);
     const newDeals = deals.map((d) => (d.id === updated.id ? updated : d));
     setDeals(newDeals);
-    setFilteredDeals((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+    setFilteredDeals((p) => p.map((d) => (d.id === updated.id ? updated : d)));
     writeThrough('save deal', upsertDeal(updated));
+
+    // Auto-trigger Promote-to-Portfolio when a deal flips to Executed
+    // and no rent_roll row references it yet. Parce dict integrity rule #3.
+    if (
+      prev &&
+      prev.status !== 'Executed' &&
+      updated.status === 'Executed' &&
+      !rentRoll.some((r) => r.dealId === updated.id)
+    ) {
+      setPromotingDeal(updated);
+      showToast('Deal executed — promoting to Rent Roll');
+    }
   };
   const handleDeleteDeal = (id: string) => {
     const newDeals = deals.filter((d) => d.id !== id);
@@ -1176,6 +1305,37 @@ function App() {
       return next;
     });
     writeThrough('save dev project', upsertDevelopmentProject(updated));
+
+    // One-shot geocode fallback: address present + no pin yet.
+    // Drag-to-move on the map is the authoritative override after this.
+    if (updated.address && updated.lat == null && updated.lng == null) {
+      geocodeAddress(updated.address).then((coords) => {
+        if (!coords) {
+          showToast('Could not geocode address — drag the pin to place manually');
+          return;
+        }
+        handleUpdateDevProjectCoords(updated.id, coords.lat, coords.lng);
+      });
+    }
+  };
+
+  const handleUpdateDevProjectCoords = (id: string, lat: number, lng: number) => {
+    const now = new Date().toISOString();
+    let saved: DevelopmentProject | null = null;
+    setDevProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p;
+        const next = { ...p, lat, lng, updatedAt: now };
+        saved = next;
+        return next;
+      })
+    );
+    if (saved) {
+      writeThrough('place dev project pin', upsertDevelopmentProject(saved));
+      showToast(
+        `Pinned ${(saved as DevelopmentProject).projectName || 'dev project'} · ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      );
+    }
   };
 
   const handleDeleteDevProject = (id: string) => {
@@ -1197,6 +1357,22 @@ function App() {
   const handleDeleteLeaseComp = (id: string) => {
     setLeaseComps((prev) => prev.filter((c) => c.id !== id));
     writeThrough('delete comp', deleteLeaseCompRow(id));
+  };
+
+  const handleSaveSalesComp = (updated: SalesComp) => {
+    setSalesComps((prev) => {
+      const idx = prev.findIndex((c) => c.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const next = prev.slice();
+      next[idx] = updated;
+      return next;
+    });
+    writeThrough('save sales comp', upsertSalesComp(updated));
+  };
+
+  const handleDeleteSalesComp = (id: string) => {
+    setSalesComps((prev) => prev.filter((c) => c.id !== id));
+    writeThrough('delete sales comp', deleteSalesCompRow(id));
   };
 
   const handleSavePropertyTaxAppeal = (updated: PropertyTaxAppeal) => {
@@ -1229,6 +1405,16 @@ function App() {
   const handleDeleteAMPendingItem = (id: string) => {
     setAMPendingItems((prev) => prev.filter((i) => i.id !== id));
     writeThrough('delete AM item', deleteAMPendingItemRow(id));
+  };
+
+  const handleAMSendTo = (item: AMPendingItem, targetView: View) => {
+    const updated: AMPendingItem = {
+      ...item,
+      sentToTab: targetView,
+      updatedAt: new Date().toISOString(),
+    };
+    handleSaveAMPendingItem(updated);
+    setView(targetView);
   };
 
   // ── CRM v1 handlers ─────────────────────────────────────────────
@@ -1307,6 +1493,35 @@ function App() {
       return next;
     });
     writeThrough('save acquisition target', upsertAcquisitionTarget(updated));
+
+    if (updated.address && updated.lat == null && updated.lng == null) {
+      geocodeAddress(updated.address).then((coords) => {
+        if (!coords) {
+          showToast('Could not geocode address — drag the pin to place manually');
+          return;
+        }
+        handleUpdateAcqTargetCoords(updated.id, coords.lat, coords.lng);
+      });
+    }
+  };
+
+  const handleUpdateAcqTargetCoords = (id: string, lat: number, lng: number) => {
+    const now = new Date().toISOString();
+    let saved: AcquisitionTarget | null = null;
+    setAcquisitionTargets((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t;
+        const next = { ...t, lat, lng, updatedAt: now };
+        saved = next;
+        return next;
+      })
+    );
+    if (saved) {
+      writeThrough('place acq target pin', upsertAcquisitionTarget(saved));
+      showToast(
+        `Pinned ${(saved as AcquisitionTarget).targetName || 'target'} · ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      );
+    }
   };
 
   const handleDeleteAcquisitionTarget = (id: string) => {
@@ -1356,6 +1571,35 @@ function App() {
       return next;
     });
     writeThrough('save disposition listing', upsertDispositionListing(updated));
+
+    if (updated.address && updated.lat == null && updated.lng == null) {
+      geocodeAddress(updated.address).then((coords) => {
+        if (!coords) {
+          showToast('Could not geocode address — drag the pin to place manually');
+          return;
+        }
+        handleUpdateDispoListingCoords(updated.id, coords.lat, coords.lng);
+      });
+    }
+  };
+
+  const handleUpdateDispoListingCoords = (id: string, lat: number, lng: number) => {
+    const now = new Date().toISOString();
+    let saved: DispositionListing | null = null;
+    setDispositionListings((prev) =>
+      prev.map((d) => {
+        if (d.id !== id) return d;
+        const next = { ...d, lat, lng, updatedAt: now };
+        saved = next;
+        return next;
+      })
+    );
+    if (saved) {
+      writeThrough('place dispo listing pin', upsertDispositionListing(saved));
+      showToast(
+        `Pinned ${(saved as DispositionListing).assetName || 'listing'} · ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      );
+    }
   };
 
   const handleDeleteDispositionListing = (id: string) => {
@@ -1446,11 +1690,12 @@ function App() {
       {/* Parce-style animated copper grid behind everything. z-0 keeps
           it under the sidebar (z-20) and main content (default stacking). */}
       <GridBackground />
-      <Sidebar view={view} onChangeView={setView} />
+      <Sidebar view={view} onChangeView={setView} onOpenSkills={() => setSkillsOpen(true)} />
+      <SkillsModal open={skillsOpen} onClose={() => setSkillsOpen(false)} onDownloadSkillData={handleSkillDataDownload} />
       {/* Mobile bottom nav — visible only on narrow viewports where
           the desktop sidebar is hidden. pb-16 above leaves clearance
           so content doesn't sit under it. */}
-      <MobileNav view={view} onChangeView={setView} />
+      <MobileNav view={view} onChangeView={setView} onOpenSkills={() => setSkillsOpen(true)} />
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Header is OPAQUE (so scrolled content doesn't bleed through
@@ -1590,13 +1835,20 @@ function App() {
                 </button>
 
                 {showsCounts && (
-                  <button
-                    onClick={view === 'prospects' ? handleNewDeal : handleNewRow}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
-                  >
-                    <Plus size={15} strokeWidth={2.25} />
-                    {view === 'prospects' ? 'New Deal' : 'New Row'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <ExcelToolbar
+                      onExport={() => handleViewExport(view === 'prospects' ? 'prospects' : 'rentroll')}
+                      onImport={(f) => handleViewImport(view === 'prospects' ? 'prospects' : 'rentroll', f)}
+                      itemCount={view === 'prospects' ? deals.length : rentRoll.length}
+                    />
+                    <button
+                      onClick={view === 'prospects' ? handleNewDeal : handleNewRow}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
+                    >
+                      <Plus size={15} strokeWidth={2.25} />
+                      {view === 'prospects' ? 'New Deal' : 'New Row'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -1631,7 +1883,7 @@ function App() {
 
         <main className="flex-1 px-6 sm:px-10 lg:px-12 pb-12 w-full space-y-8">
           {view === 'reports' ? (
-            <ReportsView deals={deals} rentRoll={rentRoll} />
+            <ReportsView deals={deals} rentRoll={rentRoll} buildings={buildings} />
           ) : view === 'underwrite' ? (
             <UnderwriteView
               deals={deals}
@@ -1655,6 +1907,11 @@ function App() {
               comps={leaseComps}
               onSave={handleSaveLeaseComp}
               onDelete={handleDeleteLeaseComp}
+              salesComps={salesComps}
+              onSaveSalesComp={handleSaveSalesComp}
+              onDeleteSalesComp={handleDeleteSalesComp}
+              onExcelExport={() => handleViewExport('comps')}
+              onExcelImport={(f) => handleViewImport('comps', f)}
             />
           ) : view === 'contacts' ? (
             <ContactsView
@@ -1667,11 +1924,22 @@ function App() {
               dispositionListings={dispositionListings}
               onSave={handleSaveContact}
               onDelete={handleDeleteContact}
+              onExcelExport={() => handleViewExport('contacts')}
+              onExcelImport={(f) => handleViewImport('contacts', f)}
             />
           ) : view === 'map' ? (
             <MapView
               deals={deals}
+              devProjects={devProjects}
+              acqTargets={acquisitionTargets}
+              dispoListings={dispositionListings}
               onSelectDeal={(d) => setEditingDeal(d)}
+              onSelectDevProject={(p) => setEditingDevProject(p)}
+              onUpdateDevProjectCoords={handleUpdateDevProjectCoords}
+              onSelectAcqTarget={(a) => setEditingAcqTarget(a)}
+              onUpdateAcqTargetCoords={handleUpdateAcqTargetCoords}
+              onSelectDispoListing={(d) => setEditingDispoListing(d)}
+              onUpdateDispoListingCoords={handleUpdateDispoListingCoords}
               onToast={showToast}
               onUpdateProjectCoords={(projectId, lat, lng) => {
                 // Project = group of deals sharing the same dealId.
@@ -1703,12 +1971,16 @@ function App() {
               rentRoll={rentRoll}
               onUpdateItem={handleUpdateOnboardingItem}
               onDelete={handleDeleteOnboarding}
+              onExcelExport={() => handleViewExport('onboarding')}
+              onExcelImport={(f) => handleViewImport('onboarding', f)}
             />
           ) : view === 'acquisitions' ? (
             <AcquisitionsView
               targets={acquisitionTargets}
               onSave={handleSaveAcquisitionTarget}
               onDelete={handleDeleteAcquisitionTarget}
+              onUpdateTargetCoords={handleUpdateAcqTargetCoords}
+              onToast={showToast}
               contacts={contacts}
               contactLinks={acquisitionTargetContacts}
               notes={acquisitionTargetNotes}
@@ -1717,12 +1989,16 @@ function App() {
               onUnlinkContact={handleUnlinkAcquisitionTargetContact}
               onSaveNote={handleSaveAcquisitionTargetNote}
               onDeleteNote={handleDeleteAcquisitionTargetNote}
+              onExcelExport={() => handleViewExport('acquisitions')}
+              onExcelImport={(f) => handleViewImport('acquisitions', f)}
             />
           ) : view === 'development' ? (
             <DevelopmentView
               projects={devProjects}
               onSave={handleSaveDevProject}
               onDelete={handleDeleteDevProject}
+              onUpdateProjectCoords={handleUpdateDevProjectCoords}
+              onToast={showToast}
               contacts={contacts}
               contactLinks={devProjectContacts}
               notes={devProjectNotes}
@@ -1731,6 +2007,8 @@ function App() {
               onUnlinkContact={handleUnlinkDevProjectContact}
               onSaveNote={handleSaveDevProjectNote}
               onDeleteNote={handleDeleteDevProjectNote}
+              onExcelExport={() => handleViewExport('development')}
+              onExcelImport={(f) => handleViewImport('development', f)}
             />
           ) : view === 'asset-mgmt' ? (
             <AssetMgmtView
@@ -1740,12 +2018,17 @@ function App() {
               amItems={amPendingItems}
               onSaveAMItem={handleSaveAMPendingItem}
               onDeleteAMItem={handleDeleteAMPendingItem}
+              onSendTo={handleAMSendTo}
+              onExcelExport={() => handleViewExport('asset-mgmt')}
+              onExcelImport={(f) => handleViewImport('asset-mgmt', f)}
             />
           ) : view === 'disposition' ? (
             <DispositionView
               listings={dispositionListings}
               onSave={handleSaveDispositionListing}
               onDelete={handleDeleteDispositionListing}
+              onUpdateListingCoords={handleUpdateDispoListingCoords}
+              onToast={showToast}
               contacts={contacts}
               contactLinks={dispositionListingContacts}
               notes={dispositionListingNotes}
@@ -1754,6 +2037,8 @@ function App() {
               onUnlinkContact={handleUnlinkDispositionListingContact}
               onSaveNote={handleSaveDispositionListingNote}
               onDeleteNote={handleDeleteDispositionListingNote}
+              onExcelExport={() => handleViewExport('disposition')}
+              onExcelImport={(f) => handleViewImport('disposition', f)}
             />
           ) : view === 'prospects' ? (
             deals.length === 0 ? (
@@ -1831,6 +2116,54 @@ function App() {
         onClose={() => setPromotingDeal(null)}
         onConfirm={handleConfirmPromote}
       />
+      {editingDevProject && (
+        <DevelopmentProjectDrawer
+          project={editingDevProject}
+          onClose={() => setEditingDevProject(null)}
+          onSave={handleSaveDevProject}
+          onDelete={handleDeleteDevProject}
+          allContacts={contacts}
+          contactLinks={devProjectContacts}
+          notes={devProjectNotes}
+          onSaveContact={handleSaveContact}
+          onLinkContact={handleLinkDevProjectContact}
+          onUnlinkContact={handleUnlinkDevProjectContact}
+          onSaveNote={handleSaveDevProjectNote}
+          onDeleteNote={handleDeleteDevProjectNote}
+        />
+      )}
+      {editingAcqTarget && (
+        <AcquisitionTargetDrawer
+          target={editingAcqTarget}
+          onClose={() => setEditingAcqTarget(null)}
+          onSave={handleSaveAcquisitionTarget}
+          onDelete={handleDeleteAcquisitionTarget}
+          allContacts={contacts}
+          contactLinks={acquisitionTargetContacts}
+          notes={acquisitionTargetNotes}
+          onSaveContact={handleSaveContact}
+          onLinkContact={handleLinkAcquisitionTargetContact}
+          onUnlinkContact={handleUnlinkAcquisitionTargetContact}
+          onSaveNote={handleSaveAcquisitionTargetNote}
+          onDeleteNote={handleDeleteAcquisitionTargetNote}
+        />
+      )}
+      {editingDispoListing && (
+        <DispositionListingDrawer
+          listing={editingDispoListing}
+          onClose={() => setEditingDispoListing(null)}
+          onSave={handleSaveDispositionListing}
+          onDelete={handleDeleteDispositionListing}
+          allContacts={contacts}
+          contactLinks={dispositionListingContacts}
+          notes={dispositionListingNotes}
+          onSaveContact={handleSaveContact}
+          onLinkContact={handleLinkDispositionListingContact}
+          onUnlinkContact={handleUnlinkDispositionListingContact}
+          onSaveNote={handleSaveDispositionListingNote}
+          onDeleteNote={handleDeleteDispositionListingNote}
+        />
+      )}
     </div>
   );
 }

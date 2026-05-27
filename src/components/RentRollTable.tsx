@@ -27,12 +27,22 @@ const formatNum = (n: number | null | undefined): string =>
 const formatCurrency = (n: number | null | undefined): string =>
   n === null || n === undefined ? '–' : `$${n.toFixed(2)}`;
 
-const Stars = ({ n }: { n: number | null }) => {
-  if (n === null) return <span className="text-fg-subtle">–</span>;
+// Credit-rating chip. Color tier reflects investment-grade boundaries
+// (BBB and up = green/blue, sub-IG = amber, NR/unknown = muted).
+const RatingChip = ({ rating }: { rating: string | null }) => {
+  if (!rating) return <span className="text-fg-subtle">–</span>;
+  const investmentGrade = new Set(['AAA', 'AA', 'A', 'BBB', 'Govt']);
+  const subGrade = new Set(['BB', 'B']);
+  const cls = investmentGrade.has(rating)
+    ? 'bg-success/10 text-success border-success/30'
+    : subGrade.has(rating)
+      ? 'bg-warning/10 text-warning border-warning/30'
+      : 'bg-fg-subtle/10 text-fg-muted border-fg-subtle/20';
   return (
-    <span className="text-amber-500 dark:text-amber-400 tracking-tight" aria-label={`${n} of 5`}>
-      {'★'.repeat(n)}
-      <span className="text-fg-subtle/30">{'★'.repeat(5 - n)}</span>
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border ${cls}`}
+    >
+      {rating}
     </span>
   );
 };
@@ -114,9 +124,7 @@ export function RentRollTable({
                 })()}
               </div>
               {r.tenantRating !== null && r.occupied && (
-                <span className="text-xs">
-                  <Stars n={r.tenantRating} />
-                </span>
+                <RatingChip rating={r.tenantRating} />
               )}
             </div>
           );

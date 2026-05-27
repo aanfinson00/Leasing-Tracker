@@ -3,12 +3,15 @@ import { ClipboardCheck } from 'lucide-react';
 import type { OnboardingChecklist, OnboardingItem, RentRollRow } from '../../types';
 import { OnboardingTable } from './OnboardingTable';
 import { OnboardingDrawer } from './OnboardingDrawer';
+import { ExcelToolbar } from '../ExcelToolbar';
 
 interface OnboardingViewProps {
   onboardings: OnboardingChecklist[];
   rentRoll: RentRollRow[];
   onUpdateItem: (checklistId: string, itemId: string, patch: Partial<OnboardingItem>) => void;
   onDelete: (id: string) => void;
+  onExcelExport?: () => void;
+  onExcelImport?: (file: File) => void;
 }
 
 export function OnboardingView({
@@ -16,6 +19,8 @@ export function OnboardingView({
   rentRoll,
   onUpdateItem,
   onDelete,
+  onExcelExport,
+  onExcelImport,
 }: OnboardingViewProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -49,6 +54,26 @@ export function OnboardingView({
 
   return (
     <>
+      <header className="rounded-2xl bg-bg-elevated shadow-soft p-6 mb-5">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-accent-tint text-accent">
+              <ClipboardCheck size={18} strokeWidth={1.75} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-fg tracking-tight">
+                Onboarding
+              </h2>
+              <p className="text-xs text-fg-muted mt-0.5">
+                {onboardings.length} {onboardings.length === 1 ? 'checklist' : 'checklists'}
+              </p>
+            </div>
+          </div>
+          {onExcelExport && onExcelImport && (
+            <ExcelToolbar onExport={onExcelExport} onImport={onExcelImport} itemCount={onboardings.length} />
+          )}
+        </div>
+      </header>
       <OnboardingTable
         onboardings={onboardings}
         rentRoll={rentRoll}

@@ -250,6 +250,8 @@ export function AcquisitionTargetDrawer({
       diligenceStatus: target.diligenceStatus,
       riskLevel: v.riskLevel,
       statusSummary: parseStr(v.statusSummary),
+      lat: target.lat ?? null,
+      lng: target.lng ?? null,
       notes: parseStr(v.notes),
       createdAt: target.createdAt,
       updatedAt: new Date().toISOString(),

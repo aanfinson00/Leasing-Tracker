@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+// Format constraints from parce-data-dictionary.xlsx ("Identifiers" sheet).
+// Enforced at the form layer (react-hook-form `pattern`), NOT in the zod
+// schema — older rows may pre-date these formats and should still parse.
+export const DEAL_ID_REGEX = /^\d{4}$/;
+export const SPACE_ID_REGEX = /^\d{4}-B\d{2}-S\d{2}$/;
+export const DEAL_ID_FORMAT_HINT = '4-digit project code (e.g. 5001)';
+export const SPACE_ID_FORMAT_HINT = '{project}-B{nn}-S{nn} (e.g. 5001-B01-S03)';
+
 export const DealStatusEnum = z.enum([
   'New Prospect',
   'RFP Requested',
@@ -109,6 +117,23 @@ export type Deal = z.infer<typeof DealSchema>;
 export const UWBasisEnum = z.enum(['Actual', 'Prospective UW']);
 export type UWBasis = z.infer<typeof UWBasisEnum>;
 
+// Credit-rating scale per parce-data-dictionary.xlsx. Replaces the
+// prior numeric 0-5 "stars" — that was quality-perception, this is
+// credit-quality. Existing star values are backfilled to
+// 'Unrated / Private' in the accompanying migration.
+export const TenantRatingEnum = z.enum([
+  'AAA',
+  'AA',
+  'A',
+  'BBB',
+  'BB',
+  'B',
+  'NR',
+  'Unrated / Private',
+  'Govt',
+]);
+export type TenantRating = z.infer<typeof TenantRatingEnum>;
+
 export const RentRollRowSchema = z.object({
   id: z.string().uuid(),
 
@@ -126,7 +151,7 @@ export const RentRollRowSchema = z.object({
 
   // Tenant
   tenantName: z.string().nullable().optional(),
-  tenantRating: z.number().min(0).max(5).nullable().optional(),
+  tenantRating: TenantRatingEnum.nullable().optional(),
   occupied: z.boolean(),
   uwBasis: UWBasisEnum.nullable().optional(),
 
@@ -504,6 +529,9 @@ export const DevelopmentProjectSchema = z.object({
   riskLevel: RiskLevelEnum,
   statusSummary: z.string().nullable().optional(),
 
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -524,6 +552,8 @@ export const DevelopmentProjectSchema = z.object({
   gcContact: p.gcContact ?? null,
   architect: p.architect ?? null,
   statusSummary: p.statusSummary ?? null,
+  lat: p.lat ?? null,
+  lng: p.lng ?? null,
   notes: p.notes ?? null,
 }));
 
@@ -705,6 +735,68 @@ export const LeaseCompSchema = z.object({
 export type LeaseComp = z.infer<typeof LeaseCompSchema>;
 
 // ──────────────────────────────────────────────────────────────────
+// Sales Comps — closed sale transactions used as reference data for
+// acquisitions, dispositions, and underwriting. Separate from lease
+// comps because the fields are fundamentally different (price vs rent).
+// ──────────────────────────────────────────────────────────────────
+
+export const SalesCompSchema = z.object({
+  id: z.string().uuid(),
+
+  propertyName: z.string().nullable().optional(),
+  buildingAddress: z.string().nullable().optional(),
+  market: z.string().nullable().optional(),
+  propertyType: z.string().nullable().optional(),
+  buildingType: z.string().nullable().optional(),
+
+  saleDate: z.string().nullable().optional(),
+  salePrice: z.number().min(0).nullable().optional(),
+  pricePSF: z.number().min(0).nullable().optional(),
+  capRate: z.number().nullable().optional(),
+  noi: z.number().nullable().optional(),
+
+  buildingSF: z.number().positive().nullable().optional(),
+  landAcres: z.number().positive().nullable().optional(),
+  yearBuilt: z.number().int().nullable().optional(),
+  occupancyPct: z.number().nullable().optional(),
+
+  buyer: z.string().nullable().optional(),
+  seller: z.string().nullable().optional(),
+
+  source: z.string().nullable().optional(),
+  sourceUrl: z.string().nullable().optional(),
+  confidence: CompConfidenceEnum,
+  confidential: z.boolean(),
+
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((c) => ({
+  ...c,
+  propertyName: c.propertyName ?? null,
+  buildingAddress: c.buildingAddress ?? null,
+  market: c.market ?? null,
+  propertyType: c.propertyType ?? null,
+  buildingType: c.buildingType ?? null,
+  saleDate: c.saleDate ?? null,
+  salePrice: c.salePrice ?? null,
+  pricePSF: c.pricePSF ?? null,
+  capRate: c.capRate ?? null,
+  noi: c.noi ?? null,
+  buildingSF: c.buildingSF ?? null,
+  landAcres: c.landAcres ?? null,
+  yearBuilt: c.yearBuilt ?? null,
+  occupancyPct: c.occupancyPct ?? null,
+  buyer: c.buyer ?? null,
+  seller: c.seller ?? null,
+  source: c.source ?? null,
+  sourceUrl: c.sourceUrl ?? null,
+  notes: c.notes ?? null,
+}));
+
+export type SalesComp = z.infer<typeof SalesCompSchema>;
+
+// ──────────────────────────────────────────────────────────────────
 // Asset Management Pending Items — operating to-do list across the
 // portfolio. One table covers all 5 playbook categories.
 // ──────────────────────────────────────────────────────────────────
@@ -715,8 +807,25 @@ export const AMItemTypeEnum = z.enum([
   'Tenant Request',
   'Building Monitoring',
   'Capital Vendor',
+  'Insurance',
+  'Operating Budget',
+  'CAM Reconciliation',
+  'Valuation',
+  'Cash Management',
+  'Reporting',
+  'LP Approval',
+  'Lease Renewal',
 ]);
 export type AMItemType = z.infer<typeof AMItemTypeEnum>;
+
+export const AMCadenceEnum = z.enum([
+  'One-Time',
+  'Monthly',
+  'Quarterly',
+  'Bi-Annual',
+  'Annual',
+]);
+export type AMCadence = z.infer<typeof AMCadenceEnum>;
 
 export const AMStatusEnum = z.enum([
   'Open',
@@ -751,6 +860,10 @@ export const AMPendingItemSchema = z.object({
   source: z.string().nullable().optional(),
   link: z.string().nullable().optional(),
 
+  cadence: AMCadenceEnum.default('One-Time'),
+  sentToTab: z.string().nullable().optional(),
+  sentToId: z.string().nullable().optional(),
+
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -766,6 +879,8 @@ export const AMPendingItemSchema = z.object({
   completedDate: i.completedDate ?? null,
   source: i.source ?? null,
   link: i.link ?? null,
+  sentToTab: i.sentToTab ?? null,
+  sentToId: i.sentToId ?? null,
   notes: i.notes ?? null,
 }));
 
@@ -962,6 +1077,9 @@ export const AcquisitionTargetSchema = z.object({
   riskLevel: RiskLevelEnum,
   statusSummary: z.string().nullable().optional(),
 
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -986,6 +1104,8 @@ export const AcquisitionTargetSchema = z.object({
   expectedClosingDate: a.expectedClosingDate ?? null,
   actualClosingDate: a.actualClosingDate ?? null,
   statusSummary: a.statusSummary ?? null,
+  lat: a.lat ?? null,
+  lng: a.lng ?? null,
   notes: a.notes ?? null,
 }));
 
@@ -1089,6 +1209,9 @@ export const DispositionListingSchema = z.object({
   riskLevel: RiskLevelEnum,
   statusSummary: z.string().nullable().optional(),
 
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -1116,6 +1239,8 @@ export const DispositionListingSchema = z.object({
   expectedClosingDate: d.expectedClosingDate ?? null,
   actualClosingDate: d.actualClosingDate ?? null,
   statusSummary: d.statusSummary ?? null,
+  lat: d.lat ?? null,
+  lng: d.lng ?? null,
   notes: d.notes ?? null,
 }));
 

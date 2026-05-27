@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, HandCoins, CalendarClock, AlertTriangle } from 'lucide-react';
+import { Plus, HandCoins, CalendarClock, AlertTriangle, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
 import type {
   Contact,
   DispositionListing,
@@ -10,11 +10,15 @@ import type {
 } from '../../types';
 import { DISPO_PIPELINE_ORDER, DispositionStatusEnum } from '../../types';
 import { DispositionListingDrawer } from './DispositionListingDrawer';
+import { ExcelToolbar } from '../ExcelToolbar';
+import { MapView } from '../Map/MapView';
 
 interface DispositionViewProps {
   listings: DispositionListing[];
   onSave: (d: DispositionListing) => void;
   onDelete: (id: string) => void;
+  onUpdateListingCoords: (id: string, lat: number, lng: number) => void;
+  onToast?: (msg: string) => void;
   // CRM
   contacts: Contact[];
   contactLinks: DispositionListingContact[];
@@ -24,6 +28,8 @@ interface DispositionViewProps {
   onUnlinkContact: (linkId: string) => void;
   onSaveNote: (n: DispositionListingNote) => void;
   onDeleteNote: (id: string) => void;
+  onExcelExport?: () => void;
+  onExcelImport?: (file: File) => void;
 }
 
 const SIDE_STATUSES: DispositionStatus[] = ['Pulled', 'On Hold'];
@@ -57,6 +63,8 @@ function newListingTemplate(): DispositionListing {
     actualClosingDate: null,
     riskLevel: 'Medium',
     statusSummary: null,
+    lat: null,
+    lng: null,
     notes: null,
     createdAt: now,
     updatedAt: now,
@@ -115,6 +123,8 @@ export function DispositionView({
   listings,
   onSave,
   onDelete,
+  onUpdateListingCoords,
+  onToast,
   contacts,
   contactLinks,
   notes,
@@ -123,11 +133,14 @@ export function DispositionView({
   onUnlinkContact,
   onSaveNote,
   onDeleteNote,
+  onExcelExport,
+  onExcelImport,
 }: DispositionViewProps) {
   const [editing, setEditing] = useState<DispositionListing | null>(null);
   const [statusFilter, setStatusFilter] = useState<
     DispositionStatus | 'all' | 'active'
   >('active');
+  const [mapOpen, setMapOpen] = useState(true);
 
   const filtered = useMemo(() => {
     if (statusFilter === 'all') return listings;
@@ -189,14 +202,19 @@ export function DispositionView({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setEditing(newListingTemplate())}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
-          >
-            <Plus size={15} strokeWidth={2} />
-            New listing
-          </button>
+          <div className="flex items-center gap-2">
+            {onExcelExport && onExcelImport && (
+              <ExcelToolbar onExport={onExcelExport} onImport={onExcelImport} itemCount={listings.length} />
+            )}
+            <button
+              type="button"
+              onClick={() => setEditing(newListingTemplate())}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
+            >
+              <Plus size={15} strokeWidth={2} />
+              New listing
+            </button>
+          </div>
         </div>
 
         {(stats.closingSoonCount > 0 || stats.highRiskCount > 0) && (
@@ -258,6 +276,44 @@ export function DispositionView({
           </select>
         </div>
       </header>
+
+      {listings.length > 0 && (
+        <section className="rounded-2xl bg-bg-elevated shadow-soft overflow-hidden">
+          <header className="px-5 py-3 border-b border-border flex items-center justify-between bg-bg/60">
+            <div className="flex items-center gap-2">
+              <MapPin size={14} strokeWidth={2} className="text-accent" />
+              <span className="text-sm font-medium text-fg">Map</span>
+              <span className="text-xs text-fg-muted">
+                · scoped to {filtered.length}{' '}
+                {filtered.length === 1 ? 'listing' : 'listings'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMapOpen((v) => !v)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-fg-muted hover:text-fg hover:bg-bg-hover transition-colors"
+              aria-expanded={mapOpen}
+            >
+              {mapOpen ? <ChevronUp size={13} strokeWidth={2} /> : <ChevronDown size={13} strokeWidth={2} />}
+              {mapOpen ? 'Collapse' : 'Expand'}
+            </button>
+          </header>
+          {mapOpen && (
+            <div className="h-[420px] p-3">
+              <MapView
+                mode="dispo-only"
+                deals={[]}
+                dispoListings={filtered}
+                onSelectDeal={() => {}}
+                onUpdateProjectCoords={() => {}}
+                onSelectDispoListing={(d) => setEditing(d)}
+                onUpdateDispoListingCoords={onUpdateListingCoords}
+                onToast={onToast}
+              />
+            </div>
+          )}
+        </section>
+      )}
 
       {listings.length === 0 ? (
         <div className="py-16 text-center border border-dashed border-border rounded-2xl bg-bg-elevated">

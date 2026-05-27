@@ -20,6 +20,7 @@ import type {
 } from '../../types';
 import { ContactTypeEnum, contactDisplayName } from '../../types';
 import { ContactDrawer } from './ContactDrawer';
+import { ExcelToolbar } from '../ExcelToolbar';
 
 interface ContactsViewProps {
   contacts: Contact[];
@@ -31,6 +32,8 @@ interface ContactsViewProps {
   dispositionListings: DispositionListing[];
   onSave: (c: Contact) => void;
   onDelete: (id: string) => void;
+  onExcelExport?: () => void;
+  onExcelImport?: (file: File) => void;
 }
 
 function newContactTemplate(): Contact {
@@ -76,6 +79,8 @@ export function ContactsView({
   dispositionListings,
   onSave,
   onDelete,
+  onExcelExport,
+  onExcelImport,
 }: ContactsViewProps) {
   const [editing, setEditing] = useState<Contact | null>(null);
   const [search, setSearch] = useState('');
@@ -133,14 +138,19 @@ export function ContactsView({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setEditing(newContactTemplate())}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
-          >
-            <Plus size={15} strokeWidth={2} />
-            New contact
-          </button>
+          <div className="flex items-center gap-2">
+            {onExcelExport && onExcelImport && (
+              <ExcelToolbar onExport={onExcelExport} onImport={onExcelImport} itemCount={contacts.length} />
+            )}
+            <button
+              type="button"
+              onClick={() => setEditing(newContactTemplate())}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-accent-fg bg-accent rounded-xl hover:bg-accent-hover transition-colors shadow-soft"
+            >
+              <Plus size={15} strokeWidth={2} />
+              New contact
+            </button>
+          </div>
         </div>
 
         <div className="mt-5 flex items-center gap-2 flex-wrap">
