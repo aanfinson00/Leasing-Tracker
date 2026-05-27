@@ -10,6 +10,8 @@ import {
   Trash2,
   Activity as ActivityIcon,
   ListChecks,
+  FolderOpen,
+  ExternalLink,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ActivityEntry, Building, RentRollRow, TenantRating, UWBasis } from '../types';
@@ -65,6 +67,7 @@ type FormValues = {
   startingAnnualRentPSF: string;
   currentSummary: string;
   notes: string;
+  sharepointUrl: string;
 };
 
 const toFormString = (v: string | number | null | undefined): string => {
@@ -189,6 +192,7 @@ export function RentRollDrawer({
         startingAnnualRentPSF: toFormString(row.startingAnnualRentPSF),
         currentSummary: toFormString(row.currentSummary),
         notes: toFormString(row.notes),
+        sharepointUrl: toFormString(row.sharepointUrl),
       });
     }
   }, [row, reset]);
@@ -228,6 +232,7 @@ export function RentRollDrawer({
       inPlaceRent: row.inPlaceRent,
       currentSummary: parseStr(v.currentSummary),
       notes: parseStr(v.notes),
+      sharepointUrl: parseStr(v.sharepointUrl),
     };
     onSave(updated);
     onClose();
@@ -502,6 +507,32 @@ export function RentRollDrawer({
                   <label className={labelClass}>Commission ($)</label>
                   <input {...register('commissionDollar')} type="number" className={`${inputClass} tabular-nums`} />
                 </div>
+              </div>
+            </Section>
+
+            <Section icon={FolderOpen} title="Tenant Folder">
+              <div className="space-y-1.5">
+                <label className={labelClass}>SharePoint URL</label>
+                <div className="flex items-stretch gap-2">
+                  <input
+                    {...register('sharepointUrl')}
+                    type="url"
+                    placeholder="https://contoso.sharepoint.com/sites/.../Tenant Folder"
+                    className={`${inputClass} flex-1`}
+                  />
+                  {watch('sharepointUrl')?.trim() && (
+                    <a
+                      href={watch('sharepointUrl')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open in new tab"
+                      className="inline-flex items-center gap-1 px-3 rounded-lg text-xs font-medium border border-border bg-bg-elevated hover:bg-bg-hover text-fg whitespace-nowrap"
+                    >
+                      Open <ExternalLink size={12} />
+                    </a>
+                  )}
+                </div>
+                <p className="text-[11px] text-fg-muted">Paste the SharePoint folder link for any team member to access this tenant's docs.</p>
               </div>
             </Section>
 

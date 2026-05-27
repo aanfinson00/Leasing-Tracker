@@ -83,5 +83,9 @@ export function previewPromote(
 
     currentSummary: deal.currentSummary ?? existing?.currentSummary ?? null,
     notes: deal.notes ?? existing?.notes ?? null,
+
+    // Carry the deal's SharePoint URL forward to the tenant if the rent_roll
+    // row doesn't already have one; preserve any existing value otherwise.
+    sharepointUrl: existing?.sharepointUrl ?? deal.sharepointUrl ?? null,
   };
 }

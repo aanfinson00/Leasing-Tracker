@@ -15,6 +15,8 @@ import {
   Mail,
   Check,
   Copy,
+  FolderOpen,
+  ExternalLink,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ActivityEntry, Building, Deal, DealStatus, Priority } from '../types';
@@ -71,6 +73,7 @@ type FormValues = {
   priority: Priority;
   currentSummary: string;
   notes: string;
+  sharepointUrl: string;
 };
 
 const toFormString = (v: string | number | null | undefined): string => {
@@ -212,6 +215,7 @@ export function DealDrawer({
         priority: deal.priority,
         currentSummary: toFormString(deal.currentSummary),
         notes: toFormString(deal.notes),
+        sharepointUrl: toFormString(deal.sharepointUrl),
       });
     }
   }, [deal, reset]);
@@ -245,6 +249,7 @@ export function DealDrawer({
       priority: values.priority,
       currentSummary: parseStr(values.currentSummary),
       notes: parseStr(values.notes),
+      sharepointUrl: parseStr(values.sharepointUrl),
     };
     onSave(updated);
     onClose();
@@ -567,6 +572,32 @@ export function DealDrawer({
               </div>
             </Section>
 
+            <Section icon={FolderOpen} title="Shared Folder">
+              <div className="space-y-1.5">
+                <label className={labelClass}>SharePoint URL</label>
+                <div className="flex items-stretch gap-2">
+                  <input
+                    {...register('sharepointUrl')}
+                    type="url"
+                    placeholder="https://contoso.sharepoint.com/sites/.../Deal Folder"
+                    className={`${inputClass} flex-1`}
+                  />
+                  {watch('sharepointUrl')?.trim() && (
+                    <a
+                      href={watch('sharepointUrl')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open in new tab"
+                      className="inline-flex items-center gap-1 px-3 rounded-lg text-xs font-medium border border-border bg-bg-elevated hover:bg-bg-hover text-fg whitespace-nowrap"
+                    >
+                      Open <ExternalLink size={12} />
+                    </a>
+                  )}
+                </div>
+                <p className="text-[11px] text-fg-muted">Paste the SharePoint folder link for any team member to access docs.</p>
+              </div>
+            </Section>
+
             <Section icon={NotebookPen} title="Notes">
               <textarea {...register('notes')} rows={5} className={inputClass} />
             </Section>
@@ -623,6 +654,7 @@ export function DealDrawer({
                           priority: values.priority,
                           currentSummary: parseStr(values.currentSummary),
                           notes: parseStr(values.notes),
+                          sharepointUrl: parseStr(values.sharepointUrl),
                         },
                       };
                       onSave(updatedDeal);
