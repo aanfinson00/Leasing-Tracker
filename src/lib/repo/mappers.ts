@@ -59,6 +59,7 @@ export interface DealRow {
   priority: Deal['priority'];
   current_summary: string | null;
   notes: string | null;
+  sharepoint_url: string | null;
 }
 
 export const dealToRow = (d: Deal): DealRow => ({
@@ -87,6 +88,7 @@ export const dealToRow = (d: Deal): DealRow => ({
   priority: d.priority,
   current_summary: d.currentSummary ?? null,
   notes: d.notes ?? null,
+  sharepoint_url: d.sharepointUrl ?? null,
 });
 
 export const rowToDeal = (r: DealRow): Deal => ({
@@ -115,6 +117,7 @@ export const rowToDeal = (r: DealRow): Deal => ({
   priority: r.priority,
   currentSummary: r.current_summary,
   notes: r.notes,
+  sharepointUrl: r.sharepoint_url,
 });
 
 // ── RentRollRow ────────────────────────────────────────────────────
@@ -151,6 +154,7 @@ export interface RentRollDbRow {
   in_place_rent: number | null;
   current_summary: string | null;
   notes: string | null;
+  sharepoint_url: string | null;
 }
 
 export const rentRollToRow = (r: RentRollRow): RentRollDbRow => ({
@@ -185,6 +189,7 @@ export const rentRollToRow = (r: RentRollRow): RentRollDbRow => ({
   in_place_rent: r.inPlaceRent ?? null,
   current_summary: r.currentSummary ?? null,
   notes: r.notes ?? null,
+  sharepoint_url: r.sharepointUrl ?? null,
 });
 
 export const rowToRentRoll = (r: RentRollDbRow): RentRollRow => ({
@@ -219,6 +224,7 @@ export const rowToRentRoll = (r: RentRollDbRow): RentRollRow => ({
   inPlaceRent: r.in_place_rent,
   currentSummary: r.current_summary,
   notes: r.notes,
+  sharepointUrl: r.sharepoint_url,
 });
 
 // ── ActivityEntry ──────────────────────────────────────────────────

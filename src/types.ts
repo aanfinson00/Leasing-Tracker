@@ -83,6 +83,8 @@ export const DealSchema = z.object({
   priority: PriorityEnum,
   currentSummary: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  // External link — team SharePoint folder for this deal's documents
+  sharepointUrl: z.string().nullable().optional(),
 }).transform((d) => ({
   ...d,
   spaceId: d.spaceId ?? null,
@@ -106,6 +108,7 @@ export const DealSchema = z.object({
   lastUpdated: d.lastUpdated ?? null,
   currentSummary: d.currentSummary ?? null,
   notes: d.notes ?? null,
+  sharepointUrl: d.sharepointUrl ?? null,
 }));
 
 export type Deal = z.infer<typeof DealSchema>;
@@ -182,6 +185,8 @@ export const RentRollRowSchema = z.object({
   // Meta
   currentSummary: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  // External link — team SharePoint folder for this tenant's documents
+  sharepointUrl: z.string().nullable().optional(),
 }).transform((r) => ({
   ...r,
   dealId: r.dealId ?? null,
@@ -213,6 +218,7 @@ export const RentRollRowSchema = z.object({
   inPlaceRent: r.inPlaceRent ?? null,
   currentSummary: r.currentSummary ?? null,
   notes: r.notes ?? null,
+  sharepointUrl: r.sharepointUrl ?? null,
 }));
 
 export type RentRollRow = z.infer<typeof RentRollRowSchema>;
@@ -249,6 +255,7 @@ export const defaultRentRollRow = (): RentRollRow => ({
   inPlaceRent: null,
   currentSummary: null,
   notes: null,
+  sharepointUrl: null,
 });
 
 const todayIso = () => {
@@ -295,6 +302,7 @@ export const defaultDeal = (): Deal => ({
   priority: 'Low',
   currentSummary: null,
   notes: null,
+  sharepointUrl: null,
 });
 
 // ──────────────────────────────────────────────────────────────────
