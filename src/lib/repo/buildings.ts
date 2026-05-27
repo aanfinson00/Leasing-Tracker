@@ -56,9 +56,17 @@ export interface BuildingsRealtimeHandlers {
 
 // Subscribes to ALL building changes; the handler filters by the
 // currently-active project (mirrors the scenarios subscribe pattern).
+//
+// Channel name is randomized per call. The Supabase Realtime client
+// caches channels by name — two subscribers using the same name share
+// one underlying channel, and the second `.on()` call fires AFTER the
+// first `.subscribe()`, which Realtime forbids ("cannot add
+// postgres_changes callbacks after subscribe()"). App.tsx and MapView
+// both subscribe to buildings, so a static name crashes the second
+// mount. Per-call UUIDs give each subscriber its own channel.
 export function subscribeBuildings(handlers: BuildingsRealtimeHandlers): () => void {
   const channel = supabase
-    .channel('buildings-changes')
+    .channel(`buildings-changes-${crypto.randomUUID()}`)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: TABLE },

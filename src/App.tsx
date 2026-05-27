@@ -547,9 +547,11 @@ function App() {
         }),
       onDelete: (id) => setSalesComps((prev) => prev.filter((x) => x.id !== id)),
     });
-    // Note: MapView also subscribes to buildings — duplicate subscriptions
-    // are fine, channels are isolated. If we want to dedupe later, lift
-    // MapView's state up to here and pass it down.
+    // Note: MapView also subscribes to buildings. The repo function gives
+    // each call a unique channel name (UUID suffix) so the two
+    // subscriptions don't share an underlying Realtime channel —
+    // otherwise the second `.on()` fires after the first `.subscribe()`
+    // and the Realtime client throws.
     const unsubBldgs = subscribeBuildings({
       onUpsert: (b) =>
         setBuildings((prev) => {
