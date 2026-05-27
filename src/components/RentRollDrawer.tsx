@@ -233,6 +233,11 @@ export function RentRollDrawer({
       currentSummary: parseStr(v.currentSummary),
       notes: parseStr(v.notes),
       sharepointUrl: parseStr(v.sharepointUrl),
+      // Finalize fields are owned by the PromoteDrawer; preserve whatever
+      // the rent_roll row already has when editing here.
+      securityDeposit: row.securityDeposit,
+      rentCommencementDate: row.rentCommencementDate,
+      cashflowJson: row.cashflowJson,
     };
     onSave(updated);
     onClose();

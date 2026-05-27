@@ -187,6 +187,10 @@ export const RentRollRowSchema = z.object({
   notes: z.string().nullable().optional(),
   // External link — team SharePoint folder for this tenant's documents
   sharepointUrl: z.string().nullable().optional(),
+  // Finalize-at-promote fields + cached monthly cashflow projection
+  securityDeposit: z.number().nullable().optional(),
+  rentCommencementDate: z.string().nullable().optional(),
+  cashflowJson: z.unknown().nullable().optional(),
 }).transform((r) => ({
   ...r,
   dealId: r.dealId ?? null,
@@ -219,6 +223,9 @@ export const RentRollRowSchema = z.object({
   currentSummary: r.currentSummary ?? null,
   notes: r.notes ?? null,
   sharepointUrl: r.sharepointUrl ?? null,
+  securityDeposit: r.securityDeposit ?? null,
+  rentCommencementDate: r.rentCommencementDate ?? null,
+  cashflowJson: r.cashflowJson ?? null,
 }));
 
 export type RentRollRow = z.infer<typeof RentRollRowSchema>;
@@ -256,6 +263,9 @@ export const defaultRentRollRow = (): RentRollRow => ({
   currentSummary: null,
   notes: null,
   sharepointUrl: null,
+  securityDeposit: null,
+  rentCommencementDate: null,
+  cashflowJson: null,
 });
 
 const todayIso = () => {

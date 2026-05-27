@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { Deal, RentRollRow } from '../types';
 import { previewPromote, computeLeaseEnd, computeExpiryBucket } from '../lib/promote';
+import { buildCashflow } from '../lib/lease-math/cashflow';
 import { StatusBadge } from './StatusBadge';
 
 interface PromoteDrawerProps {
@@ -83,6 +84,10 @@ export function PromoteDrawer({
   const [startingRent, setStartingRent] = useState('');
   const [freeRent, setFreeRent] = useState('');
   const [tiPerSF, setTiPerSF] = useState('');
+  // Finalize-at-promote fields
+  const [rentCommencement, setRentCommencement] = useState('');
+  const [securityDeposit, setSecurityDeposit] = useState('');
+  const [annualBumps, setAnnualBumps] = useState('');
 
   useEffect(() => {
     if (initialPreview) {
@@ -91,6 +96,9 @@ export function PromoteDrawer({
       setStartingRent(formatCurrencyForInput(initialPreview.startingAnnualRentPSF));
       setFreeRent(formatIntForInput(initialPreview.freeRentMonths));
       setTiPerSF(formatCurrencyForInput(initialPreview.tiPerSF));
+      setRentCommencement(initialPreview.rentCommencementDate ?? initialPreview.leaseStart ?? '');
+      setSecurityDeposit(formatCurrencyForInput(initialPreview.securityDeposit));
+      setAnnualBumps(formatCurrencyForInput(initialPreview.annualRentBumpsPct));
     }
   }, [initialPreview]);
 
@@ -117,6 +125,33 @@ export function PromoteDrawer({
       : null;
 
   const isNew = !existingRow;
+  const previewedRentCommencement = parseS(rentCommencement);
+  const previewedDeposit = parseN(securityDeposit);
+  const previewedBumps = parseN(annualBumps);
+
+  // Cashflow projection — recomputed live as inputs change. Cached on
+  // the row when the user confirms.
+  const cashflow = useMemo(
+    () =>
+      buildCashflow({
+        leaseStart: previewedStart,
+        rentCommencementDate: previewedRentCommencement,
+        leaseTermMonths: previewedTerm,
+        leasableSF: initialPreview.leasableSF,
+        startingAnnualRentPSF: previewedRent,
+        annualRentBumpsPct: previewedBumps,
+        freeRentMonths: previewedFreeRent,
+      }),
+    [
+      previewedStart,
+      previewedRentCommencement,
+      previewedTerm,
+      initialPreview.leasableSF,
+      previewedRent,
+      previewedBumps,
+      previewedFreeRent,
+    ]
+  );
 
   const handleConfirm = () => {
     const finalRow: RentRollRow = {
@@ -127,6 +162,10 @@ export function PromoteDrawer({
       startingAnnualRentPSF: previewedRent,
       freeRentMonths: previewedFreeRent,
       tiPerSF: previewedTI,
+      annualRentBumpsPct: previewedBumps,
+      rentCommencementDate: previewedRentCommencement,
+      securityDeposit: previewedDeposit,
+      cashflowJson: cashflow ?? null,
     };
     onConfirm(finalRow, isNew);
   };
@@ -330,12 +369,125 @@ export function PromoteDrawer({
               </div>
             </section>
 
+            {/* ─── Finalize section ─────────────────────────────────────── */}
+            <section>
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent-tint text-accent">
+                  <CircleCheck size={14} strokeWidth={2} />
+                </div>
+                <h3 className="text-base font-semibold text-fg tracking-tight">
+                  Finalize{' '}
+                  <span className="text-xs font-normal text-fg-subtle">
+                    — capture static lease metrics
+                  </span>
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3.5">
+                <div>
+                  <label className={labelClass}>Rent Commencement</label>
+                  <input
+                    type="date"
+                    value={rentCommencement}
+                    onChange={(e) => setRentCommencement(e.target.value)}
+                    className={inputClass}
+                  />
+                  <p className="text-[11px] text-fg-subtle mt-1">
+                    Defaults to lease start; set later when free rent runs first.
+                  </p>
+                </div>
+                <div>
+                  <label className={labelClass}>Security Deposit ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={securityDeposit}
+                    onChange={(e) => setSecurityDeposit(e.target.value)}
+                    className={`${inputClass} tabular-nums`}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelClass}>Annual Rent Bumps (%)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 3 for 3%/yr"
+                    value={annualBumps}
+                    onChange={(e) => setAnnualBumps(e.target.value)}
+                    className={`${inputClass} tabular-nums`}
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* ─── Cashflow preview ─────────────────────────────────────── */}
+            {cashflow && (
+              <section>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-accent-tint text-accent">
+                    <DollarSign size={14} strokeWidth={2} />
+                  </div>
+                  <h3 className="text-base font-semibold text-fg tracking-tight">
+                    Cashflow{' '}
+                    <span className="text-xs font-normal text-fg-subtle">
+                      — auto-computed, cached on the row
+                    </span>
+                  </h3>
+                </div>
+                <div className="grid grid-cols-3 gap-3.5 mb-3 text-sm">
+                  <div className="bg-bg-subtle rounded-xl px-3 py-2">
+                    <div className="text-[11px] uppercase tracking-wide text-fg-subtle">Term</div>
+                    <div className="text-fg tabular-nums">{cashflow.termMonths} mo</div>
+                  </div>
+                  <div className="bg-bg-subtle rounded-xl px-3 py-2">
+                    <div className="text-[11px] uppercase tracking-wide text-fg-subtle">Total Gross</div>
+                    <div className="text-fg tabular-nums">{formatMoney(cashflow.totalGrossRent)}</div>
+                  </div>
+                  <div className="bg-bg-subtle rounded-xl px-3 py-2">
+                    <div className="text-[11px] uppercase tracking-wide text-fg-subtle">Free Rent</div>
+                    <div className="text-fg tabular-nums">{formatMoney(cashflow.totalFreeRentValue)}</div>
+                  </div>
+                </div>
+                <div className="border border-border rounded-xl overflow-hidden">
+                  <table className="w-full text-xs tabular-nums">
+                    <thead className="bg-bg-subtle text-fg-subtle">
+                      <tr>
+                        <th className="px-3 py-1.5 text-left font-medium">Mo</th>
+                        <th className="px-3 py-1.5 text-left font-medium">Date</th>
+                        <th className="px-3 py-1.5 text-right font-medium">$/mo</th>
+                        <th className="px-3 py-1.5 text-right font-medium">Gross</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-fg">
+                      {cashflow.months.slice(0, 6).map((m) => (
+                        <tr key={m.month} className="border-t border-border">
+                          <td className="px-3 py-1">{m.month}</td>
+                          <td className="px-3 py-1">{m.date}</td>
+                          <td className="px-3 py-1 text-right">{formatMoney(m.baseRentMonthly)}</td>
+                          <td className="px-3 py-1 text-right">
+                            {m.freeRentApplied ? (
+                              <span className="text-fg-subtle">free</span>
+                            ) : (
+                              formatMoney(m.grossRent)
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {cashflow.months.length > 6 && (
+                    <div className="px-3 py-1.5 text-[11px] text-fg-subtle bg-bg-subtle border-t border-border">
+                      + {cashflow.months.length - 6} more months saved on the rent_roll row.
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
             <section className="text-xs text-fg-subtle bg-bg-subtle rounded-xl px-4 py-3 leading-relaxed">
               On confirm: the rent roll row will be{' '}
               {isNew ? <strong>created</strong> : <strong>updated</strong>} with the
-              values above, and <strong>{deal.dealName}</strong> will be removed
-              from Prospects (the executed deal lives in the rent roll from here
-              on).
+              values above, the monthly cashflow is cached for reports/UW, and{' '}
+              <strong>{deal.dealName}</strong> will be removed from Prospects.
             </section>
           </div>
 
