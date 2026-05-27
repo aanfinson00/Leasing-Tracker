@@ -202,6 +202,8 @@ import { AssetMgmtView } from './components/AssetMgmt/AssetMgmtView';
 import { GridBackground } from './components/GridBackground';
 import { MobileNav } from './components/MobileNav';
 import { ExcelToolbar } from './components/ExcelToolbar';
+import { CommandPaletteProvider } from './components/command-palette/CommandPaletteContext';
+import { CommandPalette } from './components/command-palette/CommandPalette';
 
 function App() {
   const [view, setView] = useState<View>('prospects');
@@ -1695,6 +1697,7 @@ function App() {
                       : 'Reports';
 
   return (
+    <CommandPaletteProvider>
     <div className="relative flex min-h-screen bg-bg text-fg pb-16 sm:pb-0">
       {/* Parce-style animated copper grid behind everything. z-0 keeps
           it under the sidebar (z-20) and main content (default stacking). */}
@@ -2173,7 +2176,32 @@ function App() {
           onDeleteNote={handleDeleteDispositionListingNote}
         />
       )}
+
+      {/* Cmd+K / Ctrl+K / "/" — global command palette */}
+      <CommandPalette
+        deals={deals}
+        rentRoll={rentRoll}
+        devProjects={devProjects}
+        acqTargets={acquisitionTargets}
+        dispoListings={dispositionListings}
+        contacts={contacts}
+        onSelectView={setView}
+        onOpenDeal={(d) => { setView('prospects'); setEditingDeal(d); }}
+        onOpenTenant={(t) => { setView('rentroll'); setEditingRow(t); }}
+        onOpenDevProject={(p) => { setView('development'); setEditingDevProject(p); }}
+        onOpenAcqTarget={(a) => { setView('acquisitions'); setEditingAcqTarget(a); }}
+        onOpenDispoListing={(d) => { setView('disposition'); setEditingDispoListing(d); }}
+        onOpenContact={() => { setView('contacts'); }}
+        onNewDeal={() => { setView('prospects'); handleNewDeal(); }}
+        onNewTenant={() => { setView('rentroll'); handleNewRow(); }}
+        onNewBuilding={() => { setView('map'); }}
+        onNewDevProject={() => { setView('development'); }}
+        onNewAcqTarget={() => { setView('acquisitions'); }}
+        onNewDispoListing={() => { setView('disposition'); }}
+        onNewContact={() => { setView('contacts'); }}
+      />
     </div>
+    </CommandPaletteProvider>
   );
 }
 

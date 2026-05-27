@@ -1,7 +1,8 @@
-import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database, Users, Lock, Cpu, ExternalLink } from 'lucide-react';
+import { Briefcase, Building, ClipboardCheck, BarChart3, Calculator, MapPin, HardHat, Crosshair, HandCoins, ListChecks, Database, Users, Lock, Cpu, ExternalLink, Search } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { ParceIcon } from './ParceIcon';
+import { useCommandPalette } from './command-palette/CommandPaletteContext';
 
 const PASSWORD_HASH_CONFIGURED = !!(import.meta.env.VITE_PASSWORD_HASH ?? '').trim();
 
@@ -56,12 +57,24 @@ interface SidebarProps {
 }
 
 export function Sidebar({ view, onChangeView, onOpenSkills }: SidebarProps) {
+  const { setOpen: setPaletteOpen } = useCommandPalette();
   return (
     <aside className="hidden sm:flex flex-col items-center w-[68px] shrink-0 bg-bg-subtle/60 h-screen sticky top-0 py-5 z-20">
       {/* Parce mark — 3x3 copper grid with the playbook tilt. */}
       <div className="flex items-center justify-center w-11 h-11 mb-6" title="parce">
         <ParceIcon size="sm" variant="on-light" />
       </div>
+
+      {/* Cmd+K search trigger — first item below the logo */}
+      <button
+        type="button"
+        onClick={() => setPaletteOpen(true)}
+        title="Search (⌘K / Ctrl+K / )"
+        aria-label="Open command palette"
+        className="inline-flex items-center justify-center w-11 h-11 rounded-xl mb-2 text-fg-muted hover:text-fg hover:bg-bg-elevated/70 transition-all"
+      >
+        <Search size={19} strokeWidth={1.75} />
+      </button>
 
       <nav className="flex flex-col items-center gap-1.5 flex-1">
         {NAV_ITEMS.map(({ id, icon: Icon, label, disabled, href }, idx) => {
