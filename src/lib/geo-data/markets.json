@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "_note": "Approximate MSA bounding polygons. Refine if precision matters at the metro edges. Source: hand-drawn from public knowledge of DFW + Houston MSAs.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "DFW" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-97.80, 32.30],
+          [-96.30, 32.30],
+          [-96.30, 33.40],
+          [-97.80, 33.40],
+          [-97.80, 32.30]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Houston" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-96.10, 29.10],
+          [-94.60, 29.10],
+          [-94.60, 30.50],
+          [-96.10, 30.50],
+          [-96.10, 29.10]
+        ]]
+      }
+    }
+  ]
+}

@@ -192,6 +192,7 @@ import { DevelopmentProjectDrawer } from './components/Development/DevelopmentPr
 import { AcquisitionTargetDrawer } from './components/Acquisitions/AcquisitionTargetDrawer';
 import { DispositionListingDrawer } from './components/Disposition/DispositionListingDrawer';
 import { geocodeAddress } from './lib/geocode';
+import { applyGeoTags } from './lib/geo-tagger';
 import { CompsView } from './components/Comps/CompsView';
 import { ContactsView } from './components/Contacts/ContactsView';
 import { AcquisitionsView } from './components/Acquisitions/AcquisitionsView';
@@ -1296,7 +1297,11 @@ function App() {
     writeThrough('delete scenario', deleteScenarioRow(id));
   };
 
-  const handleSaveDevProject = (updated: DevelopmentProject) => {
+  const handleSaveDevProject = (raw: DevelopmentProject) => {
+    // Auto-tag market/submarket/county/city from lat/lng before persisting.
+    // Silently no-ops when lat/lng is null (geocode fallback below will
+    // re-tag once we have coords).
+    const updated = applyGeoTags(raw);
     setDevProjects((prev) => {
       const idx = prev.findIndex((p) => p.id === updated.id);
       if (idx === -1) return [...prev, updated];
@@ -1325,7 +1330,9 @@ function App() {
     setDevProjects((prev) =>
       prev.map((p) => {
         if (p.id !== id) return p;
-        const next = { ...p, lat, lng, updatedAt: now };
+        // applyGeoTags re-derives market/submarket/county/city from the new
+        // lat/lng. Without this, drag-to-pin would leave the tags stale.
+        const next = applyGeoTags({ ...p, lat, lng, updatedAt: now });
         saved = next;
         return next;
       })
@@ -1484,7 +1491,8 @@ function App() {
   };
 
   // ── Acquisitions ────────────────────────────────────────────────
-  const handleSaveAcquisitionTarget = (updated: AcquisitionTarget) => {
+  const handleSaveAcquisitionTarget = (raw: AcquisitionTarget) => {
+    const updated = applyGeoTags(raw);
     setAcquisitionTargets((prev) => {
       const idx = prev.findIndex((t) => t.id === updated.id);
       if (idx === -1) return [...prev, updated];
@@ -1511,7 +1519,7 @@ function App() {
     setAcquisitionTargets((prev) =>
       prev.map((t) => {
         if (t.id !== id) return t;
-        const next = { ...t, lat, lng, updatedAt: now };
+        const next = applyGeoTags({ ...t, lat, lng, updatedAt: now });
         saved = next;
         return next;
       })
@@ -1562,7 +1570,8 @@ function App() {
   };
 
   // ── Disposition ─────────────────────────────────────────────────
-  const handleSaveDispositionListing = (updated: DispositionListing) => {
+  const handleSaveDispositionListing = (raw: DispositionListing) => {
+    const updated = applyGeoTags(raw);
     setDispositionListings((prev) => {
       const idx = prev.findIndex((d) => d.id === updated.id);
       if (idx === -1) return [...prev, updated];
@@ -1589,7 +1598,7 @@ function App() {
     setDispositionListings((prev) =>
       prev.map((d) => {
         if (d.id !== id) return d;
-        const next = { ...d, lat, lng, updatedAt: now };
+        const next = applyGeoTags({ ...d, lat, lng, updatedAt: now });
         saved = next;
         return next;
       })
