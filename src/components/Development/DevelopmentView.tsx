@@ -12,6 +12,8 @@ import { DEV_PHASE_ORDER, DevPhaseEnum } from '../../types';
 import { DevelopmentProjectDrawer } from './DevelopmentProjectDrawer';
 import { ExcelToolbar } from '../ExcelToolbar';
 import { MapView } from '../Map/MapView';
+import { GeoFilterBar } from '../GeoFilterBar';
+import { useGeoFilters, applyFilter } from '../../lib/useGeoFilters';
 
 interface DevelopmentViewProps {
   projects: DevelopmentProject[];
@@ -137,14 +139,36 @@ export function DevelopmentView({
   const [editing, setEditing] = useState<DevelopmentProject | null>(null);
   const [phaseFilter, setPhaseFilter] = useState<DevPhase | 'all' | 'active'>('active');
   const [mapOpen, setMapOpen] = useState(true);
+  const { filters: geoFilters, setFilters: setGeoFilters, reset: resetGeoFilters } = useGeoFilters('dev');
+
+  // Layer geo filter ON TOP of the existing phase filter — both apply.
+  const geoFiltered = useMemo(() => applyFilter(projects, geoFilters), [projects, geoFilters]);
 
   const filtered = useMemo(() => {
-    if (phaseFilter === 'all') return projects;
+    if (phaseFilter === 'all') return geoFiltered;
     if (phaseFilter === 'active') {
-      return projects.filter((p) => !SIDE_PHASES.includes(p.phase) && p.phase !== 'Delivered');
+      return geoFiltered.filter((p) => !SIDE_PHASES.includes(p.phase) && p.phase !== 'Delivered');
     }
-    return projects.filter((p) => p.phase === phaseFilter);
-  }, [projects, phaseFilter]);
+    return geoFiltered.filter((p) => p.phase === phaseFilter);
+  }, [geoFiltered, phaseFilter]);
+
+  // Surface only the submarket / county / city values that appear in the
+  // current row set, so dropdowns don't dangle stale options.
+  const visible = useMemo(() => {
+    const submarkets = new Set<string>();
+    const counties = new Set<string>();
+    const cities = new Set<string>();
+    for (const p of projects) {
+      if (p.submarket) submarkets.add(p.submarket);
+      if (p.county) counties.add(p.county);
+      if (p.city) cities.add(p.city);
+    }
+    return {
+      submarkets: Array.from(submarkets).sort(),
+      counties: Array.from(counties).sort(),
+      cities: Array.from(cities).sort(),
+    };
+  }, [projects]);
 
   const byPhase = useMemo(() => {
     const m = new Map<DevPhase, DevelopmentProject[]>();
@@ -230,7 +254,18 @@ export function DevelopmentView({
           </div>
         )}
 
-        <div className="mt-5 flex items-center gap-2 flex-wrap">
+        <div className="mt-4 border-t border-border pt-3">
+          <GeoFilterBar
+            filters={geoFilters}
+            onChange={setGeoFilters}
+            onReset={resetGeoFilters}
+            visibleSubmarkets={visible.submarkets}
+            visibleCounties={visible.counties}
+            visibleCities={visible.cities}
+          />
+        </div>
+
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => setPhaseFilter('active')}

@@ -80,6 +80,24 @@ export function geoTag(input: { lat: number | null | undefined; lng: number | nu
 }
 
 /**
+ * Enumerate the available names in each layer — used by GeoFilterBar to
+ * build dropdown / chip options. Returned in declaration order from the
+ * source GeoJSON files.
+ */
+export const AVAILABLE_MARKETS: string[] = MARKETS.map((f) => f.properties.name);
+export const AVAILABLE_COUNTIES: string[] = COUNTIES.map((f) => f.properties.name);
+export const AVAILABLE_CITIES: string[] = CITIES.map((f) => f.properties.name);
+export const AVAILABLE_SUBMARKETS: string[] = SUBMARKETS.map((f) => f.properties.name);
+
+/** Submarkets scoped to a market (or all when market is null). */
+export function submarketsForMarket(market: string | null): string[] {
+  if (!market) return AVAILABLE_SUBMARKETS;
+  return SUBMARKETS
+    .filter((f) => f.properties.market === market)
+    .map((f) => f.properties.name);
+}
+
+/**
  * Apply tags to an entity object in-place if its lat/lng resolves to any
  * tag. Doesn't overwrite existing fields with null — preserves manually-set
  * values when lat/lng falls outside known polygons.
