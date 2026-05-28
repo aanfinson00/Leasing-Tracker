@@ -14,15 +14,31 @@
 import { createHash } from 'node:crypto';
 import { getServiceClient } from './db';
 
+export type Role = 'admin' | 'write' | 'read';
+
 export interface AuthedToken {
   id: string;
   name: string;
-  role: string;
+  role: Role;
 }
 
 export interface AuthFailure {
   status: 401 | 403;
   message: string;
+}
+
+/**
+ * Does this token's role satisfy the tool's requirement?
+ * Tier order (lowest → highest): read < write < admin.
+ * Higher tiers always cover everything lower tiers can do.
+ */
+export function roleSatisfies(have: Role, need: Role): boolean {
+  const tier: Record<Role, number> = { read: 0, write: 1, admin: 2 };
+  return tier[have] >= tier[need];
+}
+
+function coerceRole(raw: string): Role {
+  return raw === 'read' || raw === 'write' || raw === 'admin' ? raw : 'read';
 }
 
 function sha256Hex(input: string): string {
@@ -68,7 +84,7 @@ export async function verifyBearer(authorizationHeader: string | undefined | nul
     .update({ last_used_at: new Date().toISOString() })
     .eq('id', data.id);
 
-  return { id: data.id, name: data.name, role: data.role };
+  return { id: data.id, name: data.name, role: coerceRole(data.role) };
 }
 
 export function isFailure(x: AuthedToken | AuthFailure): x is AuthFailure {
