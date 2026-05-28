@@ -27,6 +27,9 @@ import {
 import type { AuthedToken } from './auth';
 import { writeAuditLog } from './audit';
 import { listDealsTool } from './tools/list-deals';
+import { createDealTool } from './tools/create-deal';
+import { updateDealTool } from './tools/update-deal';
+import { addActivityToDealTool } from './tools/add-activity-to-deal';
 
 // All tools are registered here. The shape is a manual interface match —
 // not a base class — because each tool's args type is unique.
@@ -37,7 +40,12 @@ const TOOLS: Array<{
   inputSchema: unknown;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler: (args: any, token: AuthedToken) => Promise<unknown>;
-}> = [listDealsTool];
+}> = [
+  listDealsTool,
+  createDealTool,
+  updateDealTool,
+  addActivityToDealTool,
+];
 
 export function buildServer(token: AuthedToken): Server {
   const server = new Server(

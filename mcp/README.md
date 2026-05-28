@@ -5,8 +5,9 @@ deployed and connected to Claude (`claude.ai` or Claude Code), it exposes
 typed tools like `list_deals`, `create_deal`, `add_activity_to_deal` that
 Claude can call directly — no Excel-shuttling.
 
-**Status**: Session 1 — one read-only tool (`list_deals`). Sessions 2-3
-add the write tools + permission tiers.
+**Status**: Session 2 — `list_deals` (read) + `create_deal`, `update_deal`,
+`add_activity_to_deal` (write). Session 3 adds permission tiers + the
+remaining read+write tools.
 
 ## How the pieces fit
 
@@ -158,12 +159,25 @@ That's it — no Vercel config changes per tool.
 
 ## Sessions roadmap
 
-- **Session 1 (this PR):** `list_deals` + auth + audit + deploy
-- **Session 2:** mutations — `create_deal`, `update_deal`, `add_activity_to_deal`
+- **Session 1:** `list_deals` + auth + audit + deploy ✓
+- **Session 2 (current):** mutations — `create_deal`, `update_deal`,
+  `add_activity_to_deal` ✓
 - **Session 3:** permission tiers (`mcp_tokens.role`: admin/write/read) + all
   remaining read+write tools (`list_tenants`, `update_tenant`,
   `list_dev_projects`, `add_dev_project_note`, `find_contact`,
   `create_contact`, `list_acquisitions`, `list_dispositions`)
+
+## Known interplay with the app
+
+The frontend's Realtime subscriptions WILL pick up MCP writes — open
+clients see new/updated deals automatically.
+
+One thing the MCP **doesn't** trigger: the auto-promote-on-Executed
+flow that lives in `App.tsx::handleSaveDeal`. If `update_deal` flips a
+status to "Executed", the row updates but PromoteDrawer doesn't open
+for users with the app open. Session 3+ adds a dedicated
+`promote_deal_to_rent_roll` tool that exposes the full promote flow
+server-side.
 
 ## Security notes
 
