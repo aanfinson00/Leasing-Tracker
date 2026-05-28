@@ -528,6 +528,8 @@ export const DevelopmentProjectSchema = z.object({
   county: z.string().nullable().optional(),
   city: z.string().nullable().optional(),
   address: z.string().nullable().optional(),
+  // SiteSetter share-link URL — powers the "Preview rent roll from site plan" export
+  siteSetterUrl: z.string().nullable().optional(),
 
   phase: DevPhaseEnum,
 
@@ -560,6 +562,7 @@ export const DevelopmentProjectSchema = z.object({
   ...p,
   market: p.market ?? null,
   submarket: p.submarket ?? null,
+  siteSetterUrl: p.siteSetterUrl ?? null,
   county: p.county ?? null,
   city: p.city ?? null,
   address: p.address ?? null,
