@@ -5,9 +5,43 @@ deployed and connected to Claude (`claude.ai` or Claude Code), it exposes
 typed tools like `list_deals`, `create_deal`, `add_activity_to_deal` that
 Claude can call directly — no Excel-shuttling.
 
-**Status**: Session 2 — `list_deals` (read) + `create_deal`, `update_deal`,
-`add_activity_to_deal` (write). Session 3 adds permission tiers + the
-remaining read+write tools.
+**Status**: Session 3 — role tiers + 12 tools covering deals, tenants, dev
+projects, contacts, acquisitions, dispositions. See **Tool catalog** below.
+
+## Tool catalog
+
+| Tool | Required role | What |
+|---|---|---|
+| `list_deals` | read | Search the leasing pipeline |
+| `create_deal` | write | New prospect / RFP / unsolicited |
+| `update_deal` | write | Patch rent / term / TI / status |
+| `add_activity_to_deal` | write | Append call/email/meeting to a deal's log |
+| `list_tenants` | read | Search rent_roll |
+| `update_tenant` | write | Patch lease terms / occupancy / finalize fields |
+| `list_dev_projects` | read | The development pipeline |
+| `add_dev_project_note` | write | PM status, site visit, design review |
+| `find_contact` | read | Look up by name / company / email |
+| `create_contact` | write | New broker / attorney / vendor |
+| `list_acquisitions` | read | Acquisition pipeline |
+| `list_dispositions` | read | Disposition pipeline |
+
+### Role tiers
+
+| Role | Can do |
+|---|---|
+| `read` | All `list_*`, `find_*`, `get_*` |
+| `write` | Everything `read` can + all `create_*` / `update_*` / `add_*` |
+| `admin` | Reserved for future destructive ops (none yet) |
+
+Mint a token with a specific role by passing it in the SQL snippet (default is
+`admin` for backward compatibility with tokens minted before Session 3):
+
+```sql
+INSERT INTO mcp_tokens (name, token_hash, role)
+SELECT 'Sarah (read-only)', encode(digest(token, 'sha256'), 'hex'), 'read'
+FROM (SELECT encode(gen_random_bytes(24), 'hex') AS token) AS raw
+RETURNING ...;
+```
 
 ## How the pieces fit
 
@@ -160,12 +194,13 @@ That's it — no Vercel config changes per tool.
 ## Sessions roadmap
 
 - **Session 1:** `list_deals` + auth + audit + deploy ✓
-- **Session 2 (current):** mutations — `create_deal`, `update_deal`,
+- **Session 2:** mutations — `create_deal`, `update_deal`,
   `add_activity_to_deal` ✓
-- **Session 3:** permission tiers (`mcp_tokens.role`: admin/write/read) + all
-  remaining read+write tools (`list_tenants`, `update_tenant`,
-  `list_dev_projects`, `add_dev_project_note`, `find_contact`,
-  `create_contact`, `list_acquisitions`, `list_dispositions`)
+- **Session 3 (current):** permission tiers + the rest of the read/write
+  tools across tenants, dev projects, contacts, acquisitions, dispositions ✓
+- **Future:** `promote_deal_to_rent_roll` (wraps the cashflow projection),
+  `update_dev_project` / `update_acquisition` / `update_disposition`,
+  `add_am_pending_item`, `list_lease_comps` + `list_sales_comps`
 
 ## Known interplay with the app
 
