@@ -102,8 +102,8 @@ export function PromoteDrawer({
     }
   }, [initialPreview]);
 
-  if (!deal || !initialPreview) return null;
-
+  // All derived calculations + hooks live ABOVE any early return so the
+  // hooks order is identical across renders (rules of hooks).
   const parseN = (v: string): number | null => {
     const t = v.trim();
     if (!t) return null;
@@ -119,25 +119,26 @@ export function PromoteDrawer({
   const previewedExpiry = computeExpiryBucket(previewedLeaseEnd);
   const previewedFreeRent = parseN(freeRent);
   const previewedTI = parseN(tiPerSF);
-  const previewedAnnualRent =
-    initialPreview.leasableSF !== null && previewedRent !== null
-      ? Math.round(initialPreview.leasableSF * previewedRent)
-      : null;
-
-  const isNew = !existingRow;
   const previewedRentCommencement = parseS(rentCommencement);
   const previewedDeposit = parseN(securityDeposit);
   const previewedBumps = parseN(annualBumps);
 
+  const leasableSF = initialPreview?.leasableSF ?? null;
+  const previewedAnnualRent =
+    leasableSF !== null && previewedRent !== null
+      ? Math.round(leasableSF * previewedRent)
+      : null;
+
   // Cashflow projection — recomputed live as inputs change. Cached on
-  // the row when the user confirms.
+  // the row when the user confirms. Computed unconditionally so the hook
+  // order is stable; buildCashflow returns null when inputs are incomplete.
   const cashflow = useMemo(
     () =>
       buildCashflow({
         leaseStart: previewedStart,
         rentCommencementDate: previewedRentCommencement,
         leaseTermMonths: previewedTerm,
-        leasableSF: initialPreview.leasableSF,
+        leasableSF,
         startingAnnualRentPSF: previewedRent,
         annualRentBumpsPct: previewedBumps,
         freeRentMonths: previewedFreeRent,
@@ -146,12 +147,16 @@ export function PromoteDrawer({
       previewedStart,
       previewedRentCommencement,
       previewedTerm,
-      initialPreview.leasableSF,
+      leasableSF,
       previewedRent,
       previewedBumps,
       previewedFreeRent,
     ]
   );
+
+  if (!deal || !initialPreview) return null;
+
+  const isNew = !existingRow;
 
   const handleConfirm = () => {
     const finalRow: RentRollRow = {
