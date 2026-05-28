@@ -437,6 +437,7 @@ export interface DevelopmentProjectRow {
   county: string | null;
   city: string | null;
   address: string | null;
+  site_setter_url: string | null;
   phase: DevelopmentProject['phase'];
   total_sf: number | string | null;
   acres: number | string | null;
@@ -472,6 +473,7 @@ export const developmentProjectToRow = (
   county: p.county,
   city: p.city,
   address: p.address,
+  site_setter_url: p.siteSetterUrl,
   phase: p.phase,
   total_sf: p.totalSF,
   acres: p.acres,
@@ -504,6 +506,7 @@ export const rowToDevelopmentProject = (
   county: r.county,
   city: r.city,
   address: r.address,
+  siteSetterUrl: r.site_setter_url,
   phase: r.phase,
   totalSF: numOrNull(r.total_sf),
   acres: numOrNull(r.acres),

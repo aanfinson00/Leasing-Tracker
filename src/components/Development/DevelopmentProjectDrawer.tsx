@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   X,
@@ -13,6 +13,9 @@ import {
   AlertTriangle,
   Activity as ActivityIcon,
   UserSquare,
+  MapPin,
+  ExternalLink,
+  FileSpreadsheet,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type {
@@ -26,6 +29,12 @@ import type {
 import { DevPhaseEnum, RiskLevelEnum, DEV_PHASE_ORDER } from '../../types';
 import { DevContactsPanel } from './DevContactsPanel';
 import { DevNotesLog } from './DevNotesLog';
+import {
+  parseSiteSetterToken,
+  fetchSharedSiteSetterProject,
+  normalizeBuildings,
+} from '../../lib/sitesetter';
+import { buildSitePlanWorkbook, downloadWorkbook } from '../../lib/sitesetter-export';
 
 interface DevelopmentProjectDrawerProps {
   project: DevelopmentProject | null;
@@ -64,6 +73,7 @@ type FormValues = {
   riskLevel: RiskLevel;
   statusSummary: string;
   notes: string;
+  siteSetterUrl: string;
 };
 
 const toStr = (v: string | number | null | undefined): string => {
@@ -184,6 +194,61 @@ export function DevelopmentProjectDrawer({
     formState: { errors },
   } = useForm<FormValues>();
 
+  // SiteSetter export state — local to this section, doesn't go through
+  // the form because the values aren't saved on the project itself.
+  const [exportRate, setExportRate] = useState('');
+  const [exportTerm, setExportTerm] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportSummary, setExportSummary] = useState<string | null>(null);
+
+  const handlePreviewRentRoll = async () => {
+    setExportError(null);
+    setExportSummary(null);
+    const url = watch('siteSetterUrl');
+    const token = parseSiteSetterToken(url ?? '');
+    if (!token) {
+      setExportError('Paste a SiteSetter share URL (or token) first.');
+      return;
+    }
+    if (!project) return;
+    setExporting(true);
+    try {
+      const payload = await fetchSharedSiteSetterProject(token);
+      if (!payload || !payload.buildings) {
+        setExportError('SiteSetter returned no project — check that the share link is active.');
+        return;
+      }
+      const buildings = normalizeBuildings(payload);
+      if (buildings.length === 0) {
+        setExportError('Site plan has no buildings to export.');
+        return;
+      }
+      const rate = parseFloat(exportRate);
+      const term = parseInt(exportTerm, 10);
+      const bytes = buildSitePlanWorkbook(
+        {
+          id: project.id,
+          projectName: project.projectName,
+          address: project.address,
+          market: project.market,
+        },
+        buildings,
+        {
+          defaultStartingRentPSF: Number.isFinite(rate) ? rate : null,
+          defaultLeaseTermMonths: Number.isFinite(term) ? term : null,
+        }
+      );
+      const safeName = project.projectName.replace(/[^\w-]+/g, '_').slice(0, 40);
+      downloadWorkbook(`site_plan_${safeName}_${new Date().toISOString().slice(0, 10)}.xlsx`, bytes);
+      setExportSummary(`Generated workbook for ${buildings.length} building${buildings.length === 1 ? '' : 's'}.`);
+    } catch (e) {
+      setExportError(String((e as Error).message ?? e));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   useEffect(() => {
     if (project) {
       reset({
@@ -206,6 +271,7 @@ export function DevelopmentProjectDrawer({
         riskLevel: project.riskLevel,
         statusSummary: toStr(project.statusSummary),
         notes: toStr(project.notes),
+        siteSetterUrl: toStr(project.siteSetterUrl),
       });
     }
   }, [project, reset]);
@@ -245,6 +311,7 @@ export function DevelopmentProjectDrawer({
       lat: project.lat ?? null,
       lng: project.lng ?? null,
       notes: parseStr(v.notes),
+      siteSetterUrl: parseStr(v.siteSetterUrl),
       createdAt: project.createdAt,
       updatedAt: new Date().toISOString(),
     };
@@ -463,6 +530,88 @@ export function DevelopmentProjectDrawer({
                     className={inputClass}
                   />
                 </div>
+              </div>
+            </Section>
+
+            <Section icon={MapPin} title="Site Plan (SiteSetter)">
+              <div className="space-y-3">
+                <div>
+                  <label className={labelClass}>SiteSetter share URL</label>
+                  <div className="flex items-stretch gap-2">
+                    <input
+                      {...register('siteSetterUrl')}
+                      type="url"
+                      placeholder="https://sitesetter.io/site_planner.html?view=…"
+                      className={`${inputClass} flex-1`}
+                    />
+                    {watch('siteSetterUrl')?.trim() && (
+                      <a
+                        href={watch('siteSetterUrl')}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open in SiteSetter"
+                        className="inline-flex items-center gap-1 px-3 rounded-lg text-xs font-medium border border-border bg-bg-elevated hover:bg-bg-hover text-fg whitespace-nowrap"
+                      >
+                        Open <ExternalLink size={12} />
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3.5">
+                  <div>
+                    <label className={labelClass}>
+                      Default Starting Rent ($/SF/yr)
+                      <span className="text-fg-subtle ml-1">— optional</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 9.50"
+                      value={exportRate}
+                      onChange={(e) => setExportRate(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>
+                      Default Lease Term (months)
+                      <span className="text-fg-subtle ml-1">— optional</span>
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 60"
+                      value={exportTerm}
+                      onChange={(e) => setExportTerm(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handlePreviewRentRoll}
+                  disabled={exporting || !watch('siteSetterUrl')?.trim()}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-accent text-accent-fg rounded-xl hover:bg-accent-hover transition-colors shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FileSpreadsheet size={14} strokeWidth={2} />
+                  {exporting ? 'Generating…' : 'Preview rent roll from site plan'}
+                </button>
+
+                {exportError && (
+                  <div className="text-xs px-3 py-2 rounded-lg bg-danger/10 text-danger border border-danger/30">
+                    {exportError}
+                  </div>
+                )}
+                {exportSummary && (
+                  <div className="text-xs px-3 py-2 rounded-lg bg-emerald-50 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+                    {exportSummary} Excel download started.
+                  </div>
+                )}
+
+                <p className="text-[11px] text-fg-subtle leading-relaxed">
+                  Pulls the live building dimensions from the linked SiteSetter project and emits a 2-sheet workbook (<code>building_summary</code> + <code>projected_rent_roll</code>) ready for tenant fill-in. The <code>projected_rent_roll</code> columns match the rent_roll Excel-import schema so signed leases can re-import later.
+                </p>
               </div>
             </Section>
 

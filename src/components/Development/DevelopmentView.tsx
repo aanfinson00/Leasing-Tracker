@@ -46,6 +46,7 @@ function newProjectTemplate(): DevelopmentProject {
     county: null,
     city: null,
     address: null,
+    siteSetterUrl: null,
     phase: 'Site Selection',
     totalSF: null,
     acres: null,
