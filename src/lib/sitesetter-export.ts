@@ -54,7 +54,7 @@ export function buildSitePlanWorkbook(
   project: Pick<DevelopmentProject, 'id' | 'projectName' | 'address' | 'market'>,
   buildings: SiteSetterBuilding[],
   options: RentRollPreviewOptions = {}
-): Uint8Array {
+): ArrayBuffer {
   const rate = options.defaultStartingRentPSF ?? null;
   const term = options.defaultLeaseTermMonths ?? null;
 
@@ -122,17 +122,17 @@ export function buildSitePlanWorkbook(
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'building_summary');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rentRoll), 'projected_rent_roll');
 
-  return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  // XLSX.write with { type: 'array' } returns an ArrayBuffer despite
+  // SheetJS's confusing naming. Return as-is — Blob([ArrayBuffer]) is
+  // the easiest downstream consumer shape.
+  return XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
 }
 
 /**
  * Trigger a browser download for the workbook bytes.
  */
-export function downloadWorkbook(filename: string, bytes: Uint8Array): void {
-  // BlobPart requires an ArrayBuffer-backed view; newer @types/node tighten
-  // Uint8Array's generic so we hand it a plain ArrayBuffer slice instead.
-  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  const blob = new Blob([ab], {
+export function downloadWorkbook(filename: string, bytes: ArrayBuffer): void {
+  const blob = new Blob([bytes], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
   const url = URL.createObjectURL(blob);
