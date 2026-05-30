@@ -65,7 +65,6 @@ type FormValues = {
   brokerRep: string;
   transaction: string;
   status: DealStatus;
-  lastRevalUWRent: string;
   targetRent: string;
   proposedTermMonths: string;
   freeRentMonths: string;
@@ -239,7 +238,6 @@ export function DealDrawer({
         brokerRep: toFormString(deal.brokerRep),
         transaction: toFormString(deal.transaction),
         status: deal.status,
-        lastRevalUWRent: toFormString(deal.lastRevalUWRent),
         targetRent: toFormString(deal.targetRent),
         proposedTermMonths: toFormString(deal.proposedTermMonths),
         freeRentMonths: toFormString(deal.freeRentMonths),
@@ -273,7 +271,7 @@ export function DealDrawer({
       brokerRep: parseStr(values.brokerRep),
       transaction: parseStr(values.transaction),
       status: values.status,
-      lastRevalUWRent: parseNum(values.lastRevalUWRent),
+      lastRevalUWRent: deal.lastRevalUWRent,
       targetRent: parseNum(values.targetRent),
       proposedTermMonths: parseNum(values.proposedTermMonths),
       freeRentMonths: parseNum(values.freeRentMonths),
@@ -523,15 +521,6 @@ export function DealDrawer({
             <Section icon={DollarSign} title="Economics">
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className={labelClass}>Last Reval UW Rent ($/SF)</label>
-                  <input
-                    {...register('lastRevalUWRent')}
-                    type="number"
-                    step="0.01"
-                    className={`${inputClass} tabular-nums`}
-                  />
-                </div>
-                <div>
                   <label className={labelClass}>Target Rent ($/SF)</label>
                   <input
                     {...register('targetRent')}
@@ -669,7 +658,7 @@ export function DealDrawer({
                           brokerRep: parseStr(values.brokerRep),
                           transaction: parseStr(values.transaction),
                           status: values.status,
-                          lastRevalUWRent: parseNum(values.lastRevalUWRent),
+                          lastRevalUWRent: deal.lastRevalUWRent,
                           targetRent: parseNum(values.targetRent),
                           proposedTermMonths: parseNum(values.proposedTermMonths),
                           freeRentMonths: parseNum(values.freeRentMonths),

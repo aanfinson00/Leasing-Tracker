@@ -134,20 +134,14 @@ export function RentRollTable({
         header: 'Status',
         cell: (info) => {
           const occupied = info.getValue();
-          const basis = info.row.original.uwBasis;
           return occupied ? (
             <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
               Occupied
             </span>
           ) : (
-            <div className="flex flex-col gap-0.5">
-              <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300 self-start">
-                Vacant
-              </span>
-              {basis === 'Prospective UW' && (
-                <span className="text-[10px] text-fg-subtle">UW</span>
-              )}
-            </div>
+            <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300 self-start">
+              Vacant
+            </span>
           );
         },
       }),
