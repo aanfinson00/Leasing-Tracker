@@ -127,7 +127,7 @@ import {
   deleteSalesComp as deleteSalesCompRow,
   subscribeSalesComps,
 } from './lib/repo/salesComps';
-import { listAllBuildings, subscribeBuildings } from './lib/repo/buildings';
+import { listAllBuildings, subscribeBuildings, upsertBuilding } from './lib/repo/buildings';
 import {
   listPropertyTaxAppeals,
   upsertPropertyTaxAppeal,
@@ -971,6 +971,35 @@ function App() {
     setFilteredDeals(updated);
     setEditingDeal(newDeal);
     writeThrough('create deal', upsertDeal(newDeal));
+  };
+
+  // Optimistic upsert + write-through for buildings (used by SplitSpaceModal).
+  // Realtime sub will reconcile once Supabase round-trips.
+  const handleUpsertBuilding = (b: Building) => {
+    setBuildings((prev) => {
+      const exists = prev.some((x) => x.id === b.id);
+      return exists ? prev.map((x) => (x.id === b.id ? b : x)) : [...prev, b];
+    });
+    writeThrough('save building', upsertBuilding(b));
+  };
+
+  // Create a new minimal Deal from the NewProjectModal. Returns the
+  // created Deal so the picker can immediately select it.
+  const handleCreateNewProject = async (p: {
+    dealId: string;
+    dealName: string;
+    market: string;
+  }): Promise<Deal | null> => {
+    const newDeal: Deal = {
+      ...defaultDeal(),
+      dealId: p.dealId,
+      dealName: p.dealName,
+    };
+    const updated = [...deals, newDeal];
+    setDeals(updated);
+    setFilteredDeals(updated);
+    writeThrough('create project', upsertDeal(newDeal));
+    return newDeal;
   };
   const handleSelectDeal = (deal: Deal) => setEditingDeal(deal);
   const handleSaveDeal = (updated: Deal) => {
@@ -2101,6 +2130,7 @@ function App() {
 
       <DealDrawer
         deal={editingDeal}
+        deals={deals}
         activities={activities}
         buildings={buildings}
         onClose={() => setEditingDeal(null)}
@@ -2111,9 +2141,12 @@ function App() {
         onDeleteActivity={handleDeleteActivity}
         onStatusChange={handleDealStatusChange}
         onToast={showToast}
+        onUpsertBuilding={handleUpsertBuilding}
+        onCreateNewProject={handleCreateNewProject}
       />
       <RentRollDrawer
         row={editingRow}
+        deals={deals}
         activities={activities}
         buildings={buildings}
         onClose={() => setEditingRow(null)}
@@ -2121,6 +2154,8 @@ function App() {
         onDelete={handleDeleteRow}
         onAddActivity={handleAddActivity}
         onDeleteActivity={handleDeleteActivity}
+        onUpsertBuilding={handleUpsertBuilding}
+        onCreateNewProject={handleCreateNewProject}
       />
       <PromoteDrawer
         deal={promotingDeal}

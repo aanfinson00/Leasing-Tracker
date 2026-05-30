@@ -22,20 +22,23 @@ import type { LucideIcon } from 'lucide-react';
 import type { ActivityEntry, Building, Deal, DealStatus, Priority } from '../types';
 import {
   PriorityEnum,
-  DEAL_ID_REGEX,
   SPACE_ID_REGEX,
-  DEAL_ID_FORMAT_HINT,
   SPACE_ID_FORMAT_HINT,
 } from '../types';
-import { listSpaceOptions, findSpaceOption } from '../lib/spaces';
 import { TRANSACTION_TYPES } from '../lib/enums';
 import { EnumDropdown } from './EnumDropdown';
 import { StatusBadge } from './StatusBadge';
 import { PipelineStepper } from './PipelineStepper';
 import { ActivityLog } from './ActivityLog';
+import { DealPicker } from './DealPicker';
+import { BuildingPicker } from './BuildingPicker';
+import { SpacePicker } from './SpacePicker';
+import { SplitSpaceModal } from './SplitSpaceModal';
+import { NewProjectModal } from './NewProjectModal';
 
 interface DealDrawerProps {
   deal: Deal | null;
+  deals: Deal[];
   activities: ActivityEntry[];
   buildings: Building[];
   onClose: () => void;
@@ -46,11 +49,14 @@ interface DealDrawerProps {
   onDeleteActivity: (id: string) => void;
   onStatusChange?: (deal: Deal, from: DealStatus, to: DealStatus) => void;
   onToast?: (msg: string) => void;
+  onUpsertBuilding: (b: Building) => void;
+  onCreateNewProject: (p: { dealId: string; dealName: string; market: string }) => Promise<Deal | null>;
 }
 
 type FormValues = {
   dealName: string;
   spaceId: string;
+  buildingId: string;
   building: string;
   dealId: string;
   minSF: string;
@@ -124,6 +130,7 @@ function Section({ icon: Icon, title, children }: SectionProps) {
 
 export function DealDrawer({
   deal,
+  deals,
   activities,
   buildings,
   onClose,
@@ -134,6 +141,8 @@ export function DealDrawer({
   onDeleteActivity,
   onStatusChange,
   onToast,
+  onUpsertBuilding,
+  onCreateNewProject,
 }: DealDrawerProps) {
   const {
     register,
@@ -144,30 +153,50 @@ export function DealDrawer({
     formState: { errors },
   } = useForm<FormValues>();
 
-  // Mirrors RentRollDrawer's picker — same listSpaceOptions, same UX.
-  const spaceOptions = useMemo(() => listSpaceOptions(buildings), [buildings]);
-  const currentBuildingNameLive = watch('building') ?? deal?.building ?? '';
-  const currentSpaceIdLive = watch('spaceId') ?? deal?.spaceId ?? '';
-  const matchedSpaceOption = useMemo(
-    () =>
-      findSpaceOption(
-        spaceOptions,
-        null,
-        currentSpaceIdLive || null
-      ),
-    [spaceOptions, currentSpaceIdLive]
+  // Cascading picker live values
+  const currentDealId = watch('dealId') ?? deal?.dealId ?? '';
+  const currentBuildingId = watch('buildingId') ?? '';
+  const currentSpaceId = watch('spaceId') ?? deal?.spaceId ?? '';
+
+  // Split-space modal state
+  const [splitModal, setSplitModal] = useState<{
+    open: boolean;
+    building: Building | null;
+    parentSpaceId: string;
+  }>({ open: false, building: null, parentSpaceId: '' });
+
+  // New-project modal state
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+
+  const existingDealIds = useMemo(
+    () => deals.map((d) => d.dealId).filter((id): id is string => !!id && id !== ''),
+    [deals]
   );
 
-  const handleSpacePick = (key: string) => {
-    if (key === '') {
-      setValue('spaceId', '', { shouldDirty: true });
+  const handleSplitRequest = (parentSpaceId: string) => {
+    const b = buildings.find((bldg) => bldg.id === currentBuildingId);
+    if (!b) return;
+    setSplitModal({ open: true, building: b, parentSpaceId });
+  };
+
+  const handleSplitConfirm = (updated: Building) => {
+    onUpsertBuilding(updated);
+    setSplitModal({ open: false, building: null, parentSpaceId: '' });
+  };
+
+  const handleCreateNewProject = async (p: {
+    dealId: string;
+    dealName: string;
+    market: string;
+  }) => {
+    const newDeal = await onCreateNewProject(p);
+    if (newDeal && newDeal.dealId) {
+      setValue('dealId', newDeal.dealId, { shouldDirty: true });
+      setValue('buildingId', '', { shouldDirty: true });
       setValue('building', '', { shouldDirty: true });
-      return;
+      setValue('spaceId', '', { shouldDirty: true });
     }
-    const opt = spaceOptions.find((o) => o.key === key);
-    if (!opt) return;
-    setValue('spaceId', opt.spaceId, { shouldDirty: true });
-    setValue('building', opt.buildingName, { shouldDirty: true });
+    setNewProjectOpen(false);
   };
 
   // "Get status update" — copies the slash command + deal context to the
@@ -190,9 +219,18 @@ export function DealDrawer({
 
   useEffect(() => {
     if (deal) {
+      // Resolve current buildingId from the deal's current space + buildings list
+      const resolvedBuildingId =
+        buildings.find((b) =>
+          b.baySpaceIds.includes(deal.spaceId ?? '') ||
+          (b.spaceSubdivisions ?? []).some((s) =>
+            s.childSpaceIds.includes(deal.spaceId ?? '')
+          )
+        )?.id ?? '';
       reset({
         dealName: deal.dealName,
         spaceId: toFormString(deal.spaceId),
+        buildingId: resolvedBuildingId,
         building: toFormString(deal.building),
         dealId: toFormString(deal.dealId),
         minSF: toFormString(deal.minSF),
@@ -218,7 +256,7 @@ export function DealDrawer({
         sharepointUrl: toFormString(deal.sharepointUrl),
       });
     }
-  }, [deal, reset]);
+  }, [deal, reset, buildings]);
 
   if (!deal) return null;
 
@@ -354,65 +392,54 @@ export function DealDrawer({
                   )}
                 </div>
                 <div className="col-span-2">
-                  <label className={labelClass}>
-                    Building / Space
-                    {spaceOptions.length === 0 && (
-                      <span className="ml-2 text-fg-subtle font-normal">
-                        — no buildings drawn yet; use the free-text fields below
-                      </span>
-                    )}
-                  </label>
-                  <select
-                    value={matchedSpaceOption?.key ?? ''}
-                    onChange={(e) => handleSpacePick(e.target.value)}
-                    className={inputClass}
-                    disabled={spaceOptions.length === 0}
-                  >
-                    <option value="">
-                      {spaceOptions.length === 0
-                        ? 'No buildings — type IDs manually below'
-                        : 'Pick a space from your buildings…'}
-                    </option>
-                    {spaceOptions.map((o) => (
-                      <option key={o.key} value={o.key}>
-                        {o.buildingName} — {o.spaceId}
-                      </option>
-                    ))}
-                  </select>
-                  {matchedSpaceOption == null &&
-                    (currentBuildingNameLive || currentSpaceIdLive) && (
-                      <p className="text-xs text-fg-subtle mt-1.5">
-                        Custom IDs — doesn't match any drawn space.
-                      </p>
-                    )}
-                </div>
-                <div>
-                  <label className={labelClass}>Deal ID</label>
-                  <input
-                    {...register('dealId', {
-                      validate: (v) =>
-                        !v || DEAL_ID_REGEX.test(v.trim()) || DEAL_ID_FORMAT_HINT,
-                    })}
-                    placeholder="5001"
-                    className={`${inputClass} tabular-nums`}
+                  <label className={labelClass}>Project (Deal ID)</label>
+                  <DealPicker
+                    deals={deals}
+                    value={currentDealId}
+                    onChange={(d) => {
+                      setValue('dealId', d?.dealId ?? '', { shouldDirty: true });
+                      // Changing the project clears building + space
+                      setValue('buildingId', '', { shouldDirty: true });
+                      setValue('building', '', { shouldDirty: true });
+                      setValue('spaceId', '', { shouldDirty: true });
+                    }}
+                    onRequestNew={() => setNewProjectOpen(true)}
                   />
-                  {errors.dealId && (
-                    <p className="text-danger text-xs mt-1.5">{errors.dealId.message}</p>
-                  )}
+                  <input type="hidden" {...register('dealId')} />
                 </div>
                 <div>
                   <label className={labelClass}>Building</label>
-                  <input {...register('building')} className={`${inputClass} tabular-nums`} />
+                  <BuildingPicker
+                    buildings={buildings}
+                    dealId={currentDealId}
+                    value={currentBuildingId}
+                    onChange={(b) => {
+                      setValue('buildingId', b?.id ?? '', { shouldDirty: true });
+                      setValue('building', b?.name ?? '', { shouldDirty: true });
+                      // Changing building clears space
+                      setValue('spaceId', '', { shouldDirty: true });
+                    }}
+                  />
+                  <input type="hidden" {...register('buildingId')} />
+                  <input type="hidden" {...register('building')} />
                 </div>
-                <div className="col-span-2">
+                <div>
                   <label className={labelClass}>Space ID</label>
+                  <SpacePicker
+                    buildings={buildings}
+                    buildingId={currentBuildingId}
+                    value={currentSpaceId}
+                    onChange={(opt) => {
+                      setValue('spaceId', opt?.spaceId ?? '', { shouldDirty: true });
+                    }}
+                    onRequestSplit={handleSplitRequest}
+                  />
                   <input
+                    type="hidden"
                     {...register('spaceId', {
                       validate: (v) =>
                         !v || SPACE_ID_REGEX.test(v.trim()) || SPACE_ID_FORMAT_HINT,
                     })}
-                    placeholder="5001-B01-S03"
-                    className={`${inputClass} tabular-nums`}
                   />
                   {errors.spaceId && (
                     <p className="text-danger text-xs mt-1.5">{errors.spaceId.message}</p>
@@ -685,6 +712,21 @@ export function DealDrawer({
           </div>
         </form>
       </div>
+
+      <SplitSpaceModal
+        open={splitModal.open}
+        building={splitModal.building}
+        parentSpaceId={splitModal.parentSpaceId}
+        onClose={() => setSplitModal({ open: false, building: null, parentSpaceId: '' })}
+        onConfirm={handleSplitConfirm}
+      />
+
+      <NewProjectModal
+        open={newProjectOpen}
+        existingDealIds={existingDealIds}
+        onClose={() => setNewProjectOpen(false)}
+        onConfirm={handleCreateNewProject}
+      />
     </div>
   );
 }
