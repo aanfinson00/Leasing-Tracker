@@ -1,12 +1,24 @@
 // =============================================================================
 // Tool: list_lease_comps
-//
-// Read-only. Comparable lease transactions — for benchmarking proposed rents
-// or sizing market for an upcoming negotiation.
 // =============================================================================
 
+import { z } from 'zod';
 import { getServiceClient } from '../db';
 import type { AuthedToken } from '../auth';
+import { toMcpInputSchema } from '../lib/zod-input';
+
+const argsSchema = z
+  .object({
+    market: z.string().describe('Filter to a market (substring match).').optional(),
+    property_type: z.string().optional(),
+    signed_after: z.string().describe('YYYY-MM-DD. Only comps signed on/after.').optional(),
+    min_sf: z.number().int().optional(),
+    max_sf: z.number().int().optional(),
+    limit: z.number().int().min(1).max(100).describe('Max rows. Defaults to 20, capped at 100.').optional(),
+  })
+  .strict();
+
+type Args = z.infer<typeof argsSchema>;
 
 export const listLeaseCompsTool = {
   name: 'list_lease_comps',
@@ -14,46 +26,15 @@ export const listLeaseCompsTool = {
     'List lease comps for benchmarking. Use when the user wants to check market ' +
     'rents for a particular market / property type / size range, or when ' +
     'underwriting a new prospect. Ordered by signed_date descending.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      market: { type: 'string', description: 'Filter to a market (substring match).' },
-      property_type: { type: 'string' },
-      signed_after: { type: 'string', description: 'YYYY-MM-DD. Only comps signed on/after.' },
-      min_sf: { type: 'integer' },
-      max_sf: { type: 'integer' },
-      limit: {
-        type: 'integer',
-        description: 'Max rows. Defaults to 20, capped at 100.',
-        minimum: 1,
-        maximum: 100,
-      },
-    },
-    additionalProperties: false,
-  },
+  inputSchema: toMcpInputSchema(argsSchema),
 
-  async handler(
-    args: {
-      market?: string;
-      property_type?: string;
-      signed_after?: string;
-      min_sf?: number;
-      max_sf?: number;
-      limit?: number;
-    },
-    _token: AuthedToken
-  ) {
+  async handler(args: Args, _token: AuthedToken) {
     const limit = Math.min(args.limit ?? 20, 100);
     const sb = getServiceClient();
 
     let query = sb
       .from('lease_comps')
-      .select(
-        'id, property_name, building_address, market, property_type, building_type, ' +
-        'tenant_name, tenant_industry, transaction_type, signed_date, lease_sf, ' +
-        'base_rent_psf, effective_rent_psf, rent_type, term_months, free_rent_months, ' +
-        'ti_psf, escalation_pct, confidence, source'
-      )
+      .select('*')
       .order('signed_date', { ascending: false, nullsFirst: false })
       .limit(limit);
 

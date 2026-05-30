@@ -3,8 +3,10 @@
 // Read-only. The acquisitions pipeline (acquisition_targets).
 // =============================================================================
 
+import { z } from 'zod';
 import { getServiceClient } from '../db';
 import type { AuthedToken } from '../auth';
+import { toMcpInputSchema } from '../lib/zod-input';
 
 const ACQ_STATUSES = [
   'Sourcing',
@@ -17,11 +19,15 @@ const ACQ_STATUSES = [
   'On Hold',
 ] as const;
 
-interface ListAcquisitionsArgs {
-  status?: typeof ACQ_STATUSES[number];
-  search?: string;
-  limit?: number;
-}
+const argsSchema = z
+  .object({
+    status: z.enum(ACQ_STATUSES).optional(),
+    search: z.string().optional(),
+    limit: z.number().int().min(1).max(100).describe('Defaults to 20.').optional(),
+  })
+  .strict();
+
+type Args = z.infer<typeof argsSchema>;
 
 export const listAcquisitionsTool = {
   name: 'list_acquisitions',
@@ -29,29 +35,14 @@ export const listAcquisitionsTool = {
     'List rows from the Acquisitions Pipeline (acquisition_targets). Use when ' +
     'the user asks about deals you\'re trying to buy. Filter by status or search ' +
     'across target_name / address / market.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      status: { type: 'string', enum: [...ACQ_STATUSES] },
-      search: { type: 'string' },
-      limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Defaults to 20.' },
-    },
-    additionalProperties: false,
-  },
+  inputSchema: toMcpInputSchema(argsSchema),
 
-  async handler(args: ListAcquisitionsArgs, _token: AuthedToken) {
+  async handler(args: Args, _token: AuthedToken) {
     const limit = Math.min(args.limit ?? 20, 100);
     const sb = getServiceClient();
     let q = sb
       .from('acquisition_targets')
-      .select(
-        'id, target_name, address, market, submarket, county, city, ' +
-        'status, property_type, acres, building_count, total_sf, ' +
-        'asking_price, our_offer, earnest_money, underwritten_irr, ' +
-        'underwritten_eqty_multiple, first_contacted_date, loi_date, ' +
-        'psa_date, expected_closing_date, actual_closing_date, ' +
-        'risk_level, status_summary, updated_at'
-      )
+      .select('*')
       .order('updated_at', { ascending: false, nullsFirst: false })
       .limit(limit);
 
