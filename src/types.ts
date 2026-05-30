@@ -419,6 +419,16 @@ export const BumpOutSchema = z.object({
 
 export type BumpOut = z.infer<typeof BumpOutSchema>;
 
+// Subdivision: one parent bay-space split into N leasable child
+// spaces. Parent disappears from the leasable list once split.
+// Bay footprint is unaffected — splits are a leasing-identity
+// construct, not a physical change to the building.
+export const SpaceSubdivisionSchema = z.object({
+  parentSpaceId: z.string().min(1),
+  childSpaceIds: z.array(z.string().min(1)).min(2),
+});
+export type SpaceSubdivision = z.infer<typeof SpaceSubdivisionSchema>;
+
 export const BuildingSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().min(1),
@@ -439,6 +449,9 @@ export const BuildingSchema = z.object({
   // Space IDs per bay (parallel to bay_count). Null entries fall back
   // to the auto-format {projectId}-B{buildingOrdinal}-S{i+1}.
   baySpaceIds: z.array(z.string().nullable()).default([]),
+  // Subdivisions of bay spaces. When a parent appears here, it is
+  // replaced in the leasable-space list by its children.
+  spaceSubdivisions: z.array(SpaceSubdivisionSchema).default([]),
   // 1-indexed position of this building within its project — used in
   // the auto Space ID format. Assigned on creation.
   buildingOrdinal: z.number().int().positive().nullable().optional(),

@@ -27,7 +27,6 @@ import type {
   RentRollRow,
   Scenario,
   TenantRating,
-  UWBasis,
 } from '../types';
 import {
   AcquisitionStatusEnum,
@@ -68,7 +67,6 @@ import {
   ScenarioSchema,
   TenantRatingEnum,
   TransactionTypeEnum,
-  UWBasisEnum,
 } from '../types';
 import { getTemplateItem, reconcileWithTemplate } from './onboarding';
 
@@ -234,16 +232,6 @@ const parsePriority = (v: unknown): Priority => {
   return 'Low';
 };
 
-const parseUWBasis = (v: unknown): UWBasis | null => {
-  const s = cleanString(v)?.toLowerCase() ?? '';
-  if (!s) return null;
-  if (s.includes('actual')) return 'Actual';
-  if (s.includes('prospect') || s.includes('uw')) return 'Prospective UW';
-  const opts = UWBasisEnum.options;
-  const exact = opts.find((o) => o.toLowerCase() === s);
-  return exact ?? null;
-};
-
 const parseEnumCI = <T extends string>(v: unknown, opts: readonly T[]): T | null => {
   const s = cleanString(v)?.toLowerCase() ?? '';
   if (!s) return null;
@@ -288,7 +276,7 @@ const buildGetter = (rawRow: RawRow) => {
 // (e.g. "CENTRAL LOGISTICS PLATFORM — Rent Roll" + ✎ note rows).
 // ──────────────────────────────────────────────────────────────────
 
-const RENT_ROLL_HEADER_HINTS = ['leasablesf', 'occupied', 'tenantrating', 'actualorprospectiveuw'];
+const RENT_ROLL_HEADER_HINTS = ['leasablesf', 'occupied', 'tenantrating'];
 const PROSPECTS_HEADER_HINTS = ['prospecttenant', 'probabilityoflease', 'targetrent'];
 const ACTIVITY_HEADER_HINTS = ['parentid', 'parenttype', 'summary'];
 const ONBOARDING_HEADER_HINTS = ['checklistid', 'itemid', 'checked'];
@@ -477,7 +465,6 @@ const parseProspectsRow = (rawRow: RawRow): Deal | null => {
     brokerRep: cleanString(get('Broker / Rep', 'Broker/Rep', 'Broker', 'Rep')),
     transaction: cleanString(get('Transaction', 'Transaction Type', 'Deal Type')),
     status: parseStatus(get('Status', 'Stage')),
-    lastRevalUWRent: parseNumber(get('Last Reval UW Rent ($/SF)', 'UW Rent', 'Last Reval UW Rent')),
     targetRent: parseNumber(get('Target Rent ($/SF)', 'Target Rent', 'Base Rent PSF')),
     proposedTermMonths: parseNumber(get('Proposed Term (Months)', 'Proposed Term', 'Term', 'Term Months')),
     freeRentMonths: parseNumber(get('Free Rent (Months)', 'Free Rent', 'Free Rent Months')),
@@ -532,7 +519,6 @@ const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
     tenantName: tenant,
     tenantRating: parseTenantRating(get('Tenant Rating', 'Tenant Rating (1-5)', 'Rating')),
     occupied: parseBool(get('Occupied?', 'Occupied')),
-    uwBasis: parseUWBasis(get('Actual or Prospective UW', 'UW Basis', 'Basis')),
     leasableSF: parseNumber(get('Leasable SF', 'SF', 'Square Feet')),
     leaseStart: parseDate(get('Lease Start')),
     leaseTermMonths: parseNumber(get('Lease Term (Months)', 'Lease Term', 'Term', 'Term Months')),
@@ -541,12 +527,10 @@ const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
     annualRentBumpsPct: parsePercent(get('Annual Rent Bumps (%)', 'Annual Rent Bumps', 'Rent Bumps')),
     tiPerSF: ti.num,
     tiNote: ti.note,
-    uwTiPerSF: parseNumber(get('Underwritten TI ($/SF)', 'UW TI ($/SF)', 'Underwritten TI', 'UW TI')),
     specOffice: parseBool(get('Spec Office', 'Spec Office/lighting prior to additional $ TI spend')),
     specTIPerSF: parseNumber(get('Spec TI ($/SF)', 'Spec TI')),
     commissionStructurePct: parsePercent(get('Leasing Commission Structure', 'Commission Structure')),
     commissionDollar: parseNumber(get('Leasing Commission $', 'Commission $')),
-    lastRevalUWRent: parseNumber(get('Last Reval UW Rent ($/SF)', 'Last Reval UW Rent')),
     startingAnnualRentPSF: parseNumber(get('Starting Annual Rent ($/SF)', 'Starting Annual Rent')),
     inPlaceRent: parseNumber(get('In-Place Rent')),
     currentSummary: cleanString(get('Current Summary', 'Summary')),
@@ -1592,7 +1576,6 @@ function buildWorkbook(
       'Broker / Rep': d.brokerRep ?? '',
       'Transaction': d.transaction ?? '',
       'Status': d.status,
-      'Last Reval UW Rent ($/SF)': formatCurrency(d.lastRevalUWRent),
       'Target Rent ($/SF)': formatCurrency(d.targetRent),
       'Proposed Term (Months)': formatNum(d.proposedTermMonths, '', ' months'),
       'Free Rent (Months)': formatNum(d.freeRentMonths, '', ' months'),
@@ -1629,19 +1612,16 @@ function buildWorkbook(
       'Building Type': r.buildingType ?? '',
       'Leasable SF': r.leasableSF ?? '',
       'Occupied?': r.occupied ? 'Yes' : 'No',
-      'Actual or Prospective UW': r.uwBasis ?? '',
       'Lease Start': r.leaseStart ?? '',
       'Lease Term (Months)': r.leaseTermMonths ?? '',
       'Lease End': r.leaseEnd ?? '',
       'Free Rent (Months)': r.freeRentMonths ?? '',
       'Annual Rent Bumps (%)': formatPercent(r.annualRentBumpsPct),
       '$ TI/ TI Allowance': r.tiPerSF !== null ? formatCurrency(r.tiPerSF) : r.tiNote ?? '',
-      'Underwritten TI ($/SF)': formatCurrency(r.uwTiPerSF),
       'Spec Office': r.specOffice ? 'Yes' : 'No',
       'Spec TI ($/SF)': formatCurrency(r.specTIPerSF),
       'Leasing Commission Structure': formatPercent(r.commissionStructurePct),
       'Leasing Commission $': r.commissionDollar ?? '',
-      'Last Reval UW Rent ($/SF)': formatCurrency(r.lastRevalUWRent),
       'Starting Annual Rent ($/SF)': formatCurrency(r.startingAnnualRentPSF),
       'In-Place Rent': r.inPlaceRent ?? '',
       'Current Summary': r.currentSummary ?? '',
