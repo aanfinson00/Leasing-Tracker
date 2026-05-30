@@ -3,8 +3,10 @@
 // Read-only. The dispositions pipeline (disposition_listings).
 // =============================================================================
 
+import { z } from 'zod';
 import { getServiceClient } from '../db';
 import type { AuthedToken } from '../auth';
+import { toMcpInputSchema } from '../lib/zod-input';
 
 const DISPO_STATUSES = [
   'Considering',
@@ -16,11 +18,15 @@ const DISPO_STATUSES = [
   'On Hold',
 ] as const;
 
-interface ListDispositionsArgs {
-  status?: typeof DISPO_STATUSES[number];
-  search?: string;
-  limit?: number;
-}
+const argsSchema = z
+  .object({
+    status: z.enum(DISPO_STATUSES).optional(),
+    search: z.string().optional(),
+    limit: z.number().int().min(1).max(100).describe('Defaults to 20.').optional(),
+  })
+  .strict();
+
+type Args = z.infer<typeof argsSchema>;
 
 export const listDispositionsTool = {
   name: 'list_dispositions',
@@ -28,30 +34,14 @@ export const listDispositionsTool = {
     'List rows from the Disposition Tracking pipeline (disposition_listings). ' +
     'Use when the user asks about assets being sold. Filter by status or search ' +
     'across asset_name / address / market.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      status: { type: 'string', enum: [...DISPO_STATUSES] },
-      search: { type: 'string' },
-      limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Defaults to 20.' },
-    },
-    additionalProperties: false,
-  },
+  inputSchema: toMcpInputSchema(argsSchema),
 
-  async handler(args: ListDispositionsArgs, _token: AuthedToken) {
+  async handler(args: Args, _token: AuthedToken) {
     const limit = Math.min(args.limit ?? 20, 100);
     const sb = getServiceClient();
     let q = sb
       .from('disposition_listings')
-      .select(
-        'id, asset_name, address, market, submarket, county, city, ' +
-        'status, property_type, total_sf, acres, occupancy_pct, ' +
-        'trailing_noi, forward_noi, list_price, list_cap_pct, ' +
-        'achieved_price, achieved_cap_pct, net_proceeds, broker_commission_pct, ' +
-        'list_date, bids_due_date, loi_executed_date, psa_executed_date, ' +
-        'expected_closing_date, actual_closing_date, risk_level, ' +
-        'status_summary, updated_at'
-      )
+      .select('*')
       .order('updated_at', { ascending: false, nullsFirst: false })
       .limit(limit);
 

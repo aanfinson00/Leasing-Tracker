@@ -1,15 +1,14 @@
 // =============================================================================
 // Tool: portfolio_summary
-//
-// Read-only. Roll-up for a morning brief / portfolio dashboard:
-//   - deal count by status
-//   - total NRA, occupied SF, vacancy %
-//   - weighted-average in-place rent (PSF)
-//   - lease expirations in the next 12 months
 // =============================================================================
 
+import { z } from 'zod';
 import { getServiceClient } from '../db';
 import type { AuthedToken } from '../auth';
+import { toMcpInputSchema } from '../lib/zod-input';
+
+const argsSchema = z.object({}).strict();
+type Args = z.infer<typeof argsSchema>;
 
 export const portfolioSummaryTool = {
   name: 'portfolio_summary',
@@ -18,19 +17,12 @@ export const portfolioSummaryTool = {
     'weighted-average in-place rent ($/SF), and lease expirations in the next 12 ' +
     'months. Use for morning briefs, "how are we doing?" queries, or to surface ' +
     'time-sensitive renewal risk.',
-  inputSchema: {
-    type: 'object',
-    properties: {},
-    additionalProperties: false,
-  },
+  inputSchema: toMcpInputSchema(argsSchema),
 
-  async handler(_args: Record<string, never>, _token: AuthedToken) {
+  async handler(_args: Args, _token: AuthedToken) {
     const sb = getServiceClient();
 
-    // Deal pipeline counts by status
-    const { data: deals, error: dealsErr } = await sb
-      .from('deals')
-      .select('status');
+    const { data: deals, error: dealsErr } = await sb.from('deals').select('status');
     if (dealsErr) throw new Error(`portfolio_summary deals failed: ${dealsErr.message}`);
     const dealsByStatus: Record<string, number> = {};
     for (const d of deals ?? []) {
@@ -38,7 +30,6 @@ export const portfolioSummaryTool = {
       dealsByStatus[s] = (dealsByStatus[s] ?? 0) + 1;
     }
 
-    // Rent roll roll-up
     const { data: rows, error: rowsErr } = await sb
       .from('rent_roll')
       .select('leasable_sf, occupied, starting_annual_rent_psf, lease_end');
@@ -46,17 +37,17 @@ export const portfolioSummaryTool = {
 
     let totalNRA = 0;
     let occupiedSF = 0;
-    let rentWeightedNum = 0; // sum(rent * sf) for occupied
-    let rentWeightedDen = 0; // sum(sf) for occupied with rent set
+    let rentWeightedNum = 0;
+    let rentWeightedDen = 0;
     const now = new Date();
     const twelveMo = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
-    let expirationsNext12: number = 0;
+    let expirationsNext12 = 0;
 
     for (const r of rows ?? []) {
-      const sf = Number((r as { leasable_sf: number | null }).leasable_sf) || 0;
-      const occ = (r as { occupied: boolean }).occupied === true;
-      const rent = Number((r as { starting_annual_rent_psf: number | null }).starting_annual_rent_psf) || 0;
-      const end = (r as { lease_end: string | null }).lease_end;
+      const row = r as { leasable_sf: number | null; occupied: boolean; starting_annual_rent_psf: number | null; lease_end: string | null };
+      const sf = Number(row.leasable_sf) || 0;
+      const occ = row.occupied === true;
+      const rent = Number(row.starting_annual_rent_psf) || 0;
       totalNRA += sf;
       if (occ) {
         occupiedSF += sf;
@@ -65,8 +56,8 @@ export const portfolioSummaryTool = {
           rentWeightedDen += sf;
         }
       }
-      if (end) {
-        const endDate = new Date(end);
+      if (row.lease_end) {
+        const endDate = new Date(row.lease_end);
         if (endDate >= now && endDate <= twelveMo) expirationsNext12 += 1;
       }
     }

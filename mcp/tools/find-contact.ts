@@ -1,52 +1,49 @@
 // =============================================================================
 // Tool: find_contact
-// Read-only. Search the contacts table by name, company, or email.
-// Returns up to 20; flat phones/emails arrays are surfaced as-is from JSONB.
+// Read-only. Search contacts by name, company, or company.
 // =============================================================================
 
+import { z } from 'zod';
 import { getServiceClient } from '../db';
 import type { AuthedToken } from '../auth';
+import { toMcpInputSchema } from '../lib/zod-input';
 
-interface FindContactArgs {
-  query: string;
-  contactType?: string;
-  limit?: number;
-}
+const CONTACT_TYPES = [
+  'Owner',
+  'Broker',
+  'Attorney',
+  'Title Agent',
+  'Consultant',
+  'GC',
+  'Architect',
+  'Other',
+] as const;
+
+const argsSchema = z
+  .object({
+    query: z.string().min(1).describe('Substring matched against first_name / last_name / company_name. Required.'),
+    contactType: z.enum(CONTACT_TYPES).describe('Optional filter by contact category.').optional(),
+    limit: z.number().int().min(1).max(50).describe('Defaults to 20.').optional(),
+  })
+  .strict();
+
+type Args = z.infer<typeof argsSchema>;
 
 export const findContactTool = {
   name: 'find_contact',
   description:
-    'Search contacts by name (first or last), company, or email. Use when the user ' +
-    'mentions someone by name and you need their record — phone / email / company / role. ' +
-    'Returns the matching contacts with all channels (phones + emails) included.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      query: {
-        type: 'string',
-        minLength: 1,
-        description: 'Substring matched against first_name / last_name / company_name. Required.',
-      },
-      contactType: {
-        type: 'string',
-        enum: ['Owner', 'Broker', 'Attorney', 'Title Agent', 'Consultant', 'GC', 'Architect', 'Other'],
-        description: 'Optional filter by contact category.',
-      },
-      limit: { type: 'integer', minimum: 1, maximum: 50, description: 'Defaults to 20.' },
-    },
-    required: ['query'],
-    additionalProperties: false,
-  },
+    'Search contacts by name (first or last) or company. Use when the user mentions ' +
+    'someone by name and you need their record — phone / email / company / role.',
+  inputSchema: toMcpInputSchema(argsSchema),
 
-  async handler(args: FindContactArgs, _token: AuthedToken) {
-    if (!args.query?.trim()) throw new Error('query is required');
+  async handler(args: Args, _token: AuthedToken) {
     const limit = Math.min(args.limit ?? 20, 50);
     const sb = getServiceClient();
     const p = `%${args.query}%`;
 
     let q = sb
       .from('contacts')
-      .select('id, contact_type, first_name, last_name, company_name, title, phones, emails, notes, updated_at')
+      .select('*')
       .or(`first_name.ilike.${p},last_name.ilike.${p},company_name.ilike.${p}`)
       .order('updated_at', { ascending: false, nullsFirst: false })
       .limit(limit);
@@ -56,8 +53,6 @@ export const findContactTool = {
     const { data, error } = await q;
     if (error) throw new Error(`find_contact failed: ${error.message}`);
 
-    // Phones/emails JSONB columns might come back as strings or arrays
-    // depending on storage. Normalize to arrays.
     const norm = (data ?? []).map((c) => ({
       ...c,
       phones: Array.isArray(c.phones) ? c.phones : [],

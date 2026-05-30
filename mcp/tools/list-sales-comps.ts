@@ -1,12 +1,24 @@
 // =============================================================================
 // Tool: list_sales_comps
-//
-// Read-only. Comparable property sales — for cap rate / $/sf benchmarking
-// when underwriting an acquisition or disposition.
 // =============================================================================
 
+import { z } from 'zod';
 import { getServiceClient } from '../db';
 import type { AuthedToken } from '../auth';
+import { toMcpInputSchema } from '../lib/zod-input';
+
+const argsSchema = z
+  .object({
+    market: z.string().describe('Filter to a market (substring match).').optional(),
+    property_type: z.string().optional(),
+    sold_after: z.string().describe('YYYY-MM-DD. Only comps sold on/after.').optional(),
+    min_sf: z.number().int().optional(),
+    max_sf: z.number().int().optional(),
+    limit: z.number().int().min(1).max(100).describe('Max rows. Defaults to 20, capped at 100.').optional(),
+  })
+  .strict();
+
+type Args = z.infer<typeof argsSchema>;
 
 export const listSalesCompsTool = {
   name: 'list_sales_comps',
@@ -14,45 +26,15 @@ export const listSalesCompsTool = {
     'List sales comps for benchmarking. Use when the user wants to check market ' +
     'cap rates, $/sf pricing, or recent transactions for an acquisition or ' +
     'disposition. Ordered by sale_date descending.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      market: { type: 'string', description: 'Filter to a market (substring match).' },
-      property_type: { type: 'string' },
-      sold_after: { type: 'string', description: 'YYYY-MM-DD. Only comps sold on/after.' },
-      min_sf: { type: 'integer' },
-      max_sf: { type: 'integer' },
-      limit: {
-        type: 'integer',
-        description: 'Max rows. Defaults to 20, capped at 100.',
-        minimum: 1,
-        maximum: 100,
-      },
-    },
-    additionalProperties: false,
-  },
+  inputSchema: toMcpInputSchema(argsSchema),
 
-  async handler(
-    args: {
-      market?: string;
-      property_type?: string;
-      sold_after?: string;
-      min_sf?: number;
-      max_sf?: number;
-      limit?: number;
-    },
-    _token: AuthedToken
-  ) {
+  async handler(args: Args, _token: AuthedToken) {
     const limit = Math.min(args.limit ?? 20, 100);
     const sb = getServiceClient();
 
     let query = sb
       .from('sales_comps')
-      .select(
-        'id, property_name, building_address, market, property_type, building_type, ' +
-        'sale_date, sale_price, price_psf, cap_rate, noi, building_sf, land_acres, ' +
-        'year_built, occupancy_pct, buyer, seller, confidence, source'
-      )
+      .select('*')
       .order('sale_date', { ascending: false, nullsFirst: false })
       .limit(limit);
 

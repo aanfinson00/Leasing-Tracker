@@ -1,13 +1,19 @@
 // =============================================================================
 // Tool: search
-//
-// Free-text search across deals, rent_roll tenants, and building names.
-// Returns at most 5 hits per source. Use when the user mentions a name
-// without context ("what's the deal with Acme?" / "find the Smith lease").
 // =============================================================================
 
+import { z } from 'zod';
 import { getServiceClient } from '../db';
 import type { AuthedToken } from '../auth';
+import { toMcpInputSchema } from '../lib/zod-input';
+
+const argsSchema = z
+  .object({
+    query: z.string().min(1).describe('Search string (case-insensitive substring).'),
+  })
+  .strict();
+
+type Args = z.infer<typeof argsSchema>;
 
 export const searchTool = {
   name: 'search',
@@ -15,19 +21,10 @@ export const searchTool = {
     'Free-text search across deal names, prospect/tenant names, broker reps, and ' +
     'building names. Returns up to 5 hits per source. Use when the user mentions ' +
     'an entity by name and you need to find what it refers to before drilling in.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      query: { type: 'string', description: 'Search string (case-insensitive substring).' },
-    },
-    required: ['query'],
-    additionalProperties: false,
-  },
+  inputSchema: toMcpInputSchema(argsSchema),
 
-  async handler(args: { query: string }, _token: AuthedToken) {
-    const q = args.query.trim();
-    if (!q) throw new Error('search: query must not be empty');
-    const pat = `%${q}%`;
+  async handler(args: Args, _token: AuthedToken) {
+    const pat = `%${args.query.trim()}%`;
     const sb = getServiceClient();
 
     const [dealsRes, tenantsRes, buildingsRes] = await Promise.all([
@@ -55,7 +52,7 @@ export const searchTool = {
     if (buildingsRes.error) throw new Error(`search buildings failed: ${buildingsRes.error.message}`);
 
     return {
-      query: q,
+      query: args.query.trim(),
       deals: dealsRes.data ?? [],
       rent_roll: tenantsRes.data ?? [],
       buildings: buildingsRes.data ?? [],

@@ -3,15 +3,21 @@
 // Read-only. Search rent_roll rows; filter by occupancy or building/space.
 // =============================================================================
 
+import { z } from 'zod';
 import { getServiceClient } from '../db';
 import type { AuthedToken } from '../auth';
+import { toMcpInputSchema } from '../lib/zod-input';
 
-interface ListTenantsArgs {
-  occupied?: 'yes' | 'no' | 'all';
-  search?: string;
-  building?: string;
-  limit?: number;
-}
+const argsSchema = z
+  .object({
+    occupied: z.enum(['yes', 'no', 'all']).describe('Filter by occupancy. Defaults to "all".').optional(),
+    search: z.string().describe('Substring matched against tenant_name / building / space_id (case-insensitive).').optional(),
+    building: z.string().describe('Filter to a specific building name (exact match).').optional(),
+    limit: z.number().int().min(1).max(100).describe('Defaults to 20.').optional(),
+  })
+  .strict();
+
+type Args = z.infer<typeof argsSchema>;
 
 export const listTenantsTool = {
   name: 'list_tenants',
@@ -20,39 +26,15 @@ export const listTenantsTool = {
     'the user asks about tenants, occupancy, lease expirations, or wants to find ' +
     'a tenant by name. Default occupied=all so vacant spaces are included; pass ' +
     'occupied=yes for just the active tenants.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      occupied: {
-        type: 'string',
-        enum: ['yes', 'no', 'all'],
-        description: 'Filter by occupancy. Defaults to "all".',
-      },
-      search: {
-        type: 'string',
-        description: 'Substring matched against tenant_name / building / space_id (case-insensitive).',
-      },
-      building: {
-        type: 'string',
-        description: 'Filter to a specific building name (exact match).',
-      },
-      limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Defaults to 20.' },
-    },
-    additionalProperties: false,
-  },
+  inputSchema: toMcpInputSchema(argsSchema),
 
-  async handler(args: ListTenantsArgs, _token: AuthedToken) {
+  async handler(args: Args, _token: AuthedToken) {
     const limit = Math.min(args.limit ?? 20, 100);
     const sb = getServiceClient();
 
     let query = sb
       .from('rent_roll')
-      .select(
-        'id, tenant_name, building, space_id, occupied, leasable_sf, ' +
-        'lease_start, lease_term_months, lease_end, starting_annual_rent_psf, ' +
-        'free_rent_months, security_deposit, rent_commencement_date, tenant_rating, ' +
-        'market, property_type, uw_basis'
-      )
+      .select('*')
       .order('lease_end', { ascending: true, nullsFirst: false })
       .limit(limit);
 
