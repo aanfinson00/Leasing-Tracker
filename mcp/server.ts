@@ -24,34 +24,34 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import type { AuthedToken, Role } from './auth';
-import { roleSatisfies } from './auth';
-import { writeAuditLog } from './audit';
+import type { AuthedToken, Role } from './auth.js';
+import { roleSatisfies } from './auth.js';
+import { writeAuditLog } from './audit.js';
 
 // Deals (Sessions 1-2)
-import { listDealsTool } from './tools/list-deals';
-import { createDealTool } from './tools/create-deal';
-import { updateDealTool } from './tools/update-deal';
-import { addActivityToDealTool } from './tools/add-activity-to-deal';
+import { listDealsTool } from './tools/list-deals.js';
+import { createDealTool } from './tools/create-deal.js';
+import { updateDealTool } from './tools/update-deal.js';
+import { addActivityToDealTool } from './tools/add-activity-to-deal.js';
 
 // Session 3 — tenants / dev projects / contacts / acquisitions / dispositions
-import { listTenantsTool } from './tools/list-tenants';
-import { updateTenantTool } from './tools/update-tenant';
-import { listDevProjectsTool } from './tools/list-dev-projects';
-import { addDevProjectNoteTool } from './tools/add-dev-project-note';
-import { findContactTool } from './tools/find-contact';
-import { createContactTool } from './tools/create-contact';
-import { listAcquisitionsTool } from './tools/list-acquisitions';
-import { listDispositionsTool } from './tools/list-dispositions';
+import { listTenantsTool } from './tools/list-tenants.js';
+import { updateTenantTool } from './tools/update-tenant.js';
+import { listDevProjectsTool } from './tools/list-dev-projects.js';
+import { addDevProjectNoteTool } from './tools/add-dev-project-note.js';
+import { findContactTool } from './tools/find-contact.js';
+import { createContactTool } from './tools/create-contact.js';
+import { listAcquisitionsTool } from './tools/list-acquisitions.js';
+import { listDispositionsTool } from './tools/list-dispositions.js';
 
 // Session 4 — rent roll, buildings, comps, portfolio roll-up, search
-import { listRentRollTool } from './tools/list-rent-roll';
-import { updateRentRollRowTool } from './tools/update-rent-roll-row';
-import { listBuildingsTool } from './tools/list-buildings';
-import { listLeaseCompsTool } from './tools/list-lease-comps';
-import { listSalesCompsTool } from './tools/list-sales-comps';
-import { portfolioSummaryTool } from './tools/portfolio-summary';
-import { searchTool } from './tools/search';
+import { listRentRollTool } from './tools/list-rent-roll.js';
+import { updateRentRollRowTool } from './tools/update-rent-roll-row.js';
+import { listBuildingsTool } from './tools/list-buildings.js';
+import { listLeaseCompsTool } from './tools/list-lease-comps.js';
+import { listSalesCompsTool } from './tools/list-sales-comps.js';
+import { portfolioSummaryTool } from './tools/portfolio-summary.js';
+import { searchTool } from './tools/search.js';
 
 // All tools are registered here. The shape is a manual interface match —
 // not a base class — because each tool's args type is unique.

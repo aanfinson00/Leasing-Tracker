@@ -14,8 +14,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { verifyBearer, isFailure } from '../mcp/auth';
-import { buildServer } from '../mcp/server';
+import { verifyBearer, isFailure } from '../mcp/auth.js';
+import { buildServer } from '../mcp/server.js';
 
 // Vercel needs to run this in the Node.js runtime (not Edge) — we use
 // node:crypto for SHA-256 and @supabase/supabase-js depends on Node APIs.

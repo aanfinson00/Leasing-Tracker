@@ -12,7 +12,7 @@
 // =============================================================================
 
 import { createHash } from 'node:crypto';
-import { getServiceClient } from './db';
+import { getServiceClient } from './db.js';
 
 export type Role = 'admin' | 'write' | 'read';
 

@@ -5,9 +5,9 @@
 
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { getServiceClient } from '../db';
-import type { AuthedToken } from '../auth';
-import { toMcpInputSchema } from '../lib/zod-input';
+import { getServiceClient } from '../db.js';
+import type { AuthedToken } from '../auth.js';
+import { toMcpInputSchema } from '../lib/zod-input.js';
 
 const CONTACT_TYPES = [
   'Owner',

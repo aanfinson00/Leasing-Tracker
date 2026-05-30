@@ -4,7 +4,7 @@
 // learning aid in the early days.
 // =============================================================================
 
-import { getServiceClient } from './db';
+import { getServiceClient } from './db.js';
 
 export interface AuditEntry {
   tokenId: string | null;
