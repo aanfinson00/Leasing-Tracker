@@ -44,6 +44,15 @@ import { createContactTool } from './tools/create-contact';
 import { listAcquisitionsTool } from './tools/list-acquisitions';
 import { listDispositionsTool } from './tools/list-dispositions';
 
+// Session 4 — rent roll, buildings, comps, portfolio roll-up, search
+import { listRentRollTool } from './tools/list-rent-roll';
+import { updateRentRollRowTool } from './tools/update-rent-roll-row';
+import { listBuildingsTool } from './tools/list-buildings';
+import { listLeaseCompsTool } from './tools/list-lease-comps';
+import { listSalesCompsTool } from './tools/list-sales-comps';
+import { portfolioSummaryTool } from './tools/portfolio-summary';
+import { searchTool } from './tools/search';
+
 // All tools are registered here. The shape is a manual interface match —
 // not a base class — because each tool's args type is unique.
 // `requiredRole` tags the minimum role a caller's token must hold:
@@ -76,6 +85,14 @@ const TOOLS: Array<{
   // Acquisitions + dispositions (read-only this session)
   { ...listAcquisitionsTool, requiredRole: 'read' },
   { ...listDispositionsTool, requiredRole: 'read' },
+  // Session 4 — rent roll + buildings + comps + portfolio + search
+  { ...listRentRollTool, requiredRole: 'read' },
+  { ...updateRentRollRowTool, requiredRole: 'write' },
+  { ...listBuildingsTool, requiredRole: 'read' },
+  { ...listLeaseCompsTool, requiredRole: 'read' },
+  { ...listSalesCompsTool, requiredRole: 'read' },
+  { ...portfolioSummaryTool, requiredRole: 'read' },
+  { ...searchTool, requiredRole: 'read' },
 ];
 
 export function buildServer(token: AuthedToken): Server {
