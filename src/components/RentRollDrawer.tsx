@@ -14,9 +14,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ActivityEntry, Building, Deal, RentRollRow, TenantRating, UWBasis } from '../types';
+import type { ActivityEntry, Building, Deal, RentRollRow, TenantRating } from '../types';
 import {
-  UWBasisEnum,
   TenantRatingEnum,
   SPACE_ID_REGEX,
   SPACE_ID_FORMAT_HINT,
@@ -56,7 +55,6 @@ type FormValues = {
   tenantName: string;
   tenantRating: TenantRating | '';
   occupied: 'Yes' | 'No';
-  uwBasis: UWBasis | '';
   leasableSF: string;
   leaseStart: string;
   leaseTermMonths: string;
@@ -65,12 +63,10 @@ type FormValues = {
   annualRentBumpsPct: string;
   tiPerSF: string;
   tiNote: string;
-  uwTiPerSF: string;
   specOffice: boolean;
   specTIPerSF: string;
   commissionStructurePct: string;
   commissionDollar: string;
-  lastRevalUWRent: string;
   startingAnnualRentPSF: string;
   currentSummary: string;
   notes: string;
@@ -202,7 +198,6 @@ export function RentRollDrawer({
         tenantName: toFormString(row.tenantName),
         tenantRating: row.tenantRating ?? '',
         occupied: row.occupied ? 'Yes' : 'No',
-        uwBasis: row.uwBasis ?? '',
         leasableSF: toFormString(row.leasableSF),
         leaseStart: toFormString(row.leaseStart),
         leaseTermMonths: toFormString(row.leaseTermMonths),
@@ -211,12 +206,10 @@ export function RentRollDrawer({
         annualRentBumpsPct: toFormString(row.annualRentBumpsPct),
         tiPerSF: toFormString(row.tiPerSF),
         tiNote: toFormString(row.tiNote),
-        uwTiPerSF: toFormString(row.uwTiPerSF),
         specOffice: row.specOffice,
         specTIPerSF: toFormString(row.specTIPerSF),
         commissionStructurePct: toFormString(row.commissionStructurePct),
         commissionDollar: toFormString(row.commissionDollar),
-        lastRevalUWRent: toFormString(row.lastRevalUWRent),
         startingAnnualRentPSF: toFormString(row.startingAnnualRentPSF),
         currentSummary: toFormString(row.currentSummary),
         notes: toFormString(row.notes),
@@ -241,7 +234,7 @@ export function RentRollDrawer({
       tenantName: parseStr(v.tenantName),
       tenantRating: v.tenantRating === '' ? null : v.tenantRating,
       occupied: v.occupied === 'Yes',
-      uwBasis: v.uwBasis === '' ? null : v.uwBasis,
+      uwBasis: row.uwBasis,
       leasableSF: parseNum(v.leasableSF),
       leaseStart: parseStr(v.leaseStart),
       leaseTermMonths: parseNum(v.leaseTermMonths),
@@ -250,12 +243,12 @@ export function RentRollDrawer({
       annualRentBumpsPct: parseNum(v.annualRentBumpsPct),
       tiPerSF: parseNum(v.tiPerSF),
       tiNote: parseStr(v.tiNote),
-      uwTiPerSF: parseNum(v.uwTiPerSF),
+      uwTiPerSF: row.uwTiPerSF,
       specOffice: !!v.specOffice,
       specTIPerSF: parseNum(v.specTIPerSF),
       commissionStructurePct: parseNum(v.commissionStructurePct),
       commissionDollar: parseNum(v.commissionDollar),
-      lastRevalUWRent: parseNum(v.lastRevalUWRent),
+      lastRevalUWRent: row.lastRevalUWRent,
       startingAnnualRentPSF: parseNum(v.startingAnnualRentPSF),
       inPlaceRent: row.inPlaceRent,
       currentSummary: parseStr(v.currentSummary),
@@ -445,15 +438,6 @@ export function RentRollDrawer({
                     <option value="No">No</option>
                   </select>
                 </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>Basis</label>
-                  <select {...register('uwBasis')} className={inputClass}>
-                    <option value="">—</option>
-                    {UWBasisEnum.options.map((o) => (
-                      <option key={o} value={o}>{o}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
             </Section>
 
@@ -489,22 +473,8 @@ export function RentRollDrawer({
                   <input {...register('startingAnnualRentPSF')} type="number" step="0.01" className={`${inputClass} tabular-nums`} />
                 </div>
                 <div>
-                  <label className={labelClass}>Last Reval UW Rent ($/SF)</label>
-                  <input {...register('lastRevalUWRent')} type="number" step="0.01" className={`${inputClass} tabular-nums`} />
-                </div>
-                <div>
                   <label className={labelClass}>TI ($/SF)</label>
                   <input {...register('tiPerSF')} type="number" step="0.01" className={`${inputClass} tabular-nums`} />
-                </div>
-                <div>
-                  <label className={labelClass}>UW TI ($/SF)</label>
-                  <input
-                    {...register('uwTiPerSF')}
-                    type="number"
-                    step="0.01"
-                    placeholder="Underwritten"
-                    className={`${inputClass} tabular-nums`}
-                  />
                 </div>
                 <div className="col-span-2">
                   <label className={labelClass}>TI Note</label>
