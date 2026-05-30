@@ -370,6 +370,7 @@ export interface BuildingRow {
   center_lng: number | null;
   bump_outs: Building['bumpOuts'];
   bay_space_ids: Array<string | null>;
+  space_subdivisions: Building['spaceSubdivisions'];
   building_ordinal: number | null;
   created_at: string;
   updated_at: string;
@@ -396,6 +397,7 @@ export const buildingToRow = (
   center_lng: b.centerLng ?? null,
   bump_outs: b.bumpOuts ?? [],
   bay_space_ids: b.baySpaceIds ?? [],
+  space_subdivisions: b.spaceSubdivisions ?? [],
   building_ordinal: b.buildingOrdinal ?? null,
   created_at: b.createdAt,
   updated_at: b.updatedAt,
@@ -417,6 +419,7 @@ export const rowToBuilding = (r: BuildingRow): Building => ({
   centerLng: r.center_lng != null ? Number(r.center_lng) : null,
   bumpOuts: r.bump_outs ?? [],
   baySpaceIds: r.bay_space_ids ?? [],
+  spaceSubdivisions: r.space_subdivisions ?? [],
   buildingOrdinal: r.building_ordinal,
   createdAt: r.created_at,
   updatedAt: r.updated_at,

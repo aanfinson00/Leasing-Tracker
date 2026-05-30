@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   X,
@@ -14,20 +14,25 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ActivityEntry, Building, RentRollRow, TenantRating, UWBasis } from '../types';
+import type { ActivityEntry, Building, Deal, RentRollRow, TenantRating, UWBasis } from '../types';
 import {
   UWBasisEnum,
   TenantRatingEnum,
   SPACE_ID_REGEX,
   SPACE_ID_FORMAT_HINT,
 } from '../types';
-import { listSpaceOptions, findSpaceOption } from '../lib/spaces';
 import { MARKETS, PROPERTY_TYPES, BUILDING_TYPES } from '../lib/enums';
 import { EnumDropdown } from './EnumDropdown';
 import { ActivityLog } from './ActivityLog';
+import { DealPicker } from './DealPicker';
+import { BuildingPicker } from './BuildingPicker';
+import { SpacePicker } from './SpacePicker';
+import { SplitSpaceModal } from './SplitSpaceModal';
+import { NewProjectModal } from './NewProjectModal';
 
 interface RentRollDrawerProps {
   row: RentRollRow | null;
+  deals: Deal[];
   activities: ActivityEntry[];
   buildings: Building[];
   onClose: () => void;
@@ -35,6 +40,8 @@ interface RentRollDrawerProps {
   onDelete: (id: string) => void;
   onAddActivity: (entry: Omit<ActivityEntry, 'id' | 'createdAt'>) => void;
   onDeleteActivity: (id: string) => void;
+  onUpsertBuilding: (b: Building) => void;
+  onCreateNewProject: (p: { dealId: string; dealName: string; market: string }) => Promise<Deal | null>;
 }
 
 type FormValues = {
@@ -117,6 +124,7 @@ function Section({ icon: Icon, title, children }: SectionProps) {
 
 export function RentRollDrawer({
   row,
+  deals,
   activities,
   buildings,
   onClose,
@@ -124,6 +132,8 @@ export function RentRollDrawer({
   onDelete,
   onAddActivity,
   onDeleteActivity,
+  onUpsertBuilding,
+  onCreateNewProject,
 }: RentRollDrawerProps) {
   const {
     register,
@@ -134,30 +144,48 @@ export function RentRollDrawer({
     formState: { errors },
   } = useForm<FormValues>();
 
-  const spaceOptions = useMemo(() => listSpaceOptions(buildings), [buildings]);
+  const currentDealId = watch('dealId') ?? row?.dealId ?? '';
   const currentBuildingId = watch('buildingId') ?? row?.buildingId ?? '';
   const currentSpaceIdLive = watch('spaceId') ?? row?.spaceId ?? '';
-  const matchedOption = useMemo(
-    () => findSpaceOption(spaceOptions, currentBuildingId || null, currentSpaceIdLive || null),
-    [spaceOptions, currentBuildingId, currentSpaceIdLive]
+
+  // Modals
+  const [splitModal, setSplitModal] = useState<{
+    open: boolean;
+    building: Building | null;
+    parentSpaceId: string;
+  }>({ open: false, building: null, parentSpaceId: '' });
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+
+  const existingDealIds = useMemo(
+    () => deals.map((d) => d.dealId).filter((id): id is string => !!id && id !== ''),
+    [deals]
   );
 
-  // When the user picks a space from the dropdown, push all three
-  // canonical fields. Leaves dealName / market alone since those are
-  // per-tenant, not per-space.
-  const handleSpacePick = (key: string) => {
-    if (key === '') {
-      // "Custom" — clear the structured fields so the user can free-type.
+  const handleSplitRequest = (parentSpaceId: string) => {
+    const b = buildings.find((bldg) => bldg.id === currentBuildingId);
+    if (!b) return;
+    setSplitModal({ open: true, building: b, parentSpaceId });
+  };
+
+  const handleSplitConfirm = (updated: Building) => {
+    onUpsertBuilding(updated);
+    setSplitModal({ open: false, building: null, parentSpaceId: '' });
+  };
+
+  const handleCreateNewProject = async (p: {
+    dealId: string;
+    dealName: string;
+    market: string;
+  }) => {
+    const newDeal = await onCreateNewProject(p);
+    if (newDeal && newDeal.dealId) {
+      setValue('dealId', newDeal.dealId, { shouldDirty: true });
+      setValue('dealName', newDeal.dealName, { shouldDirty: true });
       setValue('buildingId', '', { shouldDirty: true });
-      setValue('spaceId', '', { shouldDirty: true });
       setValue('building', '', { shouldDirty: true });
-      return;
+      setValue('spaceId', '', { shouldDirty: true });
     }
-    const opt = spaceOptions.find((o) => o.key === key);
-    if (!opt) return;
-    setValue('buildingId', opt.buildingId, { shouldDirty: true });
-    setValue('spaceId', opt.spaceId, { shouldDirty: true });
-    setValue('building', opt.buildingName, { shouldDirty: true });
+    setNewProjectOpen(false);
   };
 
   useEffect(() => {
@@ -305,40 +333,58 @@ export function RentRollDrawer({
             <Section icon={Building2} title="Property">
               <div className="grid grid-cols-2 gap-3.5">
                 <div className="col-span-2">
-                  <label className={labelClass}>
-                    Building / Space
-                    {spaceOptions.length === 0 && (
-                      <span className="ml-2 text-fg-subtle font-normal">
-                        — no buildings drawn yet; use the free-text fields below
-                      </span>
-                    )}
-                  </label>
-                  <select
-                    value={matchedOption?.key ?? ''}
-                    onChange={(e) => handleSpacePick(e.target.value)}
-                    className={inputClass}
-                    disabled={spaceOptions.length === 0}
-                  >
-                    <option value="">
-                      {spaceOptions.length === 0
-                        ? 'No buildings — type IDs manually below'
-                        : 'Pick a space from your buildings…'}
-                    </option>
-                    {spaceOptions.map((o) => (
-                      <option key={o.key} value={o.key}>
-                        {o.buildingName} — {o.spaceId}
-                      </option>
-                    ))}
-                  </select>
-                  {matchedOption == null && (currentBuildingId || currentSpaceIdLive) && (
-                    <p className="text-xs text-fg-subtle mt-1.5">
-                      Custom IDs — doesn't match any drawn space.
-                    </p>
-                  )}
+                  <label className={labelClass}>Project (Deal)</label>
+                  <DealPicker
+                    deals={deals}
+                    value={currentDealId}
+                    onChange={(d) => {
+                      setValue('dealId', d?.dealId ?? '', { shouldDirty: true });
+                      setValue('dealName', d?.dealName ?? '', { shouldDirty: true });
+                      setValue('buildingId', '', { shouldDirty: true });
+                      setValue('building', '', { shouldDirty: true });
+                      setValue('spaceId', '', { shouldDirty: true });
+                    }}
+                    onRequestNew={() => setNewProjectOpen(true)}
+                  />
+                  <input type="hidden" {...register('dealId')} />
+                  <input type="hidden" {...register('dealName')} />
                 </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>Deal Name</label>
-                  <input {...register('dealName')} className={inputClass} />
+                <div>
+                  <label className={labelClass}>Building</label>
+                  <BuildingPicker
+                    buildings={buildings}
+                    dealId={currentDealId}
+                    value={currentBuildingId}
+                    onChange={(b) => {
+                      setValue('buildingId', b?.id ?? '', { shouldDirty: true });
+                      setValue('building', b?.name ?? '', { shouldDirty: true });
+                      setValue('spaceId', '', { shouldDirty: true });
+                    }}
+                  />
+                  <input type="hidden" {...register('buildingId')} />
+                  <input type="hidden" {...register('building')} />
+                </div>
+                <div>
+                  <label className={labelClass}>Space</label>
+                  <SpacePicker
+                    buildings={buildings}
+                    buildingId={currentBuildingId}
+                    value={currentSpaceIdLive}
+                    onChange={(opt) => {
+                      setValue('spaceId', opt?.spaceId ?? '', { shouldDirty: true });
+                    }}
+                    onRequestSplit={handleSplitRequest}
+                  />
+                  <input
+                    type="hidden"
+                    {...register('spaceId', {
+                      validate: (v) =>
+                        !v || SPACE_ID_REGEX.test(v.trim()) || SPACE_ID_FORMAT_HINT,
+                    })}
+                  />
+                  {errors.spaceId && (
+                    <p className="text-danger text-xs mt-1.5">{errors.spaceId.message}</p>
+                  )}
                 </div>
                 <div>
                   <label className={labelClass}>Market</label>
@@ -357,32 +403,6 @@ export function RentRollDrawer({
                     onChange={(v) => setValue('propertyType', v, { shouldDirty: true })}
                     className={inputClass}
                   />
-                </div>
-                <div>
-                  <label className={labelClass}>Deal ID</label>
-                  <input {...register('dealId')} className={`${inputClass} tabular-nums`} />
-                </div>
-                <div>
-                  <label className={labelClass}>Building ID</label>
-                  <input {...register('buildingId')} className={`${inputClass} tabular-nums`} />
-                </div>
-                <div>
-                  <label className={labelClass}>Space ID</label>
-                  <input
-                    {...register('spaceId', {
-                      validate: (v) =>
-                        !v || SPACE_ID_REGEX.test(v.trim()) || SPACE_ID_FORMAT_HINT,
-                    })}
-                    placeholder="5001-B01-S03"
-                    className={`${inputClass} tabular-nums`}
-                  />
-                  {errors.spaceId && (
-                    <p className="text-danger text-xs mt-1.5">{errors.spaceId.message}</p>
-                  )}
-                </div>
-                <div>
-                  <label className={labelClass}>Building</label>
-                  <input {...register('building')} className={inputClass} />
                 </div>
                 <div>
                   <label className={labelClass}>Building Type</label>
@@ -583,6 +603,21 @@ export function RentRollDrawer({
           </div>
         </form>
       </div>
+
+      <SplitSpaceModal
+        open={splitModal.open}
+        building={splitModal.building}
+        parentSpaceId={splitModal.parentSpaceId}
+        onClose={() => setSplitModal({ open: false, building: null, parentSpaceId: '' })}
+        onConfirm={handleSplitConfirm}
+      />
+
+      <NewProjectModal
+        open={newProjectOpen}
+        existingDealIds={existingDealIds}
+        onClose={() => setNewProjectOpen(false)}
+        onConfirm={handleCreateNewProject}
+      />
     </div>
   );
 }

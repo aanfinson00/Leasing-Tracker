@@ -412,6 +412,7 @@ export function MapView({
       centerLng: center.lng,
       bumpOuts: [],
       baySpaceIds: [],
+      spaceSubdivisions: [],
       buildingOrdinal: nextOrdinal,
       createdAt: now,
       updatedAt: now,
