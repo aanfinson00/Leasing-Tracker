@@ -101,7 +101,7 @@ export async function buildStyledWorkbook(data: FullDataSet): Promise<ExcelJS.Wo
       { header: 'Deal Name', key: 'dealName', width: 24 },
       { header: 'Space ID', key: 'spaceId', width: 14 },
       { header: 'Building', key: 'building', width: 14 },
-      { header: 'Deal ID', key: 'dealId', width: 10 },
+      { header: 'Project Code', key: 'dealId', width: 10 },
       { header: 'Min SF', key: 'minSF', width: 10, style: NUMBER_STYLE },
       { header: 'Max SF', key: 'maxSF', width: 10, style: NUMBER_STYLE },
       { header: 'Prospect / Tenant', key: 'prospectTenant', width: 24 },
@@ -148,7 +148,7 @@ export async function buildStyledWorkbook(data: FullDataSet): Promise<ExcelJS.Wo
 
   if (data.rentRoll.length > 0) {
     addStyledSheet(wb, 'Rent Roll', [
-      { header: 'Deal ID', key: 'dealId', width: 10 },
+      { header: 'Project Code', key: 'dealId', width: 10 },
       { header: 'Deal Name', key: 'dealName', width: 22 },
       { header: 'Market', key: 'market', width: 16 },
       { header: 'Property Type', key: 'propertyType', width: 14 },
@@ -258,7 +258,7 @@ export async function buildStyledWorkbook(data: FullDataSet): Promise<ExcelJS.Wo
   if (data.scenarios.length > 0) {
     addStyledSheet(wb, 'Scenarios', [
       { header: 'ID', key: 'id', width: 38 },
-      { header: 'Deal ID', key: 'dealId', width: 38 },
+      { header: 'Project Code', key: 'dealId', width: 38 },
       { header: 'Name', key: 'name', width: 22 },
       { header: 'Inputs (JSON)', key: 'inputs', width: 50 },
       { header: 'Globals (JSON)', key: 'globals', width: 50 },
@@ -525,7 +525,7 @@ export async function buildStyledWorkbook(data: FullDataSet): Promise<ExcelJS.Wo
       { header: 'Description', key: 'description', width: 40 },
       { header: 'Building ID', key: 'buildingId', width: 38 },
       { header: 'Building', key: 'buildingName', width: 20 },
-      { header: 'Deal ID', key: 'dealId', width: 38 },
+      { header: 'Project Code', key: 'dealId', width: 38 },
       { header: 'Deal', key: 'dealName', width: 20 },
       { header: 'Owner', key: 'owner', width: 16 },
       { header: 'Status', key: 'status', width: 12 },
