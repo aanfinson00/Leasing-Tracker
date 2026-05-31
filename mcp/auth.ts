@@ -23,7 +23,7 @@ export interface AuthedToken {
 }
 
 export interface AuthFailure {
-  status: 401 | 403;
+  status: 401 | 403 | 429;
   message: string;
 }
 
@@ -81,6 +81,25 @@ export async function verifyBearer(authorizationHeader: string | undefined | nul
     return {
       status: 403,
       message: `Token expired at ${data.expires_at} — mint a new one and update your client config`,
+    };
+  }
+
+  // Per-token rate limit (60 req/min) via atomic Postgres function.
+  // Fail-open if the rate-limit infra itself breaks — the limit is for
+  // abuse mitigation, not auth, so a broken RPC shouldn't deny good actors.
+  const RATE_LIMIT_PER_MIN = 60;
+  const windowStart = new Date(Math.floor(Date.now() / 60000) * 60000).toISOString();
+  const { data: rl, error: rlErr } = await sb.rpc('bump_mcp_rate_limit', {
+    p_token_id: data.id,
+    p_window_start: windowStart,
+    p_max_per_window: RATE_LIMIT_PER_MIN,
+  });
+  if (rlErr) {
+    console.warn('rate-limit RPC failed (allowing request):', rlErr.message);
+  } else if (rl && rl[0]?.exceeded) {
+    return {
+      status: 429,
+      message: `Rate limit exceeded: ${RATE_LIMIT_PER_MIN} requests/minute. Try again in ~${60 - new Date().getSeconds()}s.`,
     };
   }
 
