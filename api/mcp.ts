@@ -21,9 +21,26 @@ import { buildServer } from '../mcp/server.js';
 // node:crypto for SHA-256 and @supabase/supabase-js depends on Node APIs.
 export const config = { runtime: 'nodejs' };
 
+// CORS allow-list. Bearer auth is the real protection — CORS just stops
+// drive-by browser requests from random origins. Add new entries here as
+// new Claude surfaces are added (Desktop app uses claude.ai-derived origin;
+// Code/SDK calls are server-side and don't enforce CORS).
+const ALLOWED_ORIGINS = new Set([
+  'https://claude.ai',
+  'https://leasing-tracker-psi.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+]);
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Permissive CORS so Claude.ai can connect from claude.ai origin.
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // CORS: echo the Origin header back ONLY if it's on the allow-list.
+  // Server-side callers (Claude Code, scheduled agents, mobile-via-workspace)
+  // don't send an Origin header at all and skip the CORS check entirely.
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Mcp-Session-Id');
   if (req.method === 'OPTIONS') {
