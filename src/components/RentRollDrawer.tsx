@@ -26,6 +26,7 @@ import { ProjectPicker } from './ProjectPicker';
 import { BuildingPicker } from './BuildingPicker';
 import { SpacePicker } from './SpacePicker';
 import { SpaceEditPopover } from './SpaceEditPopover';
+import { relativeTime } from '../lib/relative-time';
 import { SplitSpaceModal } from './SplitSpaceModal';
 import { NewProjectModal } from './NewProjectModal';
 
@@ -278,6 +279,7 @@ export function RentRollDrawer({
       securityDeposit: row.securityDeposit,
       rentCommencementDate: row.rentCommencementDate,
       cashflowJson: row.cashflowJson,
+      updatedAt: new Date().toISOString(),
       metadata: row.metadata ?? {},
     };
     onSave(updated);
@@ -302,7 +304,8 @@ export function RentRollDrawer({
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
           <div className="sticky top-0 bg-bg/90 backdrop-blur-md border-b border-border px-7 py-5 z-10">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex items-center gap-3 flex-wrap">
+              <div className="min-w-0 flex flex-col gap-1">
+                <div className="flex items-center gap-3 flex-wrap">
                 <h2 className="text-xl text-fg tracking-[-0.01em] font-semibold truncate">
                   {currentDeal || 'Rent Roll'}
                   {currentSpace && (
@@ -321,6 +324,15 @@ export function RentRollDrawer({
                 >
                   {occupied ? 'Occupied' : 'Vacant'}
                 </span>
+                </div>
+                {row.updatedAt && (
+                  <span
+                    className="text-[11px] text-fg-subtle"
+                    title={row.updatedAt}
+                  >
+                    Updated {relativeTime(row.updatedAt)}
+                  </span>
+                )}
               </div>
               <button
                 type="button"

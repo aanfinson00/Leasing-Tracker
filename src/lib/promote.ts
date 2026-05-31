@@ -96,6 +96,7 @@ export function previewPromote(
     securityDeposit: existing?.securityDeposit ?? null,
     rentCommencementDate: existing?.rentCommencementDate ?? deal.expectedStart ?? null,
     cashflowJson: existing?.cashflowJson ?? null,
+    updatedAt: existing?.updatedAt ?? null,
     // Free-form escape hatch — carry through existing.
     metadata: existing?.metadata ?? {},
   };

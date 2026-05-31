@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-table';
 import { ArrowUpDown, ChevronUp, ChevronDown, Pencil, Trash2, Sparkles, UserPlus, ClipboardCheck } from 'lucide-react';
 import type { RentRollRow, Deal } from '../types';
+import { relativeTime } from '../lib/relative-time';
 
 interface RentRollTableProps {
   rows: RentRollRow[];
@@ -170,6 +171,27 @@ export function RentRollTable({
             {info.getValue() || '–'}
           </span>
         ),
+      }),
+      columnHelper.accessor((row) => row.updatedAt ?? '', {
+        id: 'updatedAt',
+        header: 'Updated',
+        cell: (info) => {
+          const v = info.getValue();
+          if (!v) return <span className="text-fg-subtle text-xs">–</span>;
+          return (
+            <span
+              className="text-xs text-fg-muted whitespace-nowrap"
+              title={String(v)}
+            >
+              {relativeTime(String(v))}
+            </span>
+          );
+        },
+        sortingFn: (a, b) => {
+          const av = String(a.original.updatedAt ?? '');
+          const bv = String(b.original.updatedAt ?? '');
+          return av.localeCompare(bv);
+        },
       }),
       columnHelper.display({
         id: 'actions',

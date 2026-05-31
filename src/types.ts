@@ -203,6 +203,8 @@ export const RentRollRowSchema = z.object({
   securityDeposit: z.number().nullable().optional(),
   rentCommencementDate: z.string().nullable().optional(),
   cashflowJson: z.unknown().nullable().optional(),
+  // Last-updated timestamp (Postgres updated_at; ISO string).
+  updatedAt: z.string().nullable().optional(),
   // Free-form escape hatch.
   metadata: z.record(z.string(), z.unknown()).default({}),
 }).transform((r) => ({
@@ -242,6 +244,7 @@ export const RentRollRowSchema = z.object({
   securityDeposit: r.securityDeposit ?? null,
   rentCommencementDate: r.rentCommencementDate ?? null,
   cashflowJson: r.cashflowJson ?? null,
+  updatedAt: r.updatedAt ?? null,
 }));
 
 export type RentRollRow = z.infer<typeof RentRollRowSchema>;
@@ -284,6 +287,7 @@ export const defaultRentRollRow = (): RentRollRow => ({
   securityDeposit: null,
   rentCommencementDate: null,
   cashflowJson: null,
+  updatedAt: null,
   metadata: {},
 });
 
