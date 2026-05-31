@@ -77,6 +77,12 @@ import { listSalesCompsTool } from './tools/list-sales-comps.js';
 import { portfolioSummaryTool } from './tools/portfolio-summary.js';
 import { searchTool } from './tools/search.js';
 
+// Phase 7 — projects + spaces hierarchy
+import { listProjectsTool } from './tools/list-projects.js';
+import { getProjectSummaryTool } from './tools/get-project-summary.js';
+import { listSpacesTool } from './tools/list-spaces.js';
+import { updateSpaceTool } from './tools/update-space.js';
+
 // All tools are registered here. The shape is a manual interface match —
 // not a base class — because each tool's args type is unique.
 // `requiredRole` tags the minimum role a caller's token must hold:
@@ -117,6 +123,11 @@ const TOOLS: Array<{
   { ...listSalesCompsTool, requiredRole: 'read' },
   { ...portfolioSummaryTool, requiredRole: 'read' },
   { ...searchTool, requiredRole: 'read' },
+  // Phase 7 — projects + spaces hierarchy
+  { ...listProjectsTool, requiredRole: 'read' },
+  { ...getProjectSummaryTool, requiredRole: 'read' },
+  { ...listSpacesTool, requiredRole: 'read' },
+  { ...updateSpaceTool, requiredRole: 'write' },
 ];
 
 export function buildServer(token: AuthedToken): Server {
