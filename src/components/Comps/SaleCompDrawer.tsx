@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { MiniMapEditor } from '../MiniMapEditor';
 import {
   X,
   Building2,
@@ -91,6 +92,14 @@ function Section({ icon: Icon, title, children }: SectionProps) {
 
 export function SaleCompDrawer({ comp, onClose, onSave, onDelete }: SaleCompDrawerProps) {
   const { register, handleSubmit, reset, watch } = useForm<FormValues>();
+  const [latLng, setLatLng] = useState<{ lat: number | null; lng: number | null }>({
+    lat: null,
+    lng: null,
+  });
+
+  useEffect(() => {
+    if (comp) setLatLng({ lat: comp.lat ?? null, lng: comp.lng ?? null });
+  }, [comp]);
 
   useEffect(() => {
     if (comp) {
@@ -147,6 +156,8 @@ export function SaleCompDrawer({ comp, onClose, onSave, onDelete }: SaleCompDraw
       sourceUrl: parseStr(v.sourceUrl),
       confidence: v.confidence,
       confidential: !!v.confidential,
+      lat: latLng.lat,
+      lng: latLng.lng,
       notes: parseStr(v.notes),
       createdAt: comp.createdAt,
       updatedAt: new Date().toISOString(),
@@ -214,6 +225,15 @@ export function SaleCompDrawer({ comp, onClose, onSave, onDelete }: SaleCompDraw
                 <div>
                   <label className={labelClass}>Year Built</label>
                   <input {...register('yearBuilt')} type="number" placeholder="2020" className={`${inputClass} tabular-nums`} />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelClass}>Location</label>
+                  <MiniMapEditor
+                    lat={latLng.lat}
+                    lng={latLng.lng}
+                    address={watch('buildingAddress') ?? ''}
+                    onChange={(lat, lng) => setLatLng({ lat, lng })}
+                  />
                 </div>
               </div>
             </Section>

@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { Feature, Polygon } from 'geojson';
-import { MapPin, Satellite, Map as MapIcon, X } from 'lucide-react';
+import { MapPin, Satellite, Map as MapIcon, X, Layers } from 'lucide-react';
 import type {
   AcquisitionTarget,
   Building,
@@ -174,6 +174,37 @@ export function MapView({
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
 
   const [mapStyle, setMapStyle] = useState<'satellite' | 'light'>('satellite');
+  // Layer filters — which entity types render on the master map. Default
+  // is projects-only; user can opt-in to other layers via the filter panel.
+  // Persisted in localStorage so toggles survive across sessions.
+  const [layerFilters, setLayerFilters] = useState<{
+    projects: boolean;
+    devProjects: boolean;
+    acqTargets: boolean;
+    dispoListings: boolean;
+  }>(() => {
+    try {
+      const raw = localStorage.getItem('mapview-layer-filters');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            projects: parsed.projects ?? true,
+            devProjects: parsed.devProjects ?? false,
+            acqTargets: parsed.acqTargets ?? false,
+            dispoListings: parsed.dispoListings ?? false,
+          };
+        }
+      }
+    } catch { /* fall through */ }
+    return { projects: true, devProjects: false, acqTargets: false, dispoListings: false };
+  });
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  useEffect(() => {
+    try {
+      localStorage.setItem('mapview-layer-filters', JSON.stringify(layerFilters));
+    } catch { /* swallow */ }
+  }, [layerFilters]);
   const [placingProjectId, setPlacingProjectId] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [buildings, setBuildings] = useState<Building[]>([]);
@@ -198,43 +229,45 @@ export function MapView({
   }, [projects]);
   const pinnedProjects = useMemo(
     () =>
-      projects.filter(
-        (p): p is Project & { lat: number; lng: number } =>
-          p.lat != null && p.lng != null
-      ),
-    [projects]
+      mode === 'all' && !layerFilters.projects
+        ? []
+        : projects.filter(
+            (p): p is Project & { lat: number; lng: number } =>
+              p.lat != null && p.lng != null
+          ),
+    [projects, mode, layerFilters.projects]
   );
   // Each entity type filters itself based on `mode` so the consumer
   // can keep passing the full lists; only the selected kinds render.
   const pinnedDevProjects = useMemo(
     () =>
-      mode === 'acq-only' || mode === 'dispo-only'
+      mode === 'acq-only' || mode === 'dispo-only' || (mode === 'all' && !layerFilters.devProjects)
         ? []
         : devProjects.filter(
             (p): p is DevelopmentProject & { lat: number; lng: number } =>
               typeof p.lat === 'number' && typeof p.lng === 'number'
           ),
-    [devProjects, mode]
+    [devProjects, mode, layerFilters.devProjects]
   );
   const pinnedAcqTargets = useMemo(
     () =>
-      mode === 'dev-only' || mode === 'dispo-only'
+      mode === 'dev-only' || mode === 'dispo-only' || (mode === 'all' && !layerFilters.acqTargets)
         ? []
         : acqTargets.filter(
             (a): a is AcquisitionTarget & { lat: number; lng: number } =>
               typeof a.lat === 'number' && typeof a.lng === 'number'
           ),
-    [acqTargets, mode]
+    [acqTargets, mode, layerFilters.acqTargets]
   );
   const pinnedDispoListings = useMemo(
     () =>
-      mode === 'dev-only' || mode === 'acq-only'
+      mode === 'dev-only' || mode === 'acq-only' || (mode === 'all' && !layerFilters.dispoListings)
         ? []
         : dispoListings.filter(
             (d): d is DispositionListing & { lat: number; lng: number } =>
               typeof d.lat === 'number' && typeof d.lng === 'number'
           ),
-    [dispoListings, mode]
+    [dispoListings, mode, layerFilters.dispoListings]
   );
   const activeProject = activeProjectId ? projectsById.get(activeProjectId) ?? null : null;
   const placingProject = placingProjectId ? projectsById.get(placingProjectId) ?? null : null;
@@ -982,6 +1015,46 @@ export function MapView({
               placingProjectId={placingProjectId}
               onPick={setPlacingProjectId}
             />
+          )}
+          {!embed && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setFilterPanelOpen((v) => !v)}
+                className="px-3 py-1.5 bg-bg-elevated rounded-lg text-xs text-fg-muted hover:text-fg hover:bg-bg-hover transition-all shadow-soft border border-border flex items-center gap-1.5"
+                title="Choose which categories show on the map"
+              >
+                <Layers size={14} />
+                Layers
+              </button>
+              {filterPanelOpen && (
+                <div className="absolute right-0 z-30 mt-1 w-56 rounded-xl bg-bg-elevated shadow-xl p-3 border border-border">
+                  <div className="text-[10px] font-medium text-fg-muted mb-2 uppercase tracking-wide">
+                    Show on map
+                  </div>
+                  <div className="space-y-1.5">
+                    {([
+                      ['projects', 'Projects (deals)'],
+                      ['devProjects', 'Development pipeline'],
+                      ['acqTargets', 'Acquisitions'],
+                      ['dispoListings', 'Dispositions'],
+                    ] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2 text-xs text-fg cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={layerFilters[key]}
+                          onChange={(e) =>
+                            setLayerFilters((prev) => ({ ...prev, [key]: e.target.checked }))
+                          }
+                          className="rounded"
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
           <StyleToggle style={mapStyle} onChange={setMapStyle} />
         </div>

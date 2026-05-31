@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   X,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { LeaseComp, CompConfidence, TransactionType, RentType } from '../../types';
+import { MiniMapEditor } from '../MiniMapEditor';
 import {
   CompConfidenceEnum,
   TransactionTypeEnum,
@@ -99,6 +100,14 @@ function Section({ icon: Icon, title, children }: SectionProps) {
 
 export function CompDrawer({ comp, onClose, onSave, onDelete }: CompDrawerProps) {
   const { register, handleSubmit, reset, watch } = useForm<FormValues>();
+  const [latLng, setLatLng] = useState<{ lat: number | null; lng: number | null }>({
+    lat: null,
+    lng: null,
+  });
+
+  useEffect(() => {
+    if (comp) setLatLng({ lat: comp.lat ?? null, lng: comp.lng ?? null });
+  }, [comp]);
 
   useEffect(() => {
     if (comp) {
@@ -163,6 +172,8 @@ export function CompDrawer({ comp, onClose, onSave, onDelete }: CompDrawerProps)
       sourceUrl: parseStr(v.sourceUrl),
       confidence: v.confidence,
       confidential: !!v.confidential,
+      lat: latLng.lat,
+      lng: latLng.lng,
       notes: parseStr(v.notes),
       createdAt: comp.createdAt,
       updatedAt: new Date().toISOString(),
@@ -230,6 +241,15 @@ export function CompDrawer({ comp, onClose, onSave, onDelete }: CompDrawerProps)
                 <div className="col-span-2">
                   <label className={labelClass}>Building Type</label>
                   <input {...register('buildingType')} placeholder="Rear Load, Front Load, Cross Dock" className={inputClass} />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelClass}>Location</label>
+                  <MiniMapEditor
+                    lat={latLng.lat}
+                    lng={latLng.lng}
+                    address={watch('buildingAddress') ?? ''}
+                    onChange={(lat, lng) => setLatLng({ lat, lng })}
+                  />
                 </div>
               </div>
             </Section>
