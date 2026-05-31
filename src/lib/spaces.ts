@@ -7,7 +7,7 @@
 // building's `spaceSubdivisions`, that parent is dropped from the
 // leasable list and replaced with its `childSpaceIds`.
 
-import type { Building } from '../types';
+import type { Building, Space } from '../types';
 import { autoSpaceId } from '../types';
 
 export interface SpaceOption {
@@ -177,4 +177,104 @@ export function removeSubdivision(b: Building, parentSpaceId: string): Building 
     ),
     updatedAt: new Date().toISOString(),
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Forward-compat: derive Space rows from a Building's bay + subdivision
+// state. Use this when a building is created or modified, so the spaces
+// table tracks every leasable unit.
+// ─────────────────────────────────────────────────────────────────────
+
+interface DerivedSpace {
+  code: string;
+  bayIndex: number;
+  parentCode: string | null;
+}
+
+/** Enumerate every space (parent + children) that should exist for a building. */
+export function deriveSpacesForBuilding(b: Building): DerivedSpace[] {
+  const out: DerivedSpace[] = [];
+  const subdivisionMap = new Map(
+    (b.spaceSubdivisions ?? []).map((s) => [s.parentSpaceId, s.childSpaceIds])
+  );
+  const count = b.bayCount ?? 1;
+  for (let i = 0; i < count; i++) {
+    const override = b.baySpaceIds[i];
+    const parentCode =
+      override && override.trim() !== ''
+        ? override
+        : autoSpaceId(b.projectId, b.buildingOrdinal, i);
+    out.push({ code: parentCode, bayIndex: i + 1, parentCode: null });
+    const children = subdivisionMap.get(parentCode);
+    if (children) {
+      for (const child of children) {
+        out.push({ code: child, bayIndex: i + 1, parentCode });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Diff the derived spaces against existing Space rows for the building,
+ * returning the list of new Space records that should be created. Existing
+ * rows are matched by `code` within the building. Does NOT delete stale
+ * rows (deletions only happen via explicit user action).
+ */
+export function computeMissingSpaces(
+  b: Building,
+  existingSpaces: Space[]
+): Space[] {
+  const existing = existingSpaces.filter((s) => s.buildingUuid === b.id);
+  const byCode = new Map(existing.map((s) => [s.code, s]));
+  const derived = deriveSpacesForBuilding(b);
+  const now = new Date().toISOString();
+  const out: Space[] = [];
+
+  // Pass 1: ensure all parent codes exist. Capture their UUIDs (existing or new).
+  const parentUuidByCode = new Map<string, string>();
+  for (const d of derived.filter((d) => d.parentCode === null)) {
+    const found = byCode.get(d.code);
+    if (found) {
+      parentUuidByCode.set(d.code, found.id);
+      continue;
+    }
+    const space: Space = {
+      id: crypto.randomUUID(),
+      buildingUuid: b.id,
+      code: d.code,
+      areaSF: null,
+      position: null,
+      bayIndex: d.bayIndex,
+      parentSpaceUuid: null,
+      occupied: false,
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    };
+    out.push(space);
+    parentUuidByCode.set(d.code, space.id);
+  }
+
+  // Pass 2: children — link via parent_space_uuid from pass 1.
+  for (const d of derived.filter((d) => d.parentCode !== null)) {
+    if (byCode.has(d.code)) continue;
+    const parentUuid = parentUuidByCode.get(d.parentCode!) ?? null;
+    const space: Space = {
+      id: crypto.randomUUID(),
+      buildingUuid: b.id,
+      code: d.code,
+      areaSF: null,
+      position: null,
+      bayIndex: d.bayIndex,
+      parentSpaceUuid: parentUuid,
+      occupied: false,
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    };
+    out.push(space);
+  }
+
+  return out;
 }
