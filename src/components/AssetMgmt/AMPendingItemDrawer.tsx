@@ -318,11 +318,11 @@ export function AMPendingItemDrawer({
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Deal Name</label>
+                  <label className={labelClass}>Project Name</label>
                   <input {...register('dealName')} className={inputClass} />
                 </div>
                 <div>
-                  <label className={labelClass}>Deal ID</label>
+                  <label className={labelClass}>Project Code</label>
                   <input
                     {...register('dealId')}
                     className={`${inputClass} tabular-nums`}

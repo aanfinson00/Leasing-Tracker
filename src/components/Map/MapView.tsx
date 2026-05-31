@@ -968,9 +968,9 @@ export function MapView({
               <span className="text-fg-subtle">·</span>
               <span
                 className="text-fg-subtle"
-                title="Deals without a Deal ID are excluded from the map"
+                title="Deals without a Project Code are excluded from the map"
               >
-                {orphanDealCount} deal{orphanDealCount === 1 ? '' : 's'} skipped (no Deal ID)
+                {orphanDealCount} deal{orphanDealCount === 1 ? '' : 's'} skipped (no project)
               </span>
             </>
           )}
