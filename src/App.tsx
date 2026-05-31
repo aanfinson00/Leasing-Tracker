@@ -1015,6 +1015,14 @@ function App() {
   // Phase 5: also derive any missing Space rows for this building and
   // upsert them — keeps the spaces table in lock-step with bay/subdivision
   // changes without needing a separate user action.
+  const handleUpsertSpace = (s: Space) => {
+    setSpaces((prev) => {
+      const exists = prev.some((x) => x.id === s.id);
+      return exists ? prev.map((x) => (x.id === s.id ? s : x)) : [...prev, s];
+    });
+    writeThrough('save space', upsertSpace(s));
+  };
+
   const handleUpsertBuilding = (b: Building) => {
     setBuildings((prev) => {
       const exists = prev.some((x) => x.id === b.id);
@@ -2181,6 +2189,8 @@ function App() {
         activities={activities}
         buildings={buildings}
         projects={projects}
+        spaces={spaces}
+        onUpsertSpace={handleUpsertSpace}
         onClose={() => setEditingDeal(null)}
         onSave={handleSaveDeal}
         onDelete={handleDeleteDeal}
@@ -2198,6 +2208,8 @@ function App() {
         activities={activities}
         buildings={buildings}
         projects={projects}
+        spaces={spaces}
+        onUpsertSpace={handleUpsertSpace}
         onClose={() => setEditingRow(null)}
         onSave={handleSaveRow}
         onDelete={handleDeleteRow}
