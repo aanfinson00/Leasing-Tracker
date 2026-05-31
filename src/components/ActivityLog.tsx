@@ -83,6 +83,7 @@ export function ActivityLog({
       summary: text,
       link: link.trim() === '' ? null : link.trim(),
       author: null,
+      metadata: {},
     });
     reset();
   };

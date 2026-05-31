@@ -49,6 +49,10 @@ export const DealSchema = z.object({
   spaceId: z.string().nullable().optional(),
   building: z.string().nullable().optional(),
   dealId: z.string().nullable().optional(),
+  // New uuid FKs (Phase 1 schema). Old text columns above are kept
+  // indefinitely as the deprecated path.
+  projectUuid: z.string().uuid().nullable().optional(),
+  targetSpaceUuid: z.string().uuid().nullable().optional(),
 
   // Space (range supported via min/max)
   minSF: z.number().int().nullable().optional(),
@@ -85,11 +89,15 @@ export const DealSchema = z.object({
   notes: z.string().nullable().optional(),
   // External link — team SharePoint folder for this deal's documents
   sharepointUrl: z.string().nullable().optional(),
+  // Free-form escape hatch. Promote keys to real columns once filtered/indexed.
+  metadata: z.record(z.string(), z.unknown()).default({}),
 }).transform((d) => ({
   ...d,
   spaceId: d.spaceId ?? null,
   building: d.building ?? null,
   dealId: d.dealId ?? null,
+  projectUuid: d.projectUuid ?? null,
+  targetSpaceUuid: d.targetSpaceUuid ?? null,
   minSF: d.minSF ?? null,
   maxSF: d.maxSF ?? null,
   prospectTenant: d.prospectTenant ?? null,
@@ -146,6 +154,9 @@ export const RentRollRowSchema = z.object({
   buildingId: z.string().nullable().optional(),
   spaceId: z.string().nullable().optional(),
   building: z.string().nullable().optional(),
+  // New uuid FKs (Phase 1 schema). Text columns above kept indefinitely as deprecated.
+  projectUuid: z.string().uuid().nullable().optional(),
+  spaceUuid: z.string().uuid().nullable().optional(),
 
   // Property
   market: z.string().nullable().optional(),
@@ -191,6 +202,8 @@ export const RentRollRowSchema = z.object({
   securityDeposit: z.number().nullable().optional(),
   rentCommencementDate: z.string().nullable().optional(),
   cashflowJson: z.unknown().nullable().optional(),
+  // Free-form escape hatch.
+  metadata: z.record(z.string(), z.unknown()).default({}),
 }).transform((r) => ({
   ...r,
   dealId: r.dealId ?? null,
@@ -198,6 +211,8 @@ export const RentRollRowSchema = z.object({
   buildingId: r.buildingId ?? null,
   spaceId: r.spaceId ?? null,
   building: r.building ?? null,
+  projectUuid: r.projectUuid ?? null,
+  spaceUuid: r.spaceUuid ?? null,
   market: r.market ?? null,
   propertyType: r.propertyType ?? null,
   buildingType: r.buildingType ?? null,
@@ -237,6 +252,8 @@ export const defaultRentRollRow = (): RentRollRow => ({
   buildingId: null,
   spaceId: null,
   building: null,
+  projectUuid: null,
+  spaceUuid: null,
   market: null,
   propertyType: null,
   buildingType: null,
@@ -266,6 +283,7 @@ export const defaultRentRollRow = (): RentRollRow => ({
   securityDeposit: null,
   rentCommencementDate: null,
   cashflowJson: null,
+  metadata: {},
 });
 
 const todayIso = () => {
@@ -292,6 +310,8 @@ export const defaultDeal = (): Deal => ({
   spaceId: null,
   building: null,
   dealId: null,
+  projectUuid: null,
+  targetSpaceUuid: null,
   minSF: null,
   maxSF: null,
   prospectTenant: null,
@@ -313,6 +333,7 @@ export const defaultDeal = (): Deal => ({
   currentSummary: null,
   notes: null,
   sharepointUrl: null,
+  metadata: {},
 });
 
 // ──────────────────────────────────────────────────────────────────
@@ -329,7 +350,19 @@ export const ActivityTypeEnum = z.enum([
 ]);
 export type ActivityType = z.infer<typeof ActivityTypeEnum>;
 
-export const ActivityParentTypeEnum = z.enum(['deal', 'rentroll']);
+// Polymorphic — an activity can be attached to anything that gets edited.
+// Phase 1 expanded the underlying check constraint to allow all of these.
+export const ActivityParentTypeEnum = z.enum([
+  'deal',
+  'rentroll',
+  'project',
+  'building',
+  'space',
+  'dev_project',
+  'acq_target',
+  'dispo_listing',
+  'contact',
+]);
 export type ActivityParentType = z.infer<typeof ActivityParentTypeEnum>;
 
 export const ActivityEntrySchema = z.object({
@@ -342,6 +375,7 @@ export const ActivityEntrySchema = z.object({
   link: z.string().nullable().optional(),
   author: z.string().nullable().optional(),
   createdAt: z.string(),
+  metadata: z.record(z.string(), z.unknown()).default({}),
 }).transform((a) => ({
   ...a,
   link: a.link ?? null,
@@ -450,6 +484,8 @@ export type SpaceSubdivision = z.infer<typeof SpaceSubdivisionSchema>;
 export const BuildingSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().min(1),
+  // New uuid FK (Phase 1). Text projectId above is kept indefinitely as deprecated.
+  projectUuid: z.string().uuid().nullable().optional(),
   name: z.string().default('Building'),
   footprint: z.unknown(),
   heightFt: z.number().positive(),
@@ -473,6 +509,8 @@ export const BuildingSchema = z.object({
   // 1-indexed position of this building within its project — used in
   // the auto Space ID format. Assigned on creation.
   buildingOrdinal: z.number().int().positive().nullable().optional(),
+  // Free-form escape hatch.
+  metadata: z.record(z.string(), z.unknown()).default({}),
   createdAt: z.string(),
   updatedAt: z.string(),
 }).transform((b) => ({
@@ -484,6 +522,7 @@ export const BuildingSchema = z.object({
   centerLat: b.centerLat ?? null,
   centerLng: b.centerLng ?? null,
   buildingOrdinal: b.buildingOrdinal ?? null,
+  projectUuid: b.projectUuid ?? null,
 }));
 
 export type Building = z.infer<typeof BuildingSchema>;
@@ -500,6 +539,114 @@ export function autoSpaceId(
   const s = (sectionIndex + 1).toString().padStart(2, '0');
   return `${projectId}-B${b}-S${s}`;
 }
+
+// ──────────────────────────────────────────────────────────────────
+// Project — top of the hierarchy. project_code is globally unique
+// (e.g., "50"). One Project owns N Buildings; each Building owns
+// N Spaces. Persisted in public.projects (Phase 1 migration).
+// ──────────────────────────────────────────────────────────────────
+
+export const ProjectSchema = z.object({
+  id: z.string().uuid(),
+  projectCode: z.string().min(1, 'Project code is required'),
+  name: z.string().min(1, 'Project name is required'),
+  address: z.string().nullable().optional(),
+  market: z.string().nullable().optional(),
+  submarket: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  county: z.string().nullable().optional(),
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((p) => ({
+  ...p,
+  address: p.address ?? null,
+  market: p.market ?? null,
+  submarket: p.submarket ?? null,
+  city: p.city ?? null,
+  county: p.county ?? null,
+  lat: p.lat ?? null,
+  lng: p.lng ?? null,
+}));
+
+export type Project = z.infer<typeof ProjectSchema>;
+
+export const defaultProject = (): Project => ({
+  id: crypto.randomUUID(),
+  projectCode: '',
+  name: '',
+  address: null,
+  market: null,
+  submarket: null,
+  city: null,
+  county: null,
+  lat: null,
+  lng: null,
+  metadata: {},
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+
+// ──────────────────────────────────────────────────────────────────
+// Space — leasable unit inside a Building. Position uses cardinal +
+// End|Middle modifiers (or 'Whole Building' / 'Center'). When a space
+// is split for partial-building tenants, the children point at the
+// parent via parentSpaceUuid (existing subdivision pattern, now in
+// its own table).
+// ──────────────────────────────────────────────────────────────────
+
+export const SpacePositionEnum = z.enum([
+  'Whole Building',
+  'Center',
+  'N End', 'N Middle',
+  'S End', 'S Middle',
+  'E End', 'E Middle',
+  'W End', 'W Middle',
+  'NE End', 'NE Middle',
+  'NW End', 'NW Middle',
+  'SE End', 'SE Middle',
+  'SW End', 'SW Middle',
+]);
+export type SpacePosition = z.infer<typeof SpacePositionEnum>;
+
+export const SpaceSchema = z.object({
+  id: z.string().uuid(),
+  buildingUuid: z.string().uuid(),
+  code: z.string().nullable().optional(),
+  areaSF: z.number().positive().nullable().optional(),
+  position: SpacePositionEnum.nullable().optional(),
+  bayIndex: z.number().int().positive().nullable().optional(),
+  parentSpaceUuid: z.string().uuid().nullable().optional(),
+  occupied: z.boolean().default(false),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((s) => ({
+  ...s,
+  code: s.code ?? null,
+  areaSF: s.areaSF ?? null,
+  position: s.position ?? null,
+  bayIndex: s.bayIndex ?? null,
+  parentSpaceUuid: s.parentSpaceUuid ?? null,
+}));
+
+export type Space = z.infer<typeof SpaceSchema>;
+
+export const defaultSpace = (buildingUuid: string): Space => ({
+  id: crypto.randomUUID(),
+  buildingUuid,
+  code: null,
+  areaSF: null,
+  position: null,
+  bayIndex: null,
+  parentSpaceUuid: null,
+  occupied: false,
+  metadata: {},
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
 
 // ──────────────────────────────────────────────────────────────────
 // Development Projects — capital projects from site selection through

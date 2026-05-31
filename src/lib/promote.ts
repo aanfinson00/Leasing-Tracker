@@ -51,6 +51,9 @@ export function previewPromote(
     buildingId: existing?.buildingId ?? null,
     spaceId: deal.spaceId ?? existing?.spaceId ?? null,
     building: deal.building ?? existing?.building ?? null,
+    // Carry through new uuid FKs — deal's projectUuid takes precedence on promote.
+    projectUuid: deal.projectUuid ?? existing?.projectUuid ?? null,
+    spaceUuid: existing?.spaceUuid ?? null,
 
     market: existing?.market ?? null,
     propertyType: existing?.propertyType ?? null,
@@ -93,5 +96,7 @@ export function previewPromote(
     securityDeposit: existing?.securityDeposit ?? null,
     rentCommencementDate: existing?.rentCommencementDate ?? deal.expectedStart ?? null,
     cashflowJson: existing?.cashflowJson ?? null,
+    // Free-form escape hatch — carry through existing.
+    metadata: existing?.metadata ?? {},
   };
 }
