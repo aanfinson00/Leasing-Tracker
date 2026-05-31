@@ -64,7 +64,7 @@ export async function verifyBearer(authorizationHeader: string | undefined | nul
   const sb = getServiceClient();
   const { data, error } = await sb
     .from('mcp_tokens')
-    .select('id, name, role, revoked_at')
+    .select('id, name, role, revoked_at, expires_at')
     .eq('token_hash', tokenHash)
     .maybeSingle();
 
@@ -76,6 +76,12 @@ export async function verifyBearer(authorizationHeader: string | undefined | nul
   }
   if (data.revoked_at) {
     return { status: 403, message: 'Token has been revoked' };
+  }
+  if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) {
+    return {
+      status: 403,
+      message: `Token expired at ${data.expires_at} — mint a new one and update your client config`,
+    };
   }
 
   // Fire-and-forget bump of last_used_at — failure here doesn't deny the call.
