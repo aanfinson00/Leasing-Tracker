@@ -23,10 +23,13 @@ import type {
   LeaseComp,
   SalesComp,
   OnboardingChecklist,
+  Project,
   PropertyTaxAppeal,
   PropertyTaxAppealStatus,
   RentRollRow,
   Scenario,
+  Space,
+  SpacePosition,
 } from '../../types';
 import type { Globals, ScenarioInputs, ScenarioResults } from '../lease-math/types';
 import type { Polygon } from 'geojson';
@@ -39,6 +42,9 @@ export interface DealRow {
   space_id: string | null;
   building: string | null;
   deal_id: string | null;
+  // Phase 1 additions
+  project_uuid: string | null;
+  target_space_uuid: string | null;
   min_sf: number | null;
   max_sf: number | null;
   prospect_tenant: string | null;
@@ -60,6 +66,7 @@ export interface DealRow {
   current_summary: string | null;
   notes: string | null;
   sharepoint_url: string | null;
+  metadata: Record<string, unknown>;
 }
 
 export const dealToRow = (d: Deal): DealRow => ({
@@ -68,6 +75,8 @@ export const dealToRow = (d: Deal): DealRow => ({
   space_id: d.spaceId ?? null,
   building: d.building ?? null,
   deal_id: d.dealId ?? null,
+  project_uuid: d.projectUuid ?? null,
+  target_space_uuid: d.targetSpaceUuid ?? null,
   min_sf: d.minSF ?? null,
   max_sf: d.maxSF ?? null,
   prospect_tenant: d.prospectTenant ?? null,
@@ -89,6 +98,7 @@ export const dealToRow = (d: Deal): DealRow => ({
   current_summary: d.currentSummary ?? null,
   notes: d.notes ?? null,
   sharepoint_url: d.sharepointUrl ?? null,
+  metadata: d.metadata ?? {},
 });
 
 export const rowToDeal = (r: DealRow): Deal => ({
@@ -97,6 +107,8 @@ export const rowToDeal = (r: DealRow): Deal => ({
   spaceId: r.space_id,
   building: r.building,
   dealId: r.deal_id,
+  projectUuid: r.project_uuid,
+  targetSpaceUuid: r.target_space_uuid,
   minSF: r.min_sf,
   maxSF: r.max_sf,
   prospectTenant: r.prospect_tenant,
@@ -118,6 +130,7 @@ export const rowToDeal = (r: DealRow): Deal => ({
   currentSummary: r.current_summary,
   notes: r.notes,
   sharepointUrl: r.sharepoint_url,
+  metadata: (r.metadata ?? {}) as Record<string, unknown>,
 });
 
 // ── RentRollRow ────────────────────────────────────────────────────
@@ -129,6 +142,9 @@ export interface RentRollDbRow {
   building_id: string | null;
   space_id: string | null;
   building: string | null;
+  // Phase 1 additions
+  project_uuid: string | null;
+  space_uuid: string | null;
   market: string | null;
   property_type: string | null;
   building_type: string | null;
@@ -158,6 +174,7 @@ export interface RentRollDbRow {
   security_deposit: number | string | null;
   rent_commencement_date: string | null;
   cashflow_json: unknown | null;
+  metadata: Record<string, unknown>;
 }
 
 export const rentRollToRow = (r: RentRollRow): RentRollDbRow => ({
@@ -167,6 +184,8 @@ export const rentRollToRow = (r: RentRollRow): RentRollDbRow => ({
   building_id: r.buildingId ?? null,
   space_id: r.spaceId ?? null,
   building: r.building ?? null,
+  project_uuid: r.projectUuid ?? null,
+  space_uuid: r.spaceUuid ?? null,
   market: r.market ?? null,
   property_type: r.propertyType ?? null,
   building_type: r.buildingType ?? null,
@@ -196,6 +215,7 @@ export const rentRollToRow = (r: RentRollRow): RentRollDbRow => ({
   security_deposit: r.securityDeposit ?? null,
   rent_commencement_date: r.rentCommencementDate ?? null,
   cashflow_json: r.cashflowJson ?? null,
+  metadata: r.metadata ?? {},
 });
 
 export const rowToRentRoll = (r: RentRollDbRow): RentRollRow => ({
@@ -205,6 +225,8 @@ export const rowToRentRoll = (r: RentRollDbRow): RentRollRow => ({
   buildingId: r.building_id,
   spaceId: r.space_id,
   building: r.building,
+  projectUuid: r.project_uuid,
+  spaceUuid: r.space_uuid,
   market: r.market,
   propertyType: r.property_type,
   buildingType: r.building_type,
@@ -234,6 +256,7 @@ export const rowToRentRoll = (r: RentRollDbRow): RentRollRow => ({
   securityDeposit: numOrNull(r.security_deposit),
   rentCommencementDate: r.rent_commencement_date,
   cashflowJson: r.cashflow_json ?? null,
+  metadata: (r.metadata ?? {}) as Record<string, unknown>,
 });
 
 // ── ActivityEntry ──────────────────────────────────────────────────
@@ -251,6 +274,7 @@ export interface ActivityRow {
   link: string | null;
   author: string | null;
   created_at: string;
+  metadata: Record<string, unknown>;
 }
 
 export const activityToRow = (a: ActivityEntry): Omit<ActivityRow, 'created_at'> & { created_at?: string } => ({
@@ -264,6 +288,7 @@ export const activityToRow = (a: ActivityEntry): Omit<ActivityRow, 'created_at'>
   author: a.author ?? null,
   // Pass through the client-generated timestamp; DB default is the fallback.
   created_at: a.createdAt,
+  metadata: a.metadata ?? {},
 });
 
 export const rowToActivity = (r: ActivityRow): ActivityEntry => ({
@@ -276,6 +301,7 @@ export const rowToActivity = (r: ActivityRow): ActivityEntry => ({
   link: r.link,
   author: r.author,
   createdAt: r.created_at,
+  metadata: (r.metadata ?? {}) as Record<string, unknown>,
 });
 
 // ── OnboardingChecklist ────────────────────────────────────────────
@@ -357,6 +383,8 @@ export const rowToScenario = (r: ScenarioRow): Scenario => ({
 export interface BuildingRow {
   id: string;
   project_id: string;
+  // Phase 1 addition
+  project_uuid: string | null;
   name: string;
   footprint: Polygon;
   height_ft: number;
@@ -372,6 +400,7 @@ export interface BuildingRow {
   bay_space_ids: Array<string | null>;
   space_subdivisions: Building['spaceSubdivisions'];
   building_ordinal: number | null;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -384,6 +413,7 @@ export const buildingToRow = (
 } => ({
   id: b.id,
   project_id: b.projectId,
+  project_uuid: b.projectUuid ?? null,
   name: b.name,
   footprint: b.footprint as Polygon,
   height_ft: b.heightFt,
@@ -399,6 +429,7 @@ export const buildingToRow = (
   bay_space_ids: b.baySpaceIds ?? [],
   space_subdivisions: b.spaceSubdivisions ?? [],
   building_ordinal: b.buildingOrdinal ?? null,
+  metadata: b.metadata ?? {},
   created_at: b.createdAt,
   updated_at: b.updatedAt,
 });
@@ -406,6 +437,7 @@ export const buildingToRow = (
 export const rowToBuilding = (r: BuildingRow): Building => ({
   id: r.id,
   projectId: r.project_id,
+  projectUuid: r.project_uuid,
   name: r.name,
   footprint: r.footprint,
   heightFt: Number(r.height_ft),
@@ -421,6 +453,111 @@ export const rowToBuilding = (r: BuildingRow): Building => ({
   baySpaceIds: r.bay_space_ids ?? [],
   spaceSubdivisions: r.space_subdivisions ?? [],
   buildingOrdinal: r.building_ordinal,
+  metadata: (r.metadata ?? {}) as Record<string, unknown>,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── Project ───────────────────────────────────────────────────────
+
+export interface ProjectRow {
+  id: string;
+  project_code: string;
+  name: string;
+  address: string | null;
+  market: string | null;
+  submarket: string | null;
+  city: string | null;
+  county: string | null;
+  lat: number | string | null;
+  lng: number | string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export const projectToRow = (
+  p: Project
+): Omit<ProjectRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: p.id,
+  project_code: p.projectCode,
+  name: p.name,
+  address: p.address,
+  market: p.market,
+  submarket: p.submarket,
+  city: p.city,
+  county: p.county,
+  lat: p.lat,
+  lng: p.lng,
+  metadata: p.metadata ?? {},
+  created_at: p.createdAt,
+  updated_at: p.updatedAt,
+});
+
+export const rowToProject = (r: ProjectRow): Project => ({
+  id: r.id,
+  projectCode: r.project_code,
+  name: r.name,
+  address: r.address,
+  market: r.market,
+  submarket: r.submarket,
+  city: r.city,
+  county: r.county,
+  lat: numOrNull(r.lat),
+  lng: numOrNull(r.lng),
+  metadata: (r.metadata ?? {}) as Record<string, unknown>,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ── Space ─────────────────────────────────────────────────────────
+
+export interface SpaceRow {
+  id: string;
+  building_uuid: string;
+  code: string | null;
+  area_sf: number | string | null;
+  position: SpacePosition | null;
+  bay_index: number | null;
+  parent_space_uuid: string | null;
+  occupied: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export const spaceToRow = (
+  s: Space
+): Omit<SpaceRow, 'created_at' | 'updated_at'> & {
+  created_at?: string;
+  updated_at?: string;
+} => ({
+  id: s.id,
+  building_uuid: s.buildingUuid,
+  code: s.code,
+  area_sf: s.areaSF,
+  position: s.position,
+  bay_index: s.bayIndex,
+  parent_space_uuid: s.parentSpaceUuid,
+  occupied: s.occupied,
+  metadata: s.metadata ?? {},
+  created_at: s.createdAt,
+  updated_at: s.updatedAt,
+});
+
+export const rowToSpace = (r: SpaceRow): Space => ({
+  id: r.id,
+  buildingUuid: r.building_uuid,
+  code: r.code,
+  areaSF: numOrNull(r.area_sf),
+  position: r.position,
+  bayIndex: r.bay_index,
+  parentSpaceUuid: r.parent_space_uuid,
+  occupied: r.occupied,
+  metadata: (r.metadata ?? {}) as Record<string, unknown>,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
