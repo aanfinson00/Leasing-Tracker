@@ -82,6 +82,7 @@ import { listProjectsTool } from './tools/list-projects.js';
 import { getProjectSummaryTool } from './tools/get-project-summary.js';
 import { listSpacesTool } from './tools/list-spaces.js';
 import { updateSpaceTool } from './tools/update-space.js';
+import { listUwAssumptionsTool } from './tools/list-uw-assumptions.js';
 
 // All tools are registered here. The shape is a manual interface match —
 // not a base class — because each tool's args type is unique.
@@ -128,6 +129,7 @@ const TOOLS: Array<{
   { ...getProjectSummaryTool, requiredRole: 'read' },
   { ...listSpacesTool, requiredRole: 'read' },
   { ...updateSpaceTool, requiredRole: 'write' },
+  { ...listUwAssumptionsTool, requiredRole: 'read' },
 ];
 
 export function buildServer(token: AuthedToken): Server {

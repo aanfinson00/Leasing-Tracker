@@ -1497,3 +1497,61 @@ export const DispositionListingNoteSchema = z.object({
 }));
 
 export type DispositionListingNote = z.infer<typeof DispositionListingNoteSchema>;
+
+// ──────────────────────────────────────────────────────────────────
+// UW Assumptions — named assumption sets like "2H25 Reval UW" used by
+// the Lease Calculator as comparison baseline. One row per (set, code)
+// where code is the natural key from a GLCP-style sheet, e.g.
+// "MiamiMidwa-3-01" (project + building + suite).
+// ──────────────────────────────────────────────────────────────────
+
+export const UwAssumptionSchema = z.object({
+  id: z.string().uuid(),
+  assumptionSet: z.string().min(1),
+  code: z.string().min(1),
+  projectUuid: z.string().uuid().nullable().optional(),
+  projectNameRaw: z.string().nullable().optional(),
+  tenantName: z.string().nullable().optional(),
+  buildingCode: z.string().nullable().optional(),
+  suiteCode: z.string().nullable().optional(),
+  projectSF: z.number().nullable().optional(),
+  buildingSF: z.number().nullable().optional(),
+  leaseSF: z.number().nullable().optional(),
+  trendedRentPSF: z.number().nullable().optional(),
+  leaseTermMonths: z.number().int().nullable().optional(),
+  startMonthPostCompletion: z.number().int().nullable().optional(),
+  startingMonth: z.number().int().nullable().optional(),
+  startDate: z.string().nullable().optional(),
+  freeRentMonths: z.number().int().nullable().optional(),
+  tisPSF: z.number().nullable().optional(),
+  lcsPct: z.number().nullable().optional(),
+  lcOverridePct: z.number().nullable().optional(),
+  rentEscalationsPct: z.number().nullable().optional(),
+  status: z.string().nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+}).transform((u) => ({
+  ...u,
+  projectUuid: u.projectUuid ?? null,
+  projectNameRaw: u.projectNameRaw ?? null,
+  tenantName: u.tenantName ?? null,
+  buildingCode: u.buildingCode ?? null,
+  suiteCode: u.suiteCode ?? null,
+  projectSF: u.projectSF ?? null,
+  buildingSF: u.buildingSF ?? null,
+  leaseSF: u.leaseSF ?? null,
+  trendedRentPSF: u.trendedRentPSF ?? null,
+  leaseTermMonths: u.leaseTermMonths ?? null,
+  startMonthPostCompletion: u.startMonthPostCompletion ?? null,
+  startingMonth: u.startingMonth ?? null,
+  startDate: u.startDate ?? null,
+  freeRentMonths: u.freeRentMonths ?? null,
+  tisPSF: u.tisPSF ?? null,
+  lcsPct: u.lcsPct ?? null,
+  lcOverridePct: u.lcOverridePct ?? null,
+  rentEscalationsPct: u.rentEscalationsPct ?? null,
+  status: u.status ?? null,
+}));
+
+export type UwAssumption = z.infer<typeof UwAssumptionSchema>;
