@@ -458,7 +458,7 @@ const parseProspectsRow = (rawRow: RawRow): Deal | null => {
     dealName,
     spaceId: cleanString(get('Space ID')),
     building: cleanString(get('Building')),
-    dealId: cleanString(get('Deal ID')),
+    dealId: cleanString(get('Project Code', 'Deal ID')),
     minSF,
     maxSF,
     prospectTenant: cleanString(get('Prospect / Tenant', 'Prospect/Tenant', 'Tenant', 'Prospect')),
@@ -490,7 +490,7 @@ const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
   const dealName = cleanString(get('Deal Name'));
   const tenant = cleanString(get('Tenant Name', 'Tenant'));
   const spaceId = cleanString(get('Space ID'));
-  const dealId = cleanString(get('Deal ID'));
+  const dealId = cleanString(get('Project Code', 'Deal ID'));
   const leasableSFRaw = get('Leasable SF', 'SF', 'Square Feet');
 
   // Skip clearly blank rows.
@@ -508,7 +508,7 @@ const parseRentRollRow = (rawRow: RawRow): RentRollRow | null => {
 
   const parsed = {
     id: existingId ?? crypto.randomUUID(),
-    dealId: cleanString(get('Deal ID')),
+    dealId: cleanString(get('Project Code', 'Deal ID')),
     dealName,
     buildingId: cleanString(get('Building ID')),
     spaceId: cleanString(get('Space ID')),
@@ -623,7 +623,7 @@ const parseOnboardingRow = (rawRow: RawRow): OnboardingRowParsed | null => {
 const parseScenarioRow = (rawRow: RawRow): Scenario | null => {
   const get = buildGetter(rawRow);
   const id = cleanString(get('ID')) ?? crypto.randomUUID();
-  const dealId = cleanString(get('Deal ID', 'DealID'));
+  const dealId = cleanString(get('Project Code', 'Deal ID', 'DealID'));
   const name = cleanString(get('Name'));
   if (!dealId || !name) return null;
   const now = new Date().toISOString();
@@ -871,8 +871,8 @@ const parseAMPendingItemRow = (rawRow: RawRow): AMPendingItem | null => {
     description: cleanString(get('Description')),
     buildingId: cleanString(get('Building ID', 'BuildingID')),
     buildingName: cleanString(get('Building', 'Building Name', 'BuildingName')),
-    dealId: cleanString(get('Deal ID', 'DealID')),
-    dealName: cleanString(get('Deal', 'Deal Name', 'DealName')),
+    dealId: cleanString(get('Project Code', 'Deal ID', 'DealID')),
+    dealName: cleanString(get('Project', 'Deal', 'Deal Name', 'DealName')),
     owner: cleanString(get('Owner')),
     status,
     priority,
@@ -1479,7 +1479,7 @@ const DATA_DICTIONARY: { Sheet: string; Column: string; 'Data Type': string; Des
   { Sheet: 'Activity', Column: 'Summary', 'Data Type': 'string', Description: 'Activity description', Example: 'Toured warehouse with tenant' },
   { Sheet: 'Onboarding', Column: 'Checklist ID', 'Data Type': 'uuid', Description: 'Checklist group identifier', Example: '550e8400-...' },
   { Sheet: 'Onboarding', Column: 'Checked', 'Data Type': 'boolean', Description: 'Completion status', Example: 'Yes' },
-  { Sheet: 'Scenarios', Column: 'Deal ID', 'Data Type': 'string', Description: 'Link to deal', Example: 'D-2025-001' },
+  { Sheet: 'Scenarios', Column: 'Project Code', 'Data Type': 'string', Description: 'Link to project (legacy: Deal ID)', Example: '5042' },
   { Sheet: 'Scenarios', Column: 'Name', 'Data Type': 'string', Description: 'Scenario name', Example: 'Base Case' },
   { Sheet: 'Scenarios', Column: 'Inputs (JSON)', 'Data Type': 'json', Description: 'Lease calc inputs blob', Example: '{"rent":12,...}' },
   { Sheet: 'Scenarios', Column: 'Globals (JSON)', 'Data Type': 'json', Description: 'Global assumptions blob', Example: '{"discount":0.08}' },
@@ -1569,7 +1569,7 @@ function buildWorkbook(
       'Deal Name': d.dealName,
       'Space ID': d.spaceId ?? '',
       'Building': d.building ?? '',
-      'Deal ID': d.dealId ?? '',
+      'Project Code': d.dealId ?? '',
       'Min SF': d.minSF ?? '',
       'Max SF': d.maxSF ?? '',
       'Prospect / Tenant': d.prospectTenant ?? '',
@@ -1600,7 +1600,7 @@ function buildWorkbook(
 
   if (data.rentRoll.length > 0) {
     const rrData = data.rentRoll.map((r) => ({
-      'Deal ID': r.dealId ?? '',
+      'Project Code': r.dealId ?? '',
       'Deal Name': r.dealName ?? '',
       'Market': r.market ?? '',
       'Property Type': r.propertyType ?? '',
@@ -1705,7 +1705,7 @@ function buildWorkbook(
   if (data.scenarios.length > 0) {
     const sData = data.scenarios.map((s) => ({
       'ID': s.id,
-      'Deal ID': s.dealId,
+      'Project Code': s.dealId,
       'Name': s.name,
       'Inputs (JSON)': JSON.stringify(s.inputs),
       'Globals (JSON)': JSON.stringify(s.globals),
@@ -1915,8 +1915,8 @@ function buildWorkbook(
       'Description': i.description ?? '',
       'Building ID': i.buildingId ?? '',
       'Building': i.buildingName ?? '',
-      'Deal ID': i.dealId ?? '',
-      'Deal': i.dealName ?? '',
+      'Project Code': i.dealId ?? '',
+      'Project': i.dealName ?? '',
       'Owner': i.owner ?? '',
       'Status': i.status,
       'Priority': i.priority,
