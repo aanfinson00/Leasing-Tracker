@@ -894,6 +894,10 @@ export const LeaseCompSchema = z.object({
   confidence: CompConfidenceEnum,
   confidential: z.boolean(),
 
+  // Geo — auto-populated by Mapbox geocode from buildingAddress; user can drag pin.
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -921,6 +925,8 @@ export const LeaseCompSchema = z.object({
   options: c.options ?? null,
   source: c.source ?? null,
   sourceUrl: c.sourceUrl ?? null,
+  lat: c.lat ?? null,
+  lng: c.lng ?? null,
   notes: c.notes ?? null,
 }));
 
@@ -960,6 +966,10 @@ export const SalesCompSchema = z.object({
   confidence: CompConfidenceEnum,
   confidential: z.boolean(),
 
+  // Geo — auto-populated by Mapbox geocode from buildingAddress; user can drag pin.
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -983,6 +993,8 @@ export const SalesCompSchema = z.object({
   seller: c.seller ?? null,
   source: c.source ?? null,
   sourceUrl: c.sourceUrl ?? null,
+  lat: c.lat ?? null,
+  lng: c.lng ?? null,
   notes: c.notes ?? null,
 }));
 

@@ -781,6 +781,8 @@ export interface LeaseCompRow {
   source_url: string | null;
   confidence: LeaseComp['confidence'];
   confidential: boolean;
+  lat: number | string | null;
+  lng: number | string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -817,6 +819,8 @@ export const leaseCompToRow = (
   source_url: c.sourceUrl,
   confidence: c.confidence,
   confidential: c.confidential,
+  lat: c.lat,
+  lng: c.lng,
   notes: c.notes,
   created_at: c.createdAt,
   updated_at: c.updatedAt,
@@ -848,6 +852,8 @@ export const rowToLeaseComp = (r: LeaseCompRow): LeaseComp => ({
   sourceUrl: r.source_url,
   confidence: r.confidence,
   confidential: r.confidential,
+  lat: numOrNull(r.lat),
+  lng: numOrNull(r.lng),
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -877,6 +883,8 @@ export interface SalesCompRow {
   source_url: string | null;
   confidence: SalesComp['confidence'];
   confidential: boolean;
+  lat: number | string | null;
+  lng: number | string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -909,6 +917,8 @@ export const salesCompToRow = (
   source_url: c.sourceUrl,
   confidence: c.confidence,
   confidential: c.confidential,
+  lat: c.lat,
+  lng: c.lng,
   notes: c.notes,
   created_at: c.createdAt,
   updated_at: c.updatedAt,
@@ -936,6 +946,8 @@ export const rowToSalesComp = (r: SalesCompRow): SalesComp => ({
   sourceUrl: r.source_url,
   confidence: r.confidence,
   confidential: r.confidential,
+  lat: numOrNull(r.lat),
+  lng: numOrNull(r.lng),
   notes: r.notes,
   createdAt: r.created_at,
   updatedAt: r.updated_at,

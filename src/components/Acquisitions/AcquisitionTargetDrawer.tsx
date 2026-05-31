@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   X,
@@ -30,6 +30,7 @@ import {
 } from '../../types';
 import { CrmContactsPanel } from '../CRM/CrmContactsPanel';
 import { CrmNotesLog } from '../CRM/CrmNotesLog';
+import { MiniMapEditor } from '../MiniMapEditor';
 
 interface AcquisitionTargetDrawerProps {
   target: AcquisitionTarget | null;
@@ -176,6 +177,18 @@ export function AcquisitionTargetDrawer({
     formState: { errors },
   } = useForm<FormValues>();
 
+  // Live lat/lng state — mirrors target on prop change, edited via MiniMapEditor.
+  const [latLng, setLatLng] = useState<{ lat: number | null; lng: number | null }>({
+    lat: null,
+    lng: null,
+  });
+
+  useEffect(() => {
+    if (target) {
+      setLatLng({ lat: target.lat ?? null, lng: target.lng ?? null });
+    }
+  }, [target]);
+
   useEffect(() => {
     if (target) {
       reset({
@@ -254,8 +267,8 @@ export function AcquisitionTargetDrawer({
       diligenceStatus: target.diligenceStatus,
       riskLevel: v.riskLevel,
       statusSummary: parseStr(v.statusSummary),
-      lat: target.lat ?? null,
-      lng: target.lng ?? null,
+      lat: latLng.lat,
+      lng: latLng.lng,
       notes: parseStr(v.notes),
       createdAt: target.createdAt,
       updatedAt: new Date().toISOString(),
@@ -376,6 +389,15 @@ export function AcquisitionTargetDrawer({
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="col-span-2">
+                  <label className={labelClass}>Location</label>
+                  <MiniMapEditor
+                    lat={latLng.lat}
+                    lng={latLng.lng}
+                    address={watch('address') ?? target.address ?? ''}
+                    onChange={(lat, lng) => setLatLng({ lat, lng })}
+                  />
                 </div>
               </div>
             </Section>
