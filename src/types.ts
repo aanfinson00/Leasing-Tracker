@@ -128,22 +128,23 @@ export type Deal = z.infer<typeof DealSchema>;
 export const UWBasisEnum = z.enum(['Actual', 'Prospective UW']);
 export type UWBasis = z.infer<typeof UWBasisEnum>;
 
-// Credit-rating scale per parce-data-dictionary.xlsx. Replaces the
-// prior numeric 0-5 "stars" — that was quality-perception, this is
-// credit-quality. Existing star values are backfilled to
-// 'Unrated / Private' in the accompanying migration.
-export const TenantRatingEnum = z.enum([
-  'AAA',
-  'AA',
-  'A',
-  'BBB',
-  'BB',
-  'B',
-  'NR',
-  'Unrated / Private',
-  'Govt',
+// 1-5 star rating. Restored from the original numeric scale after
+// the agency-rating experiment (AAA/AA/etc.) didn't fit — most tenants
+// are private so credit agencies don't apply. DB column is numeric(0-5).
+export const TenantRatingEnum = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+  z.literal(5),
 ]);
 export type TenantRating = z.infer<typeof TenantRatingEnum>;
+// Display helper — 4 stars filled out of 5 = "★★★★☆".
+export function formatStars(rating: TenantRating | null | undefined): string {
+  if (rating == null) return '–';
+  const n = Math.max(1, Math.min(5, Math.round(rating)));
+  return '★'.repeat(n) + '☆'.repeat(5 - n);
+}
 
 export const RentRollRowSchema = z.object({
   id: z.string().uuid(),

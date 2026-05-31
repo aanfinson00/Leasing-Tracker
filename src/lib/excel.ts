@@ -65,7 +65,6 @@ import {
   RentTypeEnum,
   RiskLevelEnum,
   ScenarioSchema,
-  TenantRatingEnum,
   TransactionTypeEnum,
 } from '../types';
 import { getTemplateItem, reconcileWithTemplate } from './onboarding';
@@ -148,18 +147,21 @@ const parseBool = (v: unknown): boolean => {
   return s === 'yes' || s === 'y' || s === 'true' || s === '1';
 };
 
-// Credit-rating parse. Accepts the new enum values directly; legacy
-// 1-5 numeric / star inputs map to 'Unrated / Private' rather than
-// fabricate a credit grade from a quality score.
+// Tenant rating parse — accepts a number 1-5, a star string ("★★★★"),
+// or any of the legacy agency labels (AAA/AA/etc.) which now map to null.
 const parseTenantRating = (v: unknown): TenantRating | null => {
   if (isMissing(v)) return null;
   const s = String(v).trim();
-  const match = TenantRatingEnum.options.find((r) => r.toLowerCase() === s.toLowerCase());
-  if (match) return match;
   const filled = (s.match(/★/g) ?? []).length;
-  if (filled > 0) return 'Unrated / Private';
+  if (filled > 0) {
+    const n = Math.max(1, Math.min(5, filled));
+    return n as TenantRating;
+  }
   const asNum = parseNumber(v);
-  if (asNum !== null && asNum >= 0 && asNum <= 5) return 'Unrated / Private';
+  if (asNum !== null && asNum >= 1 && asNum <= 5) {
+    return Math.round(asNum) as TenantRating;
+  }
+  // Legacy agency labels — discard (per user direction: wipe agency data).
   return null;
 };
 
@@ -1464,7 +1466,8 @@ const formatPercent = (n: number | null | undefined): string =>
   n == null ? '' : `${n}%`;
 const formatFractionAsPercent = (n: number | null | undefined): string =>
   n == null ? '' : `${(n * 100).toFixed(2)}%`;
-const formatTenantRating = (r: TenantRating | null | undefined): string => r ?? '';
+const formatTenantRating = (r: TenantRating | null | undefined): string =>
+  r == null ? '' : String(r);
 
 const DATA_DICTIONARY: { Sheet: string; Column: string; 'Data Type': string; Description: string; Example: string }[] = [
   { Sheet: 'Prospects', Column: 'Deal Name', 'Data Type': 'string', Description: 'Name of the deal / property', Example: 'Central Logistics Hub' },
