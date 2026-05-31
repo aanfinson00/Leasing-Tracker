@@ -14,7 +14,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ActivityEntry, Building, Deal, RentRollRow, TenantRating } from '../types';
+import type { ActivityEntry, Building, Deal, Project, RentRollRow, TenantRating } from '../types';
 import {
   TenantRatingEnum,
   SPACE_ID_REGEX,
@@ -34,6 +34,8 @@ interface RentRollDrawerProps {
   deals: Deal[];
   activities: ActivityEntry[];
   buildings: Building[];
+  /** Projects loaded from the new projects table — used to resolve projectUuid on save. */
+  projects: Project[];
   onClose: () => void;
   onSave: (row: RentRollRow) => void;
   onDelete: (id: string) => void;
@@ -123,6 +125,7 @@ export function RentRollDrawer({
   deals,
   activities,
   buildings,
+  projects,
   onClose,
   onSave,
   onDelete,
@@ -221,15 +224,22 @@ export function RentRollDrawer({
   if (!row) return null;
 
   const onSubmit = (v: FormValues) => {
+    // Resolve projectUuid by looking up the picked dealId text in the projects
+    // table. Falls back to the existing value if no match.
+    const pickedDealId = parseStr(v.dealId);
+    const resolvedProjectUuid =
+      (pickedDealId && projects.find((p) => p.projectCode === pickedDealId)?.id) ||
+      row.projectUuid ||
+      null;
     const updated: RentRollRow = {
       id: row.id,
-      dealId: parseStr(v.dealId),
+      dealId: pickedDealId,
       dealName: parseStr(v.dealName),
       buildingId: parseStr(v.buildingId),
       spaceId: parseStr(v.spaceId),
       building: parseStr(v.building),
-      // Carry through new uuid FKs from the existing row (Phase 3 wires UI resolution).
-      projectUuid: row.projectUuid ?? null,
+      projectUuid: resolvedProjectUuid,
+      // spaceUuid resolution requires the spaces table backfill; preserve for now.
       spaceUuid: row.spaceUuid ?? null,
       market: parseStr(v.market),
       propertyType: parseStr(v.propertyType),

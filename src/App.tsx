@@ -30,6 +30,7 @@ import type {
   DispositionListingContact,
   DispositionListingNote,
   LeaseComp,
+  Project,
   SalesComp,
   OnboardingChecklist,
   OnboardingItem,
@@ -128,6 +129,7 @@ import {
   subscribeSalesComps,
 } from './lib/repo/salesComps';
 import { listAllBuildings, subscribeBuildings, upsertBuilding } from './lib/repo/buildings';
+import { listProjects, subscribeProjects } from './lib/repo/projects';
 import {
   listPropertyTaxAppeals,
   upsertPropertyTaxAppeal,
@@ -243,6 +245,7 @@ function App() {
   // a space picker. MapView keeps its own state for now (its render path
   // already drives off it); these two subscriptions co-exist fine.
   const [buildings, setBuildings] = useState<Building[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [propertyTaxAppeals, setPropertyTaxAppeals] = useState<PropertyTaxAppeal[]>([]);
   const [amPendingItems, setAMPendingItems] = useState<AMPendingItem[]>([]);
   // CRM v1
@@ -375,6 +378,7 @@ function App() {
             crmContacts, crmLinks, crmNotes,
             acqTargets, acqLinks, acqNotes,
             dispoListings, dispoLinks, dispoNotes,
+            projs,
           ] = await Promise.all([
             listDeals(),
             listRentRoll(),
@@ -395,6 +399,7 @@ function App() {
             listDispositionListings(),
             listDispositionListingContacts(),
             listDispositionListingNotes(),
+            listProjects(),
           ]);
           setDeals(d);
           setFilteredDeals(d);
@@ -406,6 +411,7 @@ function App() {
           setLeaseComps(comps);
           setSalesComps(sComps);
           setBuildings(bldgs);
+          setProjects(projs);
           setPropertyTaxAppeals(appeals);
           setAMPendingItems(amItems);
           setContacts(crmContacts);
@@ -566,6 +572,17 @@ function App() {
         }),
       onDelete: (id) => setBuildings((prev) => prev.filter((x) => x.id !== id)),
     });
+    const unsubProjects = subscribeProjects({
+      onUpsert: (p) =>
+        setProjects((prev) => {
+          const idx = prev.findIndex((x) => x.id === p.id);
+          if (idx === -1) return [...prev, p];
+          const next = prev.slice();
+          next[idx] = p;
+          return next;
+        }),
+      onDelete: (id) => setProjects((prev) => prev.filter((x) => x.id !== id)),
+    });
     const unsubAppeals = subscribePropertyTaxAppeals({
       onUpsert: (a) =>
         setPropertyTaxAppeals((prev) => {
@@ -707,6 +724,7 @@ function App() {
       unsubComps();
       unsubSalesComps();
       unsubBldgs();
+      unsubProjects();
       unsubAppeals();
       unsubAMItems();
       unsubCrmContacts();
@@ -2133,6 +2151,7 @@ function App() {
         deals={deals}
         activities={activities}
         buildings={buildings}
+        projects={projects}
         onClose={() => setEditingDeal(null)}
         onSave={handleSaveDeal}
         onDelete={handleDeleteDeal}
@@ -2149,6 +2168,7 @@ function App() {
         deals={deals}
         activities={activities}
         buildings={buildings}
+        projects={projects}
         onClose={() => setEditingRow(null)}
         onSave={handleSaveRow}
         onDelete={handleDeleteRow}

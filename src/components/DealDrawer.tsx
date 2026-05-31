@@ -19,7 +19,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ActivityEntry, Building, Deal, DealStatus, Priority } from '../types';
+import type { ActivityEntry, Building, Deal, DealStatus, Priority, Project } from '../types';
 import {
   PriorityEnum,
   SPACE_ID_REGEX,
@@ -41,6 +41,8 @@ interface DealDrawerProps {
   deals: Deal[];
   activities: ActivityEntry[];
   buildings: Building[];
+  /** Projects loaded from the new projects table — used to resolve projectUuid on save. */
+  projects: Project[];
   onClose: () => void;
   onSave: (deal: Deal) => void;
   onDelete: (id: string) => void;
@@ -132,6 +134,7 @@ export function DealDrawer({
   deals,
   activities,
   buildings,
+  projects,
   onClose,
   onSave,
   onDelete,
@@ -259,14 +262,23 @@ export function DealDrawer({
   if (!deal) return null;
 
   const onSubmit = (values: FormValues) => {
+    // Resolve projectUuid by looking up the picked dealId text in the projects
+    // table. Falls back to the existing value if no match (so unlinked drafts
+    // don't lose data on save).
+    const pickedDealId = parseStr(values.dealId);
+    const resolvedProjectUuid =
+      (pickedDealId && projects.find((p) => p.projectCode === pickedDealId)?.id) ||
+      deal.projectUuid ||
+      null;
     const updated: Deal = {
       id: deal.id,
       dealName: values.dealName.trim(),
       spaceId: parseStr(values.spaceId),
       building: parseStr(values.building),
-      dealId: parseStr(values.dealId),
-      // Carry through new uuid FKs from the existing deal (Phase 3 wires UI resolution).
-      projectUuid: deal.projectUuid ?? null,
+      dealId: pickedDealId,
+      projectUuid: resolvedProjectUuid,
+      // targetSpaceUuid resolution requires the spaces table (currently empty
+      // pre-backfill); preserve whatever's on the deal until that lands.
       targetSpaceUuid: deal.targetSpaceUuid ?? null,
       minSF: parseNum(values.minSF),
       maxSF: parseNum(values.maxSF) ?? parseNum(values.minSF),
