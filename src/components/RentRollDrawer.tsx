@@ -16,7 +16,6 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { ActivityEntry, Building, Deal, Project, RentRollRow, TenantRating } from '../types';
 import {
-  TenantRatingEnum,
   SPACE_ID_REGEX,
   SPACE_ID_FORMAT_HINT,
 } from '../types';
@@ -55,7 +54,7 @@ type FormValues = {
   propertyType: string;
   buildingType: string;
   tenantName: string;
-  tenantRating: TenantRating | '';
+  tenantRating: '' | '1' | '2' | '3' | '4' | '5';
   occupied: 'Yes' | 'No';
   leasableSF: string;
   leaseStart: string;
@@ -199,7 +198,7 @@ export function RentRollDrawer({
         propertyType: toFormString(row.propertyType),
         buildingType: toFormString(row.buildingType),
         tenantName: toFormString(row.tenantName),
-        tenantRating: row.tenantRating ?? '',
+        tenantRating: row.tenantRating == null ? '' : (String(row.tenantRating) as FormValues['tenantRating']),
         occupied: row.occupied ? 'Yes' : 'No',
         leasableSF: toFormString(row.leasableSF),
         leaseStart: toFormString(row.leaseStart),
@@ -245,7 +244,7 @@ export function RentRollDrawer({
       propertyType: parseStr(v.propertyType),
       buildingType: parseStr(v.buildingType),
       tenantName: parseStr(v.tenantName),
-      tenantRating: v.tenantRating === '' ? null : v.tenantRating,
+      tenantRating: v.tenantRating === '' ? null : (Number(v.tenantRating) as TenantRating),
       occupied: v.occupied === 'Yes',
       uwBasis: row.uwBasis,
       leasableSF: parseNum(v.leasableSF),
@@ -435,14 +434,14 @@ export function RentRollDrawer({
                   <input {...register('tenantName')} className={inputClass} />
                 </div>
                 <div>
-                  <label className={labelClass}>Credit Rating</label>
+                  <label className={labelClass}>Tenant Rating</label>
                   <select {...register('tenantRating')} className={inputClass}>
                     <option value="">—</option>
-                    {TenantRatingEnum.options.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
+                    <option value="5">★★★★★ (5)</option>
+                    <option value="4">★★★★☆ (4)</option>
+                    <option value="3">★★★☆☆ (3)</option>
+                    <option value="2">★★☆☆☆ (2)</option>
+                    <option value="1">★☆☆☆☆ (1)</option>
                   </select>
                 </div>
                 <div>

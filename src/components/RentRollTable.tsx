@@ -27,22 +27,22 @@ const formatNum = (n: number | null | undefined): string =>
 const formatCurrency = (n: number | null | undefined): string =>
   n === null || n === undefined ? '–' : `$${n.toFixed(2)}`;
 
-// Credit-rating chip. Color tier reflects investment-grade boundaries
-// (BBB and up = green/blue, sub-IG = amber, NR/unknown = muted).
-const RatingChip = ({ rating }: { rating: string | null }) => {
-  if (!rating) return <span className="text-fg-subtle">–</span>;
-  const investmentGrade = new Set(['AAA', 'AA', 'A', 'BBB', 'Govt']);
-  const subGrade = new Set(['BB', 'B']);
-  const cls = investmentGrade.has(rating)
-    ? 'bg-success/10 text-success border-success/30'
-    : subGrade.has(rating)
-      ? 'bg-warning/10 text-warning border-warning/30'
-      : 'bg-fg-subtle/10 text-fg-muted border-fg-subtle/20';
+// 1-5 star tenant rating. 4-5 = green, 3 = amber, 1-2 = muted.
+const RatingChip = ({ rating }: { rating: number | null }) => {
+  if (rating == null) return <span className="text-fg-subtle">–</span>;
+  const n = Math.max(1, Math.min(5, Math.round(rating)));
+  const cls =
+    n >= 4
+      ? 'bg-success/10 text-success border-success/30'
+      : n === 3
+        ? 'bg-warning/10 text-warning border-warning/30'
+        : 'bg-fg-subtle/10 text-fg-muted border-fg-subtle/20';
   return (
     <span
-      className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border ${cls}`}
+      className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border tabular-nums ${cls}`}
+      title={`${n}/5`}
     >
-      {rating}
+      {'★'.repeat(n)}{'☆'.repeat(5 - n)}
     </span>
   );
 };

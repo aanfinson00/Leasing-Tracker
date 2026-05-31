@@ -25,7 +25,7 @@ const argsSchema = z
     tiNote: z.string().nullable().optional(),
     securityDeposit: z.number().describe('Dollars').nullable().optional(),
     rentCommencementDate: z.string().nullable().optional(),
-    tenantRating: z.string().describe('Credit rating string (e.g. "BBB+", "NR", "Unrated / Private")').nullable().optional(),
+    tenantRating: z.number().int().min(1).max(5).describe('1-5 star tenant rating (5=best).').nullable().optional(),
     market: z.string().nullable().optional(),
     propertyType: z.string().nullable().optional(),
     notes: z.string().nullable().optional(),

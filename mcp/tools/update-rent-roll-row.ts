@@ -11,7 +11,7 @@ const argsSchema = z
   .object({
     id: z.string().describe('UUID of the rent_roll row.'),
     tenantName: z.string().nullable().optional(),
-    tenantRating: z.string().describe('AAA / AA / A / BBB / BB / B / NR / Unrated / Private / Govt').nullable().optional(),
+    tenantRating: z.number().int().min(1).max(5).describe('1-5 star tenant rating (5=best).').nullable().optional(),
     occupied: z.boolean().optional(),
     leasableSF: z.number().nullable().optional(),
     leaseStart: z.string().describe('YYYY-MM-DD').nullable().optional(),
