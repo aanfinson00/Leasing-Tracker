@@ -19,7 +19,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ActivityEntry, Building, Deal, DealStatus, Priority, Project } from '../types';
+import type { ActivityEntry, Building, Deal, DealStatus, Priority, Project, Space } from '../types';
 import {
   PriorityEnum,
   SPACE_ID_REGEX,
@@ -33,6 +33,7 @@ import { ActivityLog } from './ActivityLog';
 import { ProjectPicker } from './ProjectPicker';
 import { BuildingPicker } from './BuildingPicker';
 import { SpacePicker } from './SpacePicker';
+import { SpaceEditPopover } from './SpaceEditPopover';
 import { SplitSpaceModal } from './SplitSpaceModal';
 import { NewProjectModal } from './NewProjectModal';
 
@@ -43,6 +44,10 @@ interface DealDrawerProps {
   buildings: Building[];
   /** Projects loaded from the new projects table — used to resolve projectUuid on save. */
   projects: Project[];
+  /** Spaces loaded from the new spaces table — used by the SpaceEditPopover. */
+  spaces: Space[];
+  /** Persist a Space row (used by SpaceEditPopover). */
+  onUpsertSpace: (s: Space) => void;
   onClose: () => void;
   onSave: (deal: Deal) => void;
   onDelete: (id: string) => void;
@@ -135,6 +140,8 @@ export function DealDrawer({
   activities,
   buildings,
   projects,
+  spaces,
+  onUpsertSpace,
   onClose,
   onSave,
   onDelete,
@@ -439,15 +446,26 @@ export function DealDrawer({
                 </div>
                 <div>
                   <label className={labelClass}>Space ID</label>
-                  <SpacePicker
-                    buildings={buildings}
-                    buildingId={currentBuildingId}
-                    value={currentSpaceId}
-                    onChange={(opt) => {
-                      setValue('spaceId', opt?.spaceId ?? '', { shouldDirty: true });
-                    }}
-                    onRequestSplit={handleSplitRequest}
-                  />
+                  <div className="flex items-stretch gap-1.5">
+                    <SpacePicker
+                      buildings={buildings}
+                      buildingId={currentBuildingId}
+                      value={currentSpaceId}
+                      onChange={(opt) => {
+                        setValue('spaceId', opt?.spaceId ?? '', { shouldDirty: true });
+                      }}
+                      onRequestSplit={handleSplitRequest}
+                      className="flex-1"
+                    />
+                    <SpaceEditPopover
+                      space={
+                        spaces.find(
+                          (s) => s.buildingUuid === currentBuildingId && s.code === currentSpaceId
+                        ) ?? null
+                      }
+                      onSave={onUpsertSpace}
+                    />
+                  </div>
                   <input
                     type="hidden"
                     {...register('spaceId', {
