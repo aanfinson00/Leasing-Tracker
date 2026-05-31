@@ -62,6 +62,7 @@ export function makeStatusChangeEntry(
     summary: `${from} → ${to}`,
     link: null,
     author: null,
+    metadata: {},
     createdAt: new Date().toISOString(),
   };
 }

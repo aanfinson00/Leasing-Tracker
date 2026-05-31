@@ -265,6 +265,9 @@ export function DealDrawer({
       spaceId: parseStr(values.spaceId),
       building: parseStr(values.building),
       dealId: parseStr(values.dealId),
+      // Carry through new uuid FKs from the existing deal (Phase 3 wires UI resolution).
+      projectUuid: deal.projectUuid ?? null,
+      targetSpaceUuid: deal.targetSpaceUuid ?? null,
       minSF: parseNum(values.minSF),
       maxSF: parseNum(values.maxSF) ?? parseNum(values.minSF),
       prospectTenant: parseStr(values.prospectTenant),
@@ -286,6 +289,7 @@ export function DealDrawer({
       currentSummary: parseStr(values.currentSummary),
       notes: parseStr(values.notes),
       sharepointUrl: parseStr(values.sharepointUrl),
+      metadata: deal.metadata ?? {},
     };
     onSave(updated);
     onClose();
@@ -671,6 +675,7 @@ export function DealDrawer({
                           currentSummary: parseStr(values.currentSummary),
                           notes: parseStr(values.notes),
                           sharepointUrl: parseStr(values.sharepointUrl),
+                          // ...deal already covers projectUuid / targetSpaceUuid / metadata
                         },
                       };
                       onSave(updatedDeal);

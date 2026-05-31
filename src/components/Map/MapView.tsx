@@ -399,6 +399,7 @@ export function MapView({
     const next: Building = {
       id: crypto.randomUUID(),
       projectId,
+      projectUuid: null,
       name: `Building ${nextOrdinal}`,
       footprint,
       heightFt: 30,
@@ -412,6 +413,7 @@ export function MapView({
       centerLng: center.lng,
       bumpOuts: [],
       baySpaceIds: [],
+      metadata: {},
       spaceSubdivisions: [],
       buildingOrdinal: nextOrdinal,
       createdAt: now,

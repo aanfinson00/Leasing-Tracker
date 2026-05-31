@@ -228,6 +228,9 @@ export function RentRollDrawer({
       buildingId: parseStr(v.buildingId),
       spaceId: parseStr(v.spaceId),
       building: parseStr(v.building),
+      // Carry through new uuid FKs from the existing row (Phase 3 wires UI resolution).
+      projectUuid: row.projectUuid ?? null,
+      spaceUuid: row.spaceUuid ?? null,
       market: parseStr(v.market),
       propertyType: parseStr(v.propertyType),
       buildingType: parseStr(v.buildingType),
@@ -259,6 +262,7 @@ export function RentRollDrawer({
       securityDeposit: row.securityDeposit,
       rentCommencementDate: row.rentCommencementDate,
       cashflowJson: row.cashflowJson,
+      metadata: row.metadata ?? {},
     };
     onSave(updated);
     onClose();
