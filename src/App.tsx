@@ -32,6 +32,7 @@ import type {
   LeaseComp,
   Project,
   SalesComp,
+  Space,
   OnboardingChecklist,
   OnboardingItem,
   PropertyTaxAppeal,
@@ -130,6 +131,8 @@ import {
 } from './lib/repo/salesComps';
 import { listAllBuildings, subscribeBuildings, upsertBuilding } from './lib/repo/buildings';
 import { listProjects, subscribeProjects } from './lib/repo/projects';
+import { listAllSpaces, subscribeSpaces, upsertSpace } from './lib/repo/spaces';
+import { computeMissingSpaces } from './lib/spaces';
 import {
   listPropertyTaxAppeals,
   upsertPropertyTaxAppeal,
@@ -246,6 +249,7 @@ function App() {
   // already drives off it); these two subscriptions co-exist fine.
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [spaces, setSpaces] = useState<Space[]>([]);
   const [propertyTaxAppeals, setPropertyTaxAppeals] = useState<PropertyTaxAppeal[]>([]);
   const [amPendingItems, setAMPendingItems] = useState<AMPendingItem[]>([]);
   // CRM v1
@@ -378,7 +382,7 @@ function App() {
             crmContacts, crmLinks, crmNotes,
             acqTargets, acqLinks, acqNotes,
             dispoListings, dispoLinks, dispoNotes,
-            projs,
+            projs, allSpaces,
           ] = await Promise.all([
             listDeals(),
             listRentRoll(),
@@ -400,6 +404,7 @@ function App() {
             listDispositionListingContacts(),
             listDispositionListingNotes(),
             listProjects(),
+            listAllSpaces(),
           ]);
           setDeals(d);
           setFilteredDeals(d);
@@ -412,6 +417,7 @@ function App() {
           setSalesComps(sComps);
           setBuildings(bldgs);
           setProjects(projs);
+          setSpaces(allSpaces);
           setPropertyTaxAppeals(appeals);
           setAMPendingItems(amItems);
           setContacts(crmContacts);
@@ -583,6 +589,17 @@ function App() {
         }),
       onDelete: (id) => setProjects((prev) => prev.filter((x) => x.id !== id)),
     });
+    const unsubSpaces = subscribeSpaces({
+      onUpsert: (s) =>
+        setSpaces((prev) => {
+          const idx = prev.findIndex((x) => x.id === s.id);
+          if (idx === -1) return [...prev, s];
+          const next = prev.slice();
+          next[idx] = s;
+          return next;
+        }),
+      onDelete: (id) => setSpaces((prev) => prev.filter((x) => x.id !== id)),
+    });
     const unsubAppeals = subscribePropertyTaxAppeals({
       onUpsert: (a) =>
         setPropertyTaxAppeals((prev) => {
@@ -725,6 +742,7 @@ function App() {
       unsubSalesComps();
       unsubBldgs();
       unsubProjects();
+      unsubSpaces();
       unsubAppeals();
       unsubAMItems();
       unsubCrmContacts();
@@ -993,12 +1011,23 @@ function App() {
 
   // Optimistic upsert + write-through for buildings (used by SplitSpaceModal).
   // Realtime sub will reconcile once Supabase round-trips.
+  //
+  // Phase 5: also derive any missing Space rows for this building and
+  // upsert them — keeps the spaces table in lock-step with bay/subdivision
+  // changes without needing a separate user action.
   const handleUpsertBuilding = (b: Building) => {
     setBuildings((prev) => {
       const exists = prev.some((x) => x.id === b.id);
       return exists ? prev.map((x) => (x.id === b.id ? b : x)) : [...prev, b];
     });
     writeThrough('save building', upsertBuilding(b));
+    const missing = computeMissingSpaces(b, spaces);
+    if (missing.length > 0) {
+      setSpaces((prev) => [...prev, ...missing]);
+      for (const s of missing) {
+        writeThrough('save space', upsertSpace(s));
+      }
+    }
   };
 
   // Create a new minimal Deal from the NewProjectModal. Returns the
