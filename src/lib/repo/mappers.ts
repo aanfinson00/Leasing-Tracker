@@ -175,6 +175,7 @@ export interface RentRollDbRow {
   rent_commencement_date: string | null;
   cashflow_json: unknown | null;
   metadata: Record<string, unknown>;
+  updated_at?: string | null;
 }
 
 export const rentRollToRow = (r: RentRollRow): RentRollDbRow => ({
@@ -256,6 +257,7 @@ export const rowToRentRoll = (r: RentRollDbRow): RentRollRow => ({
   securityDeposit: numOrNull(r.security_deposit),
   rentCommencementDate: r.rent_commencement_date,
   cashflowJson: r.cashflow_json ?? null,
+  updatedAt: r.updated_at ?? null,
   metadata: (r.metadata ?? {}) as Record<string, unknown>,
 });
 

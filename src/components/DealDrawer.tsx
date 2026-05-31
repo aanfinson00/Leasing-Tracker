@@ -34,6 +34,7 @@ import { ProjectPicker } from './ProjectPicker';
 import { BuildingPicker } from './BuildingPicker';
 import { SpacePicker } from './SpacePicker';
 import { SpaceEditPopover } from './SpaceEditPopover';
+import { relativeTime } from '../lib/relative-time';
 import { SplitSpaceModal } from './SplitSpaceModal';
 import { NewProjectModal } from './NewProjectModal';
 
@@ -344,11 +345,21 @@ export function DealDrawer({
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
           <div className="sticky top-0 bg-bg/90 backdrop-blur-md border-b border-border px-7 py-5 z-10">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex items-center gap-3 flex-wrap">
-                <h2 className="text-xl text-fg tracking-[-0.01em] font-semibold truncate">
-                  {currentName || 'New Deal'}
-                </h2>
-                <StatusBadge status={currentStatus} />
+              <div className="min-w-0 flex flex-col gap-1">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h2 className="text-xl text-fg tracking-[-0.01em] font-semibold truncate">
+                    {currentName || 'New Deal'}
+                  </h2>
+                  <StatusBadge status={currentStatus} />
+                </div>
+                {deal.lastUpdated && (
+                  <span
+                    className="text-[11px] text-fg-subtle"
+                    title={deal.lastUpdated}
+                  >
+                    Updated {relativeTime(deal.lastUpdated)}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {/* Get Status Update — copies the /get-status-update skill

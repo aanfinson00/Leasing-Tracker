@@ -11,6 +11,7 @@ import {
 import { ArrowUpDown, ChevronUp, ChevronDown, Pencil, Trash2, ArrowRight } from 'lucide-react';
 import type { Deal } from '../types';
 import { StatusBadge, PriorityLabel } from './StatusBadge';
+import { relativeTime } from '../lib/relative-time';
 
 interface DealTableProps {
   deals: Deal[];
@@ -137,6 +138,27 @@ export function DealTable({ deals, onSelectDeal, onDeleteDeal, onPromote }: Deal
       columnHelper.accessor('priority', {
         header: 'Priority',
         cell: (info) => <PriorityLabel priority={info.getValue()} />,
+      }),
+      columnHelper.accessor((row) => row.lastUpdated ?? '', {
+        id: 'lastUpdated',
+        header: 'Updated',
+        cell: (info) => {
+          const v = info.getValue();
+          if (!v) return <span className="text-fg-subtle text-xs">–</span>;
+          return (
+            <span
+              className="text-xs text-fg-muted whitespace-nowrap"
+              title={String(v)}
+            >
+              {relativeTime(String(v))}
+            </span>
+          );
+        },
+        sortingFn: (a, b) => {
+          const av = String(a.original.lastUpdated ?? '');
+          const bv = String(b.original.lastUpdated ?? '');
+          return av.localeCompare(bv);
+        },
       }),
       columnHelper.display({
         id: 'actions',
