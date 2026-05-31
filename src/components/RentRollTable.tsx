@@ -62,7 +62,7 @@ export function RentRollTable({
   const columns = useMemo(
     () => [
       columnHelper.accessor('dealName', {
-        header: 'Deal',
+        header: 'Project',
         cell: (info) => {
           const r = info.row.original;
           const sub = [r.market, r.propertyType].filter(Boolean).join(' · ');

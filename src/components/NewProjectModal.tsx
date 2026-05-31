@@ -68,7 +68,7 @@ export function NewProjectModal({
         <div className="space-y-3 mb-5">
           <div>
             <label className="block text-xs font-medium text-fg-muted mb-1.5">
-              Deal ID *
+              Project Code *
             </label>
             <input
               value={dealId}
@@ -80,7 +80,7 @@ export function NewProjectModal({
               <p className="text-danger text-xs mt-1">Must be 4 digits (e.g. 5042)</p>
             )}
             {dealIdDup && (
-              <p className="text-danger text-xs mt-1">This deal ID already exists</p>
+              <p className="text-danger text-xs mt-1">This project code already exists</p>
             )}
           </div>
 

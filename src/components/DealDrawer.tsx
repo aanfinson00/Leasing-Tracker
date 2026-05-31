@@ -30,7 +30,7 @@ import { EnumDropdown } from './EnumDropdown';
 import { StatusBadge } from './StatusBadge';
 import { PipelineStepper } from './PipelineStepper';
 import { ActivityLog } from './ActivityLog';
-import { DealPicker } from './DealPicker';
+import { ProjectPicker } from './ProjectPicker';
 import { BuildingPicker } from './BuildingPicker';
 import { SpacePicker } from './SpacePicker';
 import { SplitSpaceModal } from './SplitSpaceModal';
@@ -406,12 +406,12 @@ export function DealDrawer({
                   )}
                 </div>
                 <div className="col-span-2">
-                  <label className={labelClass}>Project (Deal ID)</label>
-                  <DealPicker
-                    deals={deals}
+                  <label className={labelClass}>Project</label>
+                  <ProjectPicker
+                    projects={projects}
                     value={currentDealId}
-                    onChange={(d) => {
-                      setValue('dealId', d?.dealId ?? '', { shouldDirty: true });
+                    onChange={(p) => {
+                      setValue('dealId', p?.projectCode ?? '', { shouldDirty: true });
                       // Changing the project clears building + space
                       setValue('buildingId', '', { shouldDirty: true });
                       setValue('building', '', { shouldDirty: true });
